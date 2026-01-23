@@ -1,0 +1,1296 @@
+package sql
+
+import (
+	"errors"
+	"strconv"
+	"strings"
+
+	"github.com/nickyhof/CommitDB/core"
+)
+
+type StatementType int
+
+const (
+	SelectStatementType StatementType = iota
+	InsertStatementType
+	UpdateStatementType
+	DeleteStatementType
+	CreateTableStatementType
+	DropTableStatementType
+	CreateDatabaseStatementType
+	DropDatabaseStatementType
+	CreateIndexStatementType
+	DropIndexStatementType
+	AlterTableStatementType
+	BeginStatementType
+	CommitStatementType
+	RollbackStatementType
+	DescribeStatementType
+	ShowDatabasesStatementType
+	ShowTablesStatementType
+	ShowIndexesStatementType
+)
+
+type Statement interface {
+	Type() StatementType
+}
+
+type SelectStatement struct {
+	Database   string
+	Table      string
+	TableAlias string
+	Columns    []string
+	Aggregates []AggregateExpr
+	Joins      []JoinClause
+	Distinct   bool
+	CountAll   bool
+	Where      WhereClause
+	GroupBy    []string
+	Having     WhereClause
+	OrderBy    []OrderByClause
+	Limit      int
+	Offset     int
+}
+
+type JoinClause struct {
+	Type       string // INNER, LEFT, RIGHT
+	Database   string
+	Table      string
+	TableAlias string
+	LeftCol    string // left table column
+	RightCol   string // right table column
+}
+
+type AggregateExpr struct {
+	Function string // COUNT, SUM, AVG, MIN, MAX
+	Column   string
+	Alias    string
+}
+
+type InsertStatement struct {
+	Database string
+	Table    string
+	Columns  []string
+	Values   []string
+}
+
+type UpdateStatement struct {
+	Database string
+	Table    string
+	Updates  []SetClause
+	Where    WhereClause
+}
+
+type SetClause struct {
+	Column string
+	Value  string
+}
+
+type DeleteStatement struct {
+	Database string
+	Table    string
+	Where    WhereClause
+}
+
+type CreateTableStatement struct {
+	Database string
+	Table    string
+	Columns  []core.Column
+}
+
+type DropTableStatement struct {
+	Database string
+	Table    string
+}
+
+type ShowDatabasesStatement struct {
+}
+
+type ShowTablesStatement struct {
+	Database string
+}
+
+type WhereClause struct {
+	Conditions []WhereCondition
+	LogicalOps []LogicalOperator // AND/OR between conditions
+}
+
+type LogicalOperator int
+
+const (
+	LogicalAnd LogicalOperator = iota
+	LogicalOr
+)
+
+type WhereCondition struct {
+	Left     string
+	Operator WhereOperator
+	Right    string
+	Negated  bool // for NOT
+}
+
+type WhereOperator int
+
+const (
+	EqualsOperator WhereOperator = iota
+	NotEqualsOperator
+	LessThanOperator
+	GreaterThanOperator
+	LessThanOrEqualOperator
+	GreaterThanOrEqualOperator
+	LikeOperator
+	IsNullOperator
+	IsNotNullOperator
+)
+
+type OrderByClause struct {
+	Column     string
+	Descending bool
+}
+
+type CreateDatabaseStatement struct {
+	Database string
+}
+
+type DropDatabaseStatement struct {
+	Database string
+}
+
+type CreateIndexStatement struct {
+	Name     string
+	Database string
+	Table    string
+	Column   string
+	Unique   bool
+}
+
+type DropIndexStatement struct {
+	Name     string
+	Database string
+	Table    string
+}
+
+type AlterTableStatement struct {
+	Database   string
+	Table      string
+	Action     string // ADD, DROP, MODIFY
+	ColumnName string
+	ColumnType string
+}
+
+type BeginStatement struct{}
+type CommitStatement struct{}
+type RollbackStatement struct{}
+
+type DescribeStatement struct {
+	Database string
+	Table    string
+}
+
+type ShowIndexesStatement struct {
+	Database string
+	Table    string
+}
+
+func (s SelectStatement) Type() StatementType {
+	return SelectStatementType
+}
+
+func (s InsertStatement) Type() StatementType {
+	return InsertStatementType
+}
+
+func (s UpdateStatement) Type() StatementType {
+	return UpdateStatementType
+}
+
+func (s DeleteStatement) Type() StatementType {
+	return DeleteStatementType
+}
+
+func (s CreateTableStatement) Type() StatementType {
+	return CreateTableStatementType
+}
+
+func (s DropTableStatement) Type() StatementType {
+	return DropTableStatementType
+}
+
+func (s CreateDatabaseStatement) Type() StatementType {
+	return CreateDatabaseStatementType
+}
+
+func (s DropDatabaseStatement) Type() StatementType {
+	return DropDatabaseStatementType
+}
+
+func (s CreateIndexStatement) Type() StatementType {
+	return CreateIndexStatementType
+}
+
+func (s DropIndexStatement) Type() StatementType {
+	return DropIndexStatementType
+}
+
+func (s AlterTableStatement) Type() StatementType {
+	return AlterTableStatementType
+}
+
+func (s BeginStatement) Type() StatementType {
+	return BeginStatementType
+}
+
+func (s CommitStatement) Type() StatementType {
+	return CommitStatementType
+}
+
+func (s RollbackStatement) Type() StatementType {
+	return RollbackStatementType
+}
+
+func (s DescribeStatement) Type() StatementType {
+	return DescribeStatementType
+}
+
+func (s ShowIndexesStatement) Type() StatementType {
+	return ShowIndexesStatementType
+}
+
+func (s ShowDatabasesStatement) Type() StatementType {
+	return ShowDatabasesStatementType
+}
+
+func (s ShowTablesStatement) Type() StatementType {
+	return ShowTablesStatementType
+}
+
+type Parser struct {
+	lexer *Lexer
+}
+
+func NewParser(sql string) *Parser {
+	lexer := NewLexer(sql)
+	return &Parser{lexer: lexer}
+}
+
+func (parser *Parser) Parse() (Statement, error) {
+	token := parser.lexer.NextToken()
+	switch token.Type {
+	case Select:
+		return ParseSelect(parser)
+	case Insert:
+		return ParseInsert(parser)
+	case Update:
+		return ParseUpdate(parser)
+	case Delete:
+		return ParseDelete(parser)
+	case Create:
+		return ParseCreate(parser)
+	case Drop:
+		return ParseDrop(parser)
+	case Alter:
+		return ParseAlter(parser)
+	case Begin:
+		return BeginStatement{}, nil
+	case Commit:
+		return CommitStatement{}, nil
+	case Rollback:
+		return RollbackStatement{}, nil
+	case Describe:
+		return ParseDescribe(parser)
+	case Show:
+		return ParseShow(parser)
+	default:
+		return nil, errors.New("unknown statement type")
+	}
+}
+
+func ParseSelect(parser *Parser) (Statement, error) {
+	var selectStatement SelectStatement
+
+	token := parser.lexer.NextToken()
+
+	// Check for DISTINCT
+	if token.Type == Distinct {
+		selectStatement.Distinct = true
+		token = parser.lexer.NextToken()
+	}
+
+	// Check for COUNT(*)
+	if token.Type == Count {
+		token = parser.lexer.NextToken()
+		if token.Type != ParenOpen {
+			return nil, errors.New("expected '(' after COUNT")
+		}
+		token = parser.lexer.NextToken()
+		switch token.Type {
+		case Wildcard:
+			token = parser.lexer.NextToken()
+			if token.Type != ParenClose {
+				return nil, errors.New("expected ')' after COUNT(*")
+			}
+			selectStatement.CountAll = true
+			selectStatement.Columns = []string{}
+			token = parser.lexer.NextToken()
+		case Identifier:
+			// COUNT(column)
+			col := token.Value
+			token = parser.lexer.NextToken()
+			if token.Type != ParenClose {
+				return nil, errors.New("expected ')' after column name")
+			}
+			selectStatement.Aggregates = append(selectStatement.Aggregates, AggregateExpr{
+				Function: "COUNT",
+				Column:   col,
+			})
+			token = parser.lexer.NextToken()
+		default:
+			return nil, errors.New("expected '*' or column name in COUNT()")
+		}
+	} else if token.Type == Sum || token.Type == Avg || token.Type == Min || token.Type == Max {
+		// Parse aggregate function: SUM(col), AVG(col), MIN(col), MAX(col)
+		for {
+			funcName := ""
+			switch token.Type {
+			case Sum:
+				funcName = "SUM"
+			case Avg:
+				funcName = "AVG"
+			case Min:
+				funcName = "MIN"
+			case Max:
+				funcName = "MAX"
+			case Count:
+				funcName = "COUNT"
+			default:
+				break
+			}
+
+			if funcName == "" {
+				break
+			}
+
+			token = parser.lexer.NextToken()
+			if token.Type != ParenOpen {
+				return nil, errors.New("expected '(' after " + funcName)
+			}
+			token = parser.lexer.NextToken()
+			if token.Type != Identifier {
+				return nil, errors.New("expected column name in " + funcName + "()")
+			}
+			col := token.Value
+			token = parser.lexer.NextToken()
+			if token.Type != ParenClose {
+				return nil, errors.New("expected ')' after column name")
+			}
+
+			agg := AggregateExpr{
+				Function: funcName,
+				Column:   col,
+			}
+
+			// Check for AS alias
+			token = parser.lexer.NextToken()
+			if token.Type == As {
+				token = parser.lexer.NextToken()
+				if token.Type != Identifier {
+					return nil, errors.New("expected alias after AS")
+				}
+				agg.Alias = token.Value
+				token = parser.lexer.NextToken()
+			}
+
+			selectStatement.Aggregates = append(selectStatement.Aggregates, agg)
+
+			// Check for comma (more aggregates) or FROM
+			if token.Type == Comma {
+				token = parser.lexer.NextToken()
+				continue
+			} else if token.Type == From {
+				break
+			} else {
+				break
+			}
+		}
+	} else if token.Type == Wildcard {
+		// Parse wildcard
+		selectStatement.Columns = []string{}
+		token = parser.lexer.NextToken()
+	} else if token.Type == Identifier {
+		// Parse columns
+		selectStatement.Columns = append(selectStatement.Columns, token.Value)
+		for {
+			token = parser.lexer.NextToken()
+			if token.Type == Comma {
+				token = parser.lexer.NextToken()
+				if token.Type == Identifier {
+					selectStatement.Columns = append(selectStatement.Columns, token.Value)
+				} else {
+					return nil, errors.New("expected identifier after comma")
+				}
+			} else if token.Type == From {
+				break
+			} else {
+				return nil, errors.New("expected FROM or comma")
+			}
+		}
+	} else {
+		return nil, errors.New("expected column name, *, DISTINCT, COUNT, SUM, AVG, MIN, or MAX")
+	}
+
+	if token.Type != From {
+		return nil, errors.New("expected FROM")
+	}
+
+	token = parser.lexer.NextToken()
+	if token.Type != Identifier {
+		return nil, errors.New("expected table name")
+	}
+
+	parts := strings.Split(token.Value, ".")
+	if len(parts) == 2 {
+		selectStatement.Database = parts[0]
+		selectStatement.Table = parts[1]
+	} else {
+		return nil, errors.New("expected database.table format")
+	}
+
+	token = parser.lexer.NextToken()
+
+	// Check for table alias
+	if token.Type == As {
+		token = parser.lexer.NextToken()
+		if token.Type != Identifier {
+			return nil, errors.New("expected alias after AS")
+		}
+		selectStatement.TableAlias = token.Value
+		token = parser.lexer.NextToken()
+	} else if token.Type == Identifier {
+		// Alias without AS keyword
+		selectStatement.TableAlias = token.Value
+		token = parser.lexer.NextToken()
+	}
+
+	// Parse JOIN clauses
+	for token.Type == Join || token.Type == Inner || token.Type == Left || token.Type == Right {
+		joinClause := JoinClause{Type: "INNER"} // Default
+
+		// Determine join type
+		if token.Type == Left {
+			joinClause.Type = "LEFT"
+			token = parser.lexer.NextToken()
+			if token.Type == Outer {
+				token = parser.lexer.NextToken()
+			}
+			if token.Type != Join {
+				return nil, errors.New("expected JOIN after LEFT")
+			}
+		} else if token.Type == Right {
+			joinClause.Type = "RIGHT"
+			token = parser.lexer.NextToken()
+			if token.Type == Outer {
+				token = parser.lexer.NextToken()
+			}
+			if token.Type != Join {
+				return nil, errors.New("expected JOIN after RIGHT")
+			}
+		} else if token.Type == Inner {
+			joinClause.Type = "INNER"
+			token = parser.lexer.NextToken()
+			if token.Type != Join {
+				return nil, errors.New("expected JOIN after INNER")
+			}
+		}
+		// token.Type == Join at this point
+
+		// Parse joined table
+		token = parser.lexer.NextToken()
+		if token.Type != Identifier {
+			return nil, errors.New("expected table name after JOIN")
+		}
+
+		tableParts := strings.Split(token.Value, ".")
+		if len(tableParts) == 2 {
+			joinClause.Database = tableParts[0]
+			joinClause.Table = tableParts[1]
+		} else {
+			joinClause.Table = token.Value
+		}
+
+		token = parser.lexer.NextToken()
+
+		// Check for table alias
+		if token.Type == As {
+			token = parser.lexer.NextToken()
+			if token.Type != Identifier {
+				return nil, errors.New("expected alias after AS")
+			}
+			joinClause.TableAlias = token.Value
+			token = parser.lexer.NextToken()
+		} else if token.Type == Identifier && token.Value != "ON" {
+			joinClause.TableAlias = token.Value
+			token = parser.lexer.NextToken()
+		}
+
+		// Parse ON condition
+		if token.Type != On {
+			return nil, errors.New("expected ON after JOIN table")
+		}
+
+		token = parser.lexer.NextToken()
+		if token.Type != Identifier {
+			return nil, errors.New("expected column after ON")
+		}
+		joinClause.LeftCol = token.Value
+
+		token = parser.lexer.NextToken()
+		if token.Type != Equals {
+			return nil, errors.New("expected = in JOIN ON condition")
+		}
+
+		token = parser.lexer.NextToken()
+		if token.Type != Identifier {
+			return nil, errors.New("expected column after = in JOIN ON")
+		}
+		joinClause.RightCol = token.Value
+
+		selectStatement.Joins = append(selectStatement.Joins, joinClause)
+		token = parser.lexer.NextToken()
+	}
+
+	// Parse WHERE clause
+	if token.Type == Where {
+		whereClause, err := ParseWhere(parser)
+		if err != nil {
+			return nil, err
+		}
+		selectStatement.Where = whereClause
+		token = parser.lexer.NextToken()
+	}
+
+	// Parse GROUP BY clause
+	if token.Type == Group {
+		token = parser.lexer.NextToken()
+		if token.Type != By {
+			return nil, errors.New("expected BY after GROUP")
+		}
+		for {
+			token = parser.lexer.NextToken()
+			if token.Type != Identifier {
+				return nil, errors.New("expected column name in GROUP BY")
+			}
+			selectStatement.GroupBy = append(selectStatement.GroupBy, token.Value)
+
+			peek := parser.lexer.PeekToken()
+			if peek.Type == Comma {
+				parser.lexer.NextToken() // consume comma
+				continue
+			}
+			break
+		}
+		token = parser.lexer.NextToken()
+	}
+
+	// Parse HAVING clause (only valid after GROUP BY)
+	if token.Type == Having {
+		havingClause, err := ParseWhere(parser)
+		if err != nil {
+			return nil, err
+		}
+		selectStatement.Having = havingClause
+		token = parser.lexer.NextToken()
+	}
+
+	// Parse ORDER BY clause
+	if token.Type == Order {
+		token = parser.lexer.NextToken()
+		if token.Type != By {
+			return nil, errors.New("expected BY after ORDER")
+		}
+		for {
+			token = parser.lexer.NextToken()
+			if token.Type != Identifier {
+				return nil, errors.New("expected column name in ORDER BY")
+			}
+			orderByClause := OrderByClause{Column: token.Value}
+
+			// Check for ASC/DESC
+			peek := parser.lexer.PeekToken()
+			if peek.Type == Asc {
+				parser.lexer.NextToken()
+				orderByClause.Descending = false
+			} else if peek.Type == Desc {
+				parser.lexer.NextToken()
+				orderByClause.Descending = true
+			}
+
+			selectStatement.OrderBy = append(selectStatement.OrderBy, orderByClause)
+
+			peek = parser.lexer.PeekToken()
+			if peek.Type == Comma {
+				parser.lexer.NextToken() // consume comma
+				continue
+			}
+			break
+		}
+		token = parser.lexer.NextToken()
+	}
+
+	// Parse LIMIT clause
+	if token.Type == Limit {
+		token = parser.lexer.NextToken()
+		if token.Type != Int {
+			return nil, errors.New("expected integer after LIMIT")
+		}
+		limit, err := strconv.Atoi(token.Value)
+		if err != nil {
+			return nil, err
+		}
+		selectStatement.Limit = limit
+		token = parser.lexer.NextToken()
+	}
+
+	// Parse OFFSET clause
+	if token.Type == Offset {
+		token = parser.lexer.NextToken()
+		if token.Type != Int {
+			return nil, errors.New("expected integer after OFFSET")
+		}
+		offset, err := strconv.Atoi(token.Value)
+		if err != nil {
+			return nil, err
+		}
+		selectStatement.Offset = offset
+	}
+
+	return selectStatement, nil
+}
+
+func ParseWhere(parser *Parser) (WhereClause, error) {
+	var whereClause WhereClause
+
+	for {
+		token := parser.lexer.NextToken()
+
+		// Check for NOT
+		negated := false
+		if token.Type == Not {
+			negated = true
+			token = parser.lexer.NextToken()
+		}
+
+		if token.Type != Identifier {
+			return whereClause, errors.New("expected identifier in WHERE clause")
+		}
+		left := token.Value
+
+		token = parser.lexer.NextToken()
+
+		var operator WhereOperator
+		var right string
+
+		// Handle IS NULL / IS NOT NULL
+		if token.Type == Is {
+			token = parser.lexer.NextToken()
+			if token.Type == Not {
+				token = parser.lexer.NextToken()
+				if token.Type != Null {
+					return whereClause, errors.New("expected NULL after IS NOT")
+				}
+				operator = IsNotNullOperator
+			} else if token.Type == Null {
+				operator = IsNullOperator
+			} else {
+				return whereClause, errors.New("expected NULL or NOT after IS")
+			}
+			right = ""
+		} else {
+			// Handle comparison operators
+			switch token.Type {
+			case Equals:
+				operator = EqualsOperator
+			case NotEquals:
+				operator = NotEqualsOperator
+			case LessThan:
+				operator = LessThanOperator
+			case GreaterThan:
+				operator = GreaterThanOperator
+			case LessThanOrEqual:
+				operator = LessThanOrEqualOperator
+			case GreaterThanOrEqual:
+				operator = GreaterThanOrEqualOperator
+			case Like:
+				operator = LikeOperator
+			default:
+				return whereClause, errors.New("expected operator in WHERE clause")
+			}
+
+			token = parser.lexer.NextToken()
+			if token.Type != String && token.Type != Int {
+				return whereClause, errors.New("expected value in WHERE clause")
+			}
+			right = token.Value
+		}
+
+		whereClause.Conditions = append(whereClause.Conditions, WhereCondition{
+			Left:     left,
+			Operator: operator,
+			Right:    right,
+			Negated:  negated,
+		})
+
+		token = parser.lexer.PeekToken()
+		if token.Type == And {
+			parser.lexer.NextToken() // consume AND
+			whereClause.LogicalOps = append(whereClause.LogicalOps, LogicalAnd)
+			continue
+		} else if token.Type == Or {
+			parser.lexer.NextToken() // consume OR
+			whereClause.LogicalOps = append(whereClause.LogicalOps, LogicalOr)
+			continue
+		} else {
+			break
+		}
+	}
+
+	return whereClause, nil
+}
+
+func ParseInsert(parser *Parser) (Statement, error) {
+	var insertStatement InsertStatement
+
+	// Parse INTO
+	token := parser.lexer.NextToken()
+	if token.Type != Into {
+		return nil, errors.New("expected INTO after INSERT")
+	}
+
+	// Parse table name
+	token = parser.lexer.NextToken()
+	if token.Type != Identifier {
+		return nil, errors.New("expected table name after INSERT INTO")
+	}
+
+	parts := strings.Split(token.Value, ".")
+	if len(parts) == 2 {
+		insertStatement.Database = parts[0]
+		insertStatement.Table = parts[1]
+	} else {
+		return nil, errors.New("expected database.table format")
+	}
+
+	// Parse columns
+	token = parser.lexer.NextToken()
+	if token.Type != ParenOpen {
+		return nil, errors.New("expected '(' after table name")
+	}
+
+	for {
+		token = parser.lexer.NextToken()
+		if token.Type != Identifier {
+			return nil, errors.New("expected column name")
+		}
+		insertStatement.Columns = append(insertStatement.Columns, token.Value)
+
+		token = parser.lexer.NextToken()
+		if token.Type == Comma {
+			continue
+		} else if token.Type == ParenClose {
+			break
+		} else {
+			return nil, errors.New("expected ',' or ')' in column list")
+		}
+	}
+
+	// Parse VALUES
+	token = parser.lexer.NextToken()
+	if token.Type != Values {
+		return nil, errors.New("expected VALUES")
+	}
+
+	// Parse values
+	token = parser.lexer.NextToken()
+	if token.Type != ParenOpen {
+		return nil, errors.New("expected '(' after VALUES")
+	}
+
+	for {
+		token = parser.lexer.NextToken()
+		if token.Type != String && token.Type != Int {
+			return nil, errors.New("expected value")
+		}
+		insertStatement.Values = append(insertStatement.Values, token.Value)
+
+		token = parser.lexer.NextToken()
+		if token.Type == Comma {
+			continue
+		} else if token.Type == ParenClose {
+			break
+		} else {
+			return nil, errors.New("expected ',' or ')' in values list")
+		}
+	}
+
+	return insertStatement, nil
+}
+
+func ParseUpdate(parser *Parser) (Statement, error) {
+	var updateStatement UpdateStatement
+
+	// Parse table name
+	token := parser.lexer.NextToken()
+	if token.Type != Identifier {
+		return nil, errors.New("expected table name after UPDATE")
+	}
+
+	parts := strings.Split(token.Value, ".")
+	if len(parts) == 2 {
+		updateStatement.Database = parts[0]
+		updateStatement.Table = parts[1]
+	} else {
+		return nil, errors.New("expected database.table format")
+	}
+
+	// Parse SET clause
+	token = parser.lexer.NextToken()
+	if token.Type != Set {
+		return nil, errors.New("expected SET after table name")
+	}
+
+	for {
+		token = parser.lexer.NextToken()
+		if token.Type != Identifier {
+			return nil, errors.New("expected column name in SET clause")
+		}
+		column := token.Value
+
+		token = parser.lexer.NextToken()
+		if token.Type != Equals {
+			return nil, errors.New("expected '=' in SET clause")
+		}
+
+		token = parser.lexer.NextToken()
+		if token.Type != String && token.Type != Int {
+			return nil, errors.New("expected value in SET clause")
+		}
+		value := token.Value
+
+		updateStatement.Updates = append(updateStatement.Updates, SetClause{
+			Column: column,
+			Value:  value,
+		})
+
+		token = parser.lexer.PeekToken()
+		if token.Type == Comma {
+			parser.lexer.NextToken() // consume comma
+			continue
+		} else {
+			break
+		}
+	}
+
+	token = parser.lexer.NextToken()
+	if token.Type == Where {
+		whereClause, err := ParseWhere(parser)
+		if err != nil {
+			return nil, err
+		}
+		updateStatement.Where = whereClause
+	}
+
+	return updateStatement, nil
+}
+
+func ParseDelete(parser *Parser) (Statement, error) {
+	var deleteStatement DeleteStatement
+
+	// Parse FROM
+	token := parser.lexer.NextToken()
+	if token.Type != From {
+		return nil, errors.New("expected FROM after DELETE")
+	}
+
+	// Parse table name
+	token = parser.lexer.NextToken()
+	if token.Type != Identifier {
+		return nil, errors.New("expected table name after FROM")
+	}
+
+	parts := strings.Split(token.Value, ".")
+	if len(parts) == 2 {
+		deleteStatement.Database = parts[0]
+		deleteStatement.Table = parts[1]
+	} else {
+		return nil, errors.New("expected database.table format")
+	}
+
+	// Parse WHERE clause
+	token = parser.lexer.NextToken()
+	if token.Type == Where {
+		whereClause, err := ParseWhere(parser)
+		if err != nil {
+			return nil, err
+		}
+		deleteStatement.Where = whereClause
+	}
+
+	return deleteStatement, nil
+}
+
+func ParseCreate(parser *Parser) (Statement, error) {
+	token := parser.lexer.NextToken()
+	switch token.Type {
+	case TableIdentifier:
+		return ParseCreateTable(parser)
+	case DatabaseIdentifier:
+		return ParseCreateDatabase(parser)
+	case IndexIdentifier:
+		return ParseCreateIndex(parser, false)
+	case Unique:
+		// UNIQUE INDEX
+		token = parser.lexer.NextToken()
+		if token.Type != IndexIdentifier {
+			return nil, errors.New("expected INDEX after UNIQUE")
+		}
+		return ParseCreateIndex(parser, true)
+	default:
+		return nil, errors.New("expected TABLE, DATABASE, or INDEX after CREATE")
+	}
+}
+
+func ParseCreateTable(parser *Parser) (Statement, error) {
+	var createTableStatement CreateTableStatement
+
+	// Parse table name
+	token := parser.lexer.NextToken()
+	if token.Type != Identifier {
+		return nil, errors.New("expected table name after TABLE")
+	}
+
+	parts := strings.Split(token.Value, ".")
+	if len(parts) == 2 {
+		createTableStatement.Database = parts[0]
+		createTableStatement.Table = parts[1]
+	} else {
+		return nil, errors.New("expected database.table format")
+	}
+
+	// Parse columns
+	token = parser.lexer.NextToken()
+	if token.Type != ParenOpen {
+		return nil, errors.New("expected '(' after table name")
+	}
+
+	for {
+		token = parser.lexer.NextToken()
+		if token.Type != Identifier {
+			return nil, errors.New("expected column name")
+		}
+		columnName := token.Value
+
+		token = parser.lexer.NextToken()
+		var columnType core.ColumnType
+		switch toUpper(token.Value) {
+		case "STRING":
+			columnType = core.StringType
+		case "INT", "INTEGER":
+			columnType = core.IntType
+		case "FLOAT", "DOUBLE", "REAL":
+			columnType = core.FloatType
+		case "BOOL", "BOOLEAN":
+			columnType = core.BoolType
+		case "TEXT":
+			columnType = core.TextType
+		case "TIMESTAMP", "DATETIME":
+			columnType = core.TimestampType
+		default:
+			return nil, errors.New("expected column type (STRING, INT, FLOAT, BOOL, TEXT, TIMESTAMP)")
+		}
+
+		// Check for PRIMARY KEY
+		token = parser.lexer.PeekToken()
+		isPrimaryKey := false
+		if token.Type == PrimaryKey {
+			parser.lexer.NextToken() // consume PRIMARY KEY
+			isPrimaryKey = true
+		}
+
+		createTableStatement.Columns = append(createTableStatement.Columns, core.Column{
+			Name:       columnName,
+			Type:       columnType,
+			PrimaryKey: isPrimaryKey,
+		})
+
+		token = parser.lexer.NextToken()
+		if token.Type == Comma {
+			continue
+		} else if token.Type == ParenClose {
+			break
+		} else {
+			return nil, errors.New("expected ',' or ')' in column list")
+		}
+	}
+
+	return createTableStatement, nil
+}
+
+// ParseCreateIndex parses: CREATE [UNIQUE] INDEX name ON database.table(column)
+func ParseCreateIndex(parser *Parser, unique bool) (Statement, error) {
+	var statement CreateIndexStatement
+	statement.Unique = unique
+
+	// Parse index name
+	token := parser.lexer.NextToken()
+	if token.Type != Identifier {
+		return nil, errors.New("expected index name after INDEX")
+	}
+	statement.Name = token.Value
+
+	// Parse ON
+	token = parser.lexer.NextToken()
+	if token.Type != On {
+		return nil, errors.New("expected ON after index name")
+	}
+
+	// Parse table name (database.table or just table)
+	token = parser.lexer.NextToken()
+	if token.Type != Identifier {
+		return nil, errors.New("expected table name after ON")
+	}
+
+	tableParts := strings.Split(token.Value, ".")
+	if len(tableParts) == 2 {
+		statement.Database = tableParts[0]
+		statement.Table = tableParts[1]
+	} else {
+		statement.Table = token.Value
+	}
+
+	// Parse (column)
+	token = parser.lexer.NextToken()
+	if token.Type != ParenOpen {
+		return nil, errors.New("expected '(' after table name")
+	}
+
+	token = parser.lexer.NextToken()
+	if token.Type != Identifier {
+		return nil, errors.New("expected column name inside parentheses")
+	}
+	statement.Column = token.Value
+
+	token = parser.lexer.NextToken()
+	if token.Type != ParenClose {
+		return nil, errors.New("expected ')' after column name")
+	}
+
+	return statement, nil
+}
+
+func ParseDrop(parser *Parser) (Statement, error) {
+	token := parser.lexer.NextToken()
+	switch token.Type {
+	case TableIdentifier:
+		return ParseDropTable(parser)
+	case DatabaseIdentifier:
+		return ParseDropDatabase(parser)
+	case IndexIdentifier:
+		return ParseDropIndex(parser)
+	default:
+		return nil, errors.New("expected TABLE, DATABASE, or INDEX after DROP")
+	}
+}
+
+// ParseDropIndex parses: DROP INDEX name ON database.table
+func ParseDropIndex(parser *Parser) (Statement, error) {
+	var statement DropIndexStatement
+
+	// Parse index name
+	token := parser.lexer.NextToken()
+	if token.Type != Identifier {
+		return nil, errors.New("expected index name after INDEX")
+	}
+	statement.Name = token.Value
+
+	// Parse ON
+	token = parser.lexer.NextToken()
+	if token.Type != On {
+		return nil, errors.New("expected ON after index name")
+	}
+
+	// Parse table name
+	token = parser.lexer.NextToken()
+	if token.Type != Identifier {
+		return nil, errors.New("expected table name after ON")
+	}
+
+	tableParts := strings.Split(token.Value, ".")
+	if len(tableParts) == 2 {
+		statement.Database = tableParts[0]
+		statement.Table = tableParts[1]
+	} else {
+		statement.Table = token.Value
+	}
+
+	return statement, nil
+}
+
+func ParseDropTable(parser *Parser) (Statement, error) {
+	var dropTableStatement DropTableStatement
+
+	// Parse table name
+	token := parser.lexer.NextToken()
+	if token.Type != Identifier {
+		return nil, errors.New("expected table name after TABLE")
+	}
+
+	parts := strings.Split(token.Value, ".")
+	if len(parts) == 2 {
+		dropTableStatement.Database = parts[0]
+		dropTableStatement.Table = parts[1]
+	} else {
+		return nil, errors.New("expected database.table format")
+	}
+
+	return dropTableStatement, nil
+}
+
+func ParseCreateDatabase(parser *Parser) (Statement, error) {
+	var createDatabaseStatement CreateDatabaseStatement
+
+	// Parse database name
+	token := parser.lexer.NextToken()
+	if token.Type != Identifier {
+		return nil, errors.New("expected database name after DATABASE")
+	}
+	createDatabaseStatement.Database = token.Value
+
+	return createDatabaseStatement, nil
+}
+
+func ParseDropDatabase(parser *Parser) (Statement, error) {
+	var dropDatabaseStatement DropDatabaseStatement
+
+	// Parse database name
+	token := parser.lexer.NextToken()
+	if token.Type != Identifier {
+		return nil, errors.New("expected database name after DATABASE")
+	}
+	dropDatabaseStatement.Database = token.Value
+
+	return dropDatabaseStatement, nil
+}
+
+func ParseShow(parser *Parser) (Statement, error) {
+	token := parser.lexer.NextToken()
+	switch token.Type {
+	case DatabasesIdentifier:
+		return ShowDatabasesStatement{}, nil
+	case TablesIdentifier:
+		// Parse IN
+		token = parser.lexer.NextToken()
+		if token.Type != In {
+			return nil, errors.New("expected IN after TABLES")
+		}
+		token = parser.lexer.NextToken()
+		if token.Type != Identifier {
+			return nil, errors.New("expected database name after IN")
+		}
+		return ShowTablesStatement{Database: token.Value}, nil
+	case IndexIdentifier:
+		// SHOW INDEXES ON database.table
+		token = parser.lexer.NextToken()
+		if token.Type != On {
+			return nil, errors.New("expected ON after INDEXES")
+		}
+		token = parser.lexer.NextToken()
+		if token.Type != Identifier {
+			return nil, errors.New("expected table name after ON")
+		}
+		tableParts := strings.Split(token.Value, ".")
+		if len(tableParts) == 2 {
+			return ShowIndexesStatement{Database: tableParts[0], Table: tableParts[1]}, nil
+		}
+		return ShowIndexesStatement{Table: token.Value}, nil
+	default:
+		return nil, errors.New("expected DATABASES, TABLES, or INDEXES after SHOW")
+	}
+}
+
+// ParseAlter parses ALTER TABLE statements
+func ParseAlter(parser *Parser) (Statement, error) {
+	token := parser.lexer.NextToken()
+	if token.Type != TableIdentifier {
+		return nil, errors.New("expected TABLE after ALTER")
+	}
+
+	var statement AlterTableStatement
+
+	// Parse table name
+	token = parser.lexer.NextToken()
+	if token.Type != Identifier {
+		return nil, errors.New("expected table name")
+	}
+	tableParts := strings.Split(token.Value, ".")
+	if len(tableParts) == 2 {
+		statement.Database = tableParts[0]
+		statement.Table = tableParts[1]
+	} else {
+		statement.Table = token.Value
+	}
+
+	// Parse action: ADD, DROP, MODIFY
+	token = parser.lexer.NextToken()
+	switch token.Type {
+	case Add:
+		statement.Action = "ADD"
+	case Drop:
+		statement.Action = "DROP"
+	case Modify:
+		statement.Action = "MODIFY"
+	default:
+		return nil, errors.New("expected ADD, DROP, or MODIFY")
+	}
+
+	// Parse COLUMN (optional)
+	token = parser.lexer.NextToken()
+	if token.Type == Column {
+		token = parser.lexer.NextToken()
+	}
+
+	// Parse column name
+	if token.Type != Identifier {
+		return nil, errors.New("expected column name")
+	}
+	statement.ColumnName = token.Value
+
+	// Parse column type for ADD and MODIFY
+	if statement.Action == "ADD" || statement.Action == "MODIFY" {
+		token = parser.lexer.NextToken()
+		if token.Type != Identifier {
+			return nil, errors.New("expected column type")
+		}
+		statement.ColumnType = token.Value
+	}
+
+	return statement, nil
+}
+
+// ParseDescribe parses DESCRIBE table statements
+func ParseDescribe(parser *Parser) (Statement, error) {
+	token := parser.lexer.NextToken()
+	if token.Type != Identifier {
+		return nil, errors.New("expected table name after DESCRIBE")
+	}
+
+	tableParts := strings.Split(token.Value, ".")
+	if len(tableParts) == 2 {
+		return DescribeStatement{Database: tableParts[0], Table: tableParts[1]}, nil
+	}
+	return DescribeStatement{Table: token.Value}, nil
+}
+
+func parse(sql string) (Statement, error) {
+	parser := NewParser(sql)
+
+	return parser.Parse()
+}
