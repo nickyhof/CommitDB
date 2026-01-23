@@ -45,35 +45,49 @@ func TestBranchFromTransaction(t *testing.T) {
 	persistence, _ := NewMemoryPersistence()
 	identity := core.Identity{Name: "Test", Email: "test@test.com"}
 
-	// Create first commit
+	// Create first commit (database only)
 	db := core.Database{Name: "testdb"}
 	txn1, err := persistence.CreateDatabase(db, identity)
 	if err != nil {
 		t.Fatalf("CreateDatabase failed: %v", err)
 	}
 
-	// Create second commit
+	// Create second commit (add table - this should NOT be visible on old branch)
 	table := core.Table{Database: "testdb", Name: "users", Columns: []core.Column{{Name: "id", Type: core.IntType}}}
 	_, err = persistence.CreateTable(table, identity)
 	if err != nil {
 		t.Fatalf("CreateTable failed: %v", err)
 	}
 
-	// Create branch from first transaction
+	// Verify table exists on master
+	tables := persistence.ListTables("testdb")
+	if len(tables) != 1 {
+		t.Fatalf("Expected 1 table on master, got %d", len(tables))
+	}
+
+	// Create branch from first transaction (before table was created)
 	err = persistence.Branch("old-state", &txn1)
 	if err != nil {
 		t.Fatalf("Branch from transaction failed: %v", err)
 	}
 
-	branches, _ := persistence.ListBranches()
-	found := false
-	for _, b := range branches {
-		if b == "old-state" {
-			found = true
-		}
+	// Checkout old-state branch
+	err = persistence.Checkout("old-state")
+	if err != nil {
+		t.Fatalf("Checkout old-state failed: %v", err)
 	}
-	if !found {
-		t.Error("Expected 'old-state' branch to exist")
+
+	// On old-state branch, the table should NOT exist
+	tablesOnOldState := persistence.ListTables("testdb")
+	if len(tablesOnOldState) != 0 {
+		t.Errorf("Expected 0 tables on old-state branch (created from before table), got %d", len(tablesOnOldState))
+	}
+
+	// Verify we can switch back to master and see the table
+	persistence.Checkout("master")
+	tablesOnMaster := persistence.ListTables("testdb")
+	if len(tablesOnMaster) != 1 {
+		t.Errorf("Expected 1 table on master after checkout, got %d", len(tablesOnMaster))
 	}
 }
 

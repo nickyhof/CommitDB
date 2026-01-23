@@ -402,8 +402,6 @@ func ParseSelect(parser *Parser) (Statement, error) {
 				funcName = "MAX"
 			case Count:
 				funcName = "COUNT"
-			default:
-				break
 			}
 
 			if funcName == "" {
@@ -442,15 +440,12 @@ func ParseSelect(parser *Parser) (Statement, error) {
 
 			selectStatement.Aggregates = append(selectStatement.Aggregates, agg)
 
-			// Check for comma (more aggregates) or FROM
+			// Check for comma (more aggregates) or break
 			if token.Type == Comma {
 				token = parser.lexer.NextToken()
 				continue
-			} else if token.Type == From {
-				break
-			} else {
-				break
 			}
+			break
 		}
 	} else if token.Type == Wildcard {
 		// Parse wildcard

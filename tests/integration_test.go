@@ -548,20 +548,61 @@ func TestBranchingSQL(t *testing.T) {
 // TestBranchFromTransaction tests CREATE BRANCH FROM syntax
 func TestBranchFromTransaction(t *testing.T) {
 	runWithBothPersistence(t, func(t *testing.T, engine *db.Engine) {
-		// Create database and get the transaction ID
+		// Create database and table
 		engine.Execute("CREATE DATABASE branchtest2")
-		engine.Execute("CREATE TABLE branchtest2.data (id INT PRIMARY KEY)")
-		engine.Execute("INSERT INTO branchtest2.data (id) VALUES (1)")
+		engine.Execute("CREATE TABLE branchtest2.data (id INT PRIMARY KEY, name STRING)")
 
-		// Make more changes
-		engine.Execute("INSERT INTO branchtest2.data (id) VALUES (2)")
-		engine.Execute("INSERT INTO branchtest2.data (id) VALUES (3)")
+		// Insert first row and capture the transaction
+		result1, err := engine.Execute("INSERT INTO branchtest2.data (id, name) VALUES (1, 'first')")
+		if err != nil {
+			t.Fatalf("INSERT failed: %v", err)
+		}
+		txn1 := result1.(db.CommitResult).Transaction
 
-		// Current state should have 3 rows
+		// Insert more rows (these should NOT be on the old branch)
+		engine.Execute("INSERT INTO branchtest2.data (id, name) VALUES (2, 'second')")
+		engine.Execute("INSERT INTO branchtest2.data (id, name) VALUES (3, 'third')")
+
+		// Verify current state has 3 rows
 		result, _ := engine.Execute("SELECT * FROM branchtest2.data")
 		qr := result.(db.QueryResult)
 		if len(qr.Data) != 3 {
-			t.Errorf("Expected 3 rows, got %d", len(qr.Data))
+			t.Fatalf("Expected 3 rows on master, got %d", len(qr.Data))
+		}
+
+		// Create branch from the first transaction (should only have 1 row)
+		_, err = engine.Execute("CREATE BRANCH old_state FROM '" + txn1.Id + "'")
+		if err != nil {
+			t.Fatalf("CREATE BRANCH FROM failed: %v", err)
+		}
+
+		// Checkout the old branch
+		_, err = engine.Execute("CHECKOUT old_state")
+		if err != nil {
+			t.Fatalf("CHECKOUT old_state failed: %v", err)
+		}
+
+		// On old branch, should only have 1 row
+		result, err = engine.Execute("SELECT * FROM branchtest2.data")
+		if err != nil {
+			t.Fatalf("SELECT on old branch failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 {
+			t.Errorf("Expected 1 row on old_state branch, got %d", len(qr.Data))
+		}
+
+		// Verify the old branch has the correct data
+		if len(qr.Data) > 0 && qr.Data[0][1] != "first" {
+			t.Errorf("Expected 'first' on old branch, got '%s'", qr.Data[0][1])
+		}
+
+		// Switch back to master and verify 3 rows
+		engine.Execute("CHECKOUT master")
+		result, _ = engine.Execute("SELECT * FROM branchtest2.data")
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 3 {
+			t.Errorf("Expected 3 rows on master after checkout, got %d", len(qr.Data))
 		}
 	})
 }
