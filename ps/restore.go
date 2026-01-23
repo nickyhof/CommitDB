@@ -24,8 +24,15 @@ func (persistence *Persistence) Snapshot(name string, asof *Transaction) error {
 func (persistence *Persistence) Recover(name string) error {
 	fmt.Println("Recovering to snapshot:", name)
 
-	wt, _ := persistence.repo.Worktree()
-	ref, _ := persistence.repo.Tag(name)
+	wt, err := persistence.repo.Worktree()
+	if err != nil {
+		return fmt.Errorf("failed to get worktree: %w", err)
+	}
+
+	ref, err := persistence.repo.Tag(name)
+	if err != nil {
+		return fmt.Errorf("snapshot not found: %w", err)
+	}
 
 	return wt.Reset(&git.ResetOptions{
 		Mode:   git.HardReset,
@@ -36,7 +43,10 @@ func (persistence *Persistence) Recover(name string) error {
 func (persistence *Persistence) Restore(asof Transaction, database *string, table *string) error {
 	fmt.Println("Restoring to transaction:", asof.Id)
 
-	wt, _ := persistence.repo.Worktree()
+	wt, err := persistence.repo.Worktree()
+	if err != nil {
+		return fmt.Errorf("failed to get worktree: %w", err)
+	}
 
 	sparseDirs := []string{}
 	if database != nil && table != nil {

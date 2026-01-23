@@ -166,6 +166,32 @@ COMMIT;
 ROLLBACK;
 ```
 
+### Snapshots & Restore
+
+CommitDB's Git-backed storage enables powerful version control features:
+
+```go
+// Create a named snapshot (git tag) at current state
+persistence.Snapshot("v1.0.0", nil)
+
+// Create a snapshot at a specific transaction
+persistence.Snapshot("before-migration", &transaction)
+
+// Recover to a named snapshot (resets all data)
+persistence.Recover("v1.0.0")
+
+// Restore to a specific transaction
+persistence.Restore(transaction, nil, nil)
+
+// Restore only a specific database
+db := "mydb"
+persistence.Restore(transaction, &db, nil)
+
+// Restore only a specific table
+table := "users"
+persistence.Restore(transaction, &db, &table)
+```
+
 ### WHERE Operators
 
 | Operator | Example |
