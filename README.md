@@ -65,6 +65,7 @@ The server accepts SQL queries (one per line) and returns JSON responses:
 pip install commitdb
 ```
 
+**Remote mode** (connect to server):
 ```python
 from commitdb import CommitDB
 
@@ -73,6 +74,22 @@ with CommitDB('localhost', 3306) as db:
     result = db.query('SELECT * FROM mydb.users')
     for row in result:
         print(row)
+```
+
+**Embedded mode** (no server required):
+```python
+from commitdb import CommitDBLocal
+
+# In-memory database
+with CommitDBLocal() as db:
+    db.execute('CREATE DATABASE mydb')
+    db.execute('CREATE TABLE mydb.users (id INT PRIMARY KEY, name STRING)')
+    db.execute("INSERT INTO mydb.users (id, name) VALUES (1, 'Alice')")
+    result = db.query('SELECT * FROM mydb.users')
+
+# File-based persistence
+with CommitDBLocal('/path/to/data') as db:
+    db.execute('CREATE DATABASE mydb')
 ```
 
 See [drivers/python/README.md](drivers/python/README.md) for full documentation.

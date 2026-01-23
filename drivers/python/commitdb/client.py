@@ -242,3 +242,138 @@ class CommitDB:
         """List all tables in a database."""
         result = self.query(f'SHOW TABLES IN {database}')
         return [row[0] for row in result.data] if result.data else []
+
+
+class CommitDBLocal:
+    """
+    CommitDB embedded client using Go bindings.
+    
+    This mode runs the database engine directly in-process without
+    requiring a separate server.
+
+    Example:
+        # In-memory database
+        db = CommitDBLocal()
+        
+        # File-based database
+        db = CommitDBLocal('/path/to/data')
+        
+        db.execute('CREATE DATABASE mydb')
+        result = db.query('SELECT * FROM mydb.users')
+        db.close()
+    """
+
+    def __init__(self, path: Optional[str] = None, lib_path: Optional[str] = None):
+        """
+        Initialize CommitDB embedded client.
+
+        Args:
+            path: Path for file-based persistence. If None, uses in-memory storage.
+            lib_path: Optional path to libcommitdb shared library.
+        """
+        from .binding import CommitDBBinding
+        
+        self._binding = CommitDBBinding
+        if lib_path:
+            self._binding.load(lib_path)
+        
+        self._path = path
+        self._handle: Optional[int] = None
+
+    def open(self) -> 'CommitDBLocal':
+        """Open the database."""
+        if self._path:
+            self._handle = self._binding.open_file(self._path)
+        else:
+            self._handle = self._binding.open_memory()
+        return self
+
+    def close(self) -> None:
+        """Close the database."""
+        if self._handle is not None:
+            self._binding.close(self._handle)
+            self._handle = None
+
+    def __enter__(self) -> 'CommitDBLocal':
+        return self.open()
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()
+
+    def _parse_response(self, response: dict) -> CommitResult | QueryResult:
+        """Parse a response dict into result objects."""
+        if not response.get('success'):
+            raise CommitDBError(response.get('error', 'Unknown error'))
+
+        result_type = response.get('type')
+        result_data = response.get('result', {})
+
+        if result_type == 'query':
+            return QueryResult(
+                columns=result_data.get('columns', []),
+                data=result_data.get('data', []),
+                records_read=result_data.get('records_read', 0),
+                time_ms=result_data.get('time_ms', 0.0)
+            )
+        elif result_type == 'commit':
+            return CommitResult(
+                databases_created=result_data.get('databases_created', 0),
+                databases_deleted=result_data.get('databases_deleted', 0),
+                tables_created=result_data.get('tables_created', 0),
+                tables_deleted=result_data.get('tables_deleted', 0),
+                records_written=result_data.get('records_written', 0),
+                records_deleted=result_data.get('records_deleted', 0),
+                time_ms=result_data.get('time_ms', 0.0)
+            )
+        else:
+            return CommitResult()
+
+    def execute(self, query: str) -> CommitResult | QueryResult:
+        """
+        Execute a SQL query.
+
+        Args:
+            query: SQL query to execute
+
+        Returns:
+            QueryResult for SELECT queries, CommitResult for mutations
+        """
+        if self._handle is None:
+            raise CommitDBError("Database not open. Call open() first.")
+        
+        response = self._binding.execute(self._handle, query)
+        return self._parse_response(response)
+
+    def query(self, sql: str) -> QueryResult:
+        """Execute a SELECT query and return results."""
+        result = self.execute(sql)
+        if not isinstance(result, QueryResult):
+            raise CommitDBError("Expected query result, got commit result")
+        return result
+
+    def create_database(self, name: str) -> CommitResult:
+        """Create a database."""
+        result = self.execute(f'CREATE DATABASE {name}')
+        if not isinstance(result, CommitResult):
+            raise CommitDBError("Expected commit result")
+        return result
+
+    def create_table(self, database: str, table: str, columns: str) -> CommitResult:
+        """Create a table."""
+        result = self.execute(f'CREATE TABLE {database}.{table} ({columns})')
+        if not isinstance(result, CommitResult):
+            raise CommitDBError("Expected commit result")
+        return result
+
+    def insert(self, database: str, table: str, columns: list[str], values: list) -> CommitResult:
+        """Insert a row."""
+        cols = ', '.join(columns)
+        vals = ', '.join(
+            f"'{v}'" if isinstance(v, str) else str(v)
+            for v in values
+        )
+        result = self.execute(f'INSERT INTO {database}.{table} ({cols}) VALUES ({vals})')
+        if not isinstance(result, CommitResult):
+            raise CommitDBError("Expected commit result")
+        return result
+

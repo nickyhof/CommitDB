@@ -83,6 +83,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build shared libraries
+        working-directory: .
+        run: |
+          mkdir -p drivers/python/commitdb/lib
+          # Build for Linux amd64
+          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -buildmode=c-shared -o drivers/python/commitdb/lib/libcommitdb-linux-amd64.so ./bindings
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -106,4 +119,3 @@ jobs:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: twine upload dist/*
-

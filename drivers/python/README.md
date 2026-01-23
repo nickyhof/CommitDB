@@ -82,3 +82,80 @@ result.records_written   # 1
 result.affected_rows     # 1
 result.time_ms           # 1.5
 ```
+
+## Embedded Mode (CommitDBLocal)
+
+Run CommitDB directly in-process without a separate server. Requires the `libcommitdb` shared library.
+
+### Quick Start
+
+```python
+from commitdb import CommitDBLocal
+
+# In-memory database (no persistence)
+with CommitDBLocal() as db:
+    db.execute('CREATE DATABASE mydb')
+    db.execute('CREATE TABLE mydb.users (id INT PRIMARY KEY, name STRING)')
+    db.execute("INSERT INTO mydb.users (id, name) VALUES (1, 'Alice')")
+    result = db.query('SELECT * FROM mydb.users')
+
+# File-based persistence
+with CommitDBLocal('/path/to/data') as db:
+    db.execute('CREATE DATABASE mydb')
+    # Data persists between sessions
+```
+
+### Building the Shared Library
+
+If the library isn't bundled with your pip install:
+
+```bash
+# From CommitDB root
+make lib  # Creates lib/libcommitdb.dylib (macOS) or .so (Linux)
+```
+
+### CommitDBLocal API
+
+```python
+CommitDBLocal(path=None, lib_path=None)
+```
+
+**Parameters:**
+- `path` - Directory for file-based persistence. If `None`, uses in-memory storage.
+- `lib_path` - Optional path to `libcommitdb` shared library.
+
+**Methods:**
+- `open()` - Open the database
+- `close()` - Close the database
+- `execute(sql)` - Execute any SQL query
+- `query(sql)` - Execute SELECT query
+- `create_database(name)` - Create a database
+- `create_table(database, table, columns)` - Create a table
+- `insert(database, table, columns, values)` - Insert a row
+
+### Example: Full CRUD
+
+```python
+from commitdb import CommitDBLocal
+
+with CommitDBLocal() as db:
+    # Create
+    db.create_database('app')
+    db.create_table('app', 'users', 'id INT PRIMARY KEY, name STRING, email STRING')
+    
+    # Insert
+    db.insert('app', 'users', ['id', 'name', 'email'], [1, 'Alice', 'alice@example.com'])
+    db.insert('app', 'users', ['id', 'name', 'email'], [2, 'Bob', 'bob@example.com'])
+    
+    # Read
+    result = db.query('SELECT * FROM app.users')
+    for row in result:
+        print(f"{row['name']}: {row['email']}")
+    
+    # Update
+    db.execute("UPDATE app.users SET email = 'alice@new.com' WHERE id = 1")
+    
+    # Delete
+    db.execute('DELETE FROM app.users WHERE id = 2')
+```
+

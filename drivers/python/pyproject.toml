@@ -31,5 +31,8 @@ Repository = "https://github.com/nickyhof/CommitDB"
 [tool.setuptools.packages.find]
 where = ["."]
 
+[tool.setuptools.package-data]
+commitdb = ["lib/*.so", "lib/*.dylib", "lib/*.dll"]
+
 [project.optional-dependencies]
 dev = ["pytest>=7.0"]

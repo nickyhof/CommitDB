@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-01-23
+
+### Added
+
+#### Go Bindings for Python (Embedded Mode)
+- CGO shared library (`libcommitdb`) for embedded database mode
+- `CommitDBLocal` class for in-process database without server
+- ctypes bindings in `commitdb/binding.py`
+- Makefile with `make lib` target for building shared libraries
+- Bundled shared libraries in PyPI package
+
+#### Documentation
+- Embedded mode documentation in main README and Python driver README
+- Full CRUD examples for `CommitDBLocal`
+
 ## [1.1.2] - 2026-01-23
 
 ### Added
@@ -100,6 +115,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests run with both memory and file persistence modes
 - Persistence reopen tests for data durability verification
 
+[1.2.0]: https://github.com/nickyhof/CommitDB/releases/tag/v1.2.0
 [1.1.2]: https://github.com/nickyhof/CommitDB/releases/tag/v1.1.2
 [1.1.1]: https://github.com/nickyhof/CommitDB/releases/tag/v1.1.1
 [1.1.0]: https://github.com/nickyhof/CommitDB/releases/tag/v1.1.0

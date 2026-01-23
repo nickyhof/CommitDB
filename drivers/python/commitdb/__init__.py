@@ -22,9 +22,15 @@ Usage:
         print(row)
 
     db.close()
+
+Embedded mode (requires libcommitdb):
+    from commitdb import CommitDBLocal
+
+    with CommitDBLocal('/path/to/data') as db:
+        db.execute('CREATE DATABASE mydb')
 """
 
-from .client import CommitDB, QueryResult, CommitResult, CommitDBError
+from .client import CommitDB, CommitDBLocal, QueryResult, CommitResult, CommitDBError
 
 __version__ = '0.1.0'
-__all__ = ['CommitDB', 'QueryResult', 'CommitResult', 'CommitDBError']
+__all__ = ['CommitDB', 'CommitDBLocal', 'QueryResult', 'CommitResult', 'CommitDBError']
