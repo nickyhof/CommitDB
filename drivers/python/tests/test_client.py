@@ -322,33 +322,27 @@ class TestCommitDBLocal:
 
     def test_abort_merge(self, db):
         """Test ABORT MERGE syntax"""
-        # Setup
+        # Setup: create a record that will be modified on both branches
         db.execute('CREATE DATABASE aborttest')
-        db.execute('CREATE TABLE aborttest.data (id INT PRIMARY KEY)')
-        db.execute('INSERT INTO aborttest.data (id) VALUES (1)')
+        db.execute('CREATE TABLE aborttest.data (id INT PRIMARY KEY, val STRING)')
+        db.execute("INSERT INTO aborttest.data (id, val) VALUES (1, 'Original')")
         
+        # Create branch and modify the same record
         db.execute('CREATE BRANCH feature_abort')
         db.execute('CHECKOUT feature_abort')
-        db.execute('INSERT INTO aborttest.data (id) VALUES (2)')
+        db.execute("UPDATE aborttest.data SET val = 'FeatureValue' WHERE id = 1")
         
+        # Go back to master and modify the same record (creates conflict)
         db.execute('CHECKOUT master')
-        db.execute('INSERT INTO aborttest.data (id) VALUES (3)')
+        db.execute("UPDATE aborttest.data SET val = 'MasterValue' WHERE id = 1")
         
-        # Start manual merge
+        # Start manual merge - should have conflict on id=1
         db.execute('MERGE feature_abort WITH MANUAL RESOLUTION')
         
-        # Check if there are conflicts to abort
+        # Abort the merge
+        db.execute('ABORT MERGE')
+        
+        # Verify no pending conflicts after abort
         conflicts = db.query('SHOW MERGE CONFLICTS')
-        if len(conflicts) > 0:
-            # Abort it
-            db.execute('ABORT MERGE')
-            
-            # Verify no pending conflicts after abort
-            conflicts = db.query('SHOW MERGE CONFLICTS')
-            assert len(conflicts) == 0
-        else:
-            # No conflicts means merge completed successfully
-            # Verify data merged correctly
-            result = db.query('SELECT * FROM aborttest.data')
-            assert len(result) >= 2
+        assert len(conflicts) == 0
 
