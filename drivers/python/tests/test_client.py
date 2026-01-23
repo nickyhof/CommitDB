@@ -130,9 +130,11 @@ from pathlib import Path
 
 # Try to find the shared library
 def _find_lib():
+    # Path: drivers/python/tests/test_client.py -> repo root is 4 levels up
+    repo_root = Path(__file__).parent.parent.parent.parent
     lib_paths = [
-        Path(__file__).parent.parent.parent.parent.parent / 'lib' / 'libcommitdb.dylib',
-        Path(__file__).parent.parent.parent.parent.parent / 'lib' / 'libcommitdb.so',
+        repo_root / 'lib' / 'libcommitdb.dylib',
+        repo_root / 'lib' / 'libcommitdb.so',
     ]
     for p in lib_paths:
         if p.exists():
