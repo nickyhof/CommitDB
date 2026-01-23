@@ -65,8 +65,17 @@ func main() {
 
 	// Print banner
 	fmt.Println()
+	bannerWidth := 39 // inner width of the banner box
+	versionLine := fmt.Sprintf("CommitDB SQL Server v%s", Version)
+	padding := bannerWidth - len(versionLine) - 2 // -2 for "  " margins
+	if padding < 0 {
+		padding = 0
+	}
+	leftPad := padding / 2
+	rightPad := padding - leftPad
+
 	fmt.Println("╔═══════════════════════════════════════╗")
-	fmt.Printf("║   CommitDB SQL Server v%-14s  ║\n", Version)
+	fmt.Printf("║ %*s%s%*s ║\n", leftPad, "", versionLine, rightPad, "")
 	fmt.Println("║   Git-backed SQL Database Engine      ║")
 	fmt.Println("╚═══════════════════════════════════════╝")
 	fmt.Println()

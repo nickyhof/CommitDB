@@ -89,8 +89,17 @@ func main() {
 
 func printBanner() {
 	fmt.Println()
+	bannerWidth := 39 // inner width of the banner box
+	versionLine := fmt.Sprintf("CommitDB v%s", Version)
+	padding := bannerWidth - len(versionLine) - 2 // -2 for "  " margins
+	if padding < 0 {
+		padding = 0
+	}
+	leftPad := padding / 2
+	rightPad := padding - leftPad
+
 	fmt.Printf("%s%s╔═══════════════════════════════════════╗%s\n", BoldColor, PromptColor, ResetColor)
-	fmt.Printf("%s%s║         CommitDB v%s               ║%s\n", BoldColor, PromptColor, Version, ResetColor)
+	fmt.Printf("%s%s║ %*s%s%*s ║%s\n", BoldColor, PromptColor, leftPad, "", versionLine, rightPad, "", ResetColor)
 	fmt.Printf("%s%s║   Git-backed SQL Database Engine      ║%s\n", BoldColor, PromptColor, ResetColor)
 	fmt.Printf("%s%s╚═══════════════════════════════════════╝%s\n", BoldColor, PromptColor, ResetColor)
 	fmt.Println()
