@@ -249,9 +249,32 @@ SHOW BRANCHES
 -- Switch back to main branch
 CHECKOUT master
 
--- Merge changes from feature branch
+-- Merge changes from feature branch (auto-resolves conflicts with Last-Writer-Wins)
 MERGE feature_x
+
+-- Or merge with manual conflict resolution
+MERGE feature_x WITH MANUAL RESOLUTION
+
+-- View pending conflicts
+SHOW MERGE CONFLICTS
+
+-- Resolve conflicts
+RESOLVE CONFLICT mydb.users.1 USING HEAD    -- Keep current branch value
+RESOLVE CONFLICT mydb.users.1 USING SOURCE  -- Keep feature branch value
+RESOLVE CONFLICT mydb.users.1 USING '{"custom":"value"}'  -- Custom value
+
+-- Complete the merge
+COMMIT MERGE
+
+-- Or abort the merge
+ABORT MERGE
 ```
+
+**Merge Strategies:**
+| Strategy | Description |
+|----------|-------------|
+| Row-level (default) | Auto-resolves conflicts using Last-Writer-Wins (later commit wins) |
+| Manual | Pauses on conflicts, requires resolution before completing |
 
 **Go API:**
 ```go
@@ -270,8 +293,25 @@ branches, _ := persistence.ListBranches()
 // Get current branch
 current, _ := persistence.CurrentBranch()
 
-// Merge (fast-forward)
+// Merge with default strategy (row-level, Last-Writer-Wins)
 txn, err := persistence.Merge("feature", identity)
+
+// Merge with options
+result, err := persistence.MergeWithOptions("feature", identity, ps.MergeOptions{
+    Strategy: ps.MergeStrategyManual,
+})
+
+// Handle pending merge
+if result.Pending {
+    for _, conflict := range result.Unresolved {
+        // Resolve each conflict
+        persistence.ResolveConflict(conflict.Database, conflict.Table, conflict.Key, resolution)
+    }
+    persistence.CompleteMerge(identity)
+}
+
+// Or abort
+persistence.AbortMerge()
 
 // Delete branch
 persistence.DeleteBranch("feature")

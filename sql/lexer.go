@@ -85,6 +85,16 @@ const (
 	Branches
 	Checkout
 	Merge
+	Manual
+	Resolution
+	With
+	Resolve
+	Conflict
+	Conflicts
+	Using
+	Abort
+	Head
+	Source
 	EOF
 	Unknown
 )
@@ -488,6 +498,26 @@ func lookupIdentifier(id string) TokenType {
 		return Checkout
 	case "MERGE":
 		return Merge
+	case "MANUAL":
+		return Manual
+	case "RESOLUTION":
+		return Resolution
+	case "WITH":
+		return With
+	case "RESOLVE":
+		return Resolve
+	case "CONFLICT":
+		return Conflict
+	case "CONFLICTS":
+		return Conflicts
+	case "USING":
+		return Using
+	case "ABORT":
+		return Abort
+	case "HEAD":
+		return Head
+	case "SOURCE":
+		return Source
 	default:
 		return Identifier
 	}

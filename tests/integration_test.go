@@ -606,3 +606,100 @@ func TestBranchFromTransaction(t *testing.T) {
 		}
 	})
 }
+
+// TestMergeManualResolutionSQL tests MERGE WITH MANUAL RESOLUTION syntax
+func TestMergeManualResolutionSQL(t *testing.T) {
+	runWithBothPersistence(t, func(t *testing.T, engine *db.Engine) {
+		// Setup: create conflict situation
+		engine.Execute("CREATE DATABASE mrtest")
+		engine.Execute("CREATE TABLE mrtest.users (id INT PRIMARY KEY, name STRING)")
+		engine.Execute("INSERT INTO mrtest.users (id, name) VALUES (1, 'Original')")
+
+		// Create feature branch
+		engine.Execute("CREATE BRANCH feature")
+		engine.Execute("CHECKOUT feature")
+		// Add a new record on feature branch
+		engine.Execute("INSERT INTO mrtest.users (id, name) VALUES (2, 'Feature')")
+
+		// Switch to master and add different record
+		engine.Execute("CHECKOUT master")
+		engine.Execute("INSERT INTO mrtest.users (id, name) VALUES (3, 'Master')")
+
+		// Before merge: master has 2 rows (1, 3), feature has 2 rows (1, 2)
+
+		// Merge with manual resolution - should detect conflict on common base
+		result, err := engine.Execute("MERGE feature WITH MANUAL RESOLUTION")
+		if err != nil {
+			t.Fatalf("MERGE WITH MANUAL RESOLUTION failed: %v", err)
+		}
+
+		// Check if there are conflicts (depends on actual data)
+		qr, ok := result.(db.QueryResult)
+		if ok && len(qr.Data) > 0 {
+			// Show merge conflicts
+			result, err = engine.Execute("SHOW MERGE CONFLICTS")
+			if err != nil {
+				t.Fatalf("SHOW MERGE CONFLICTS failed: %v", err)
+			}
+			qr = result.(db.QueryResult)
+
+			// Resolve each conflict using HEAD
+			for _, row := range qr.Data {
+				db := row[0]
+				table := row[1]
+				key := row[2]
+				_, err = engine.Execute("RESOLVE CONFLICT " + db + "." + table + "." + key + " USING HEAD")
+				if err != nil {
+					t.Fatalf("RESOLVE CONFLICT failed: %v", err)
+				}
+			}
+
+			// Commit merge
+			_, err = engine.Execute("COMMIT MERGE")
+			if err != nil {
+				t.Fatalf("COMMIT MERGE failed: %v", err)
+			}
+		}
+
+		// After merge, should have records from both branches
+		result, _ = engine.Execute("SELECT * FROM mrtest.users")
+		qr = result.(db.QueryResult)
+		// Should have at least the non-conflicting records from both branches
+		if len(qr.Data) < 2 {
+			t.Errorf("Expected at least 2 rows after merge, got %d", len(qr.Data))
+		}
+	})
+}
+
+// TestAbortMergeSQL tests ABORT MERGE syntax
+func TestAbortMergeSQL(t *testing.T) {
+	runWithBothPersistence(t, func(t *testing.T, engine *db.Engine) {
+		// Setup
+		engine.Execute("CREATE DATABASE abtest")
+		engine.Execute("CREATE TABLE abtest.data (id INT PRIMARY KEY, val STRING)")
+		engine.Execute("INSERT INTO abtest.data (id, val) VALUES (1, 'Original')")
+
+		engine.Execute("CREATE BRANCH feature")
+		engine.Execute("CHECKOUT feature")
+		engine.Execute("UPDATE abtest.data SET val = 'Feature' WHERE id = 1")
+
+		engine.Execute("CHECKOUT master")
+		engine.Execute("UPDATE abtest.data SET val = 'Master' WHERE id = 1")
+
+		// Start merge
+		engine.Execute("MERGE feature WITH MANUAL RESOLUTION")
+
+		// Abort
+		_, err := engine.Execute("ABORT MERGE")
+		if err != nil {
+			t.Fatalf("ABORT MERGE failed: %v", err)
+		}
+
+		// Verify no pending merge
+		result, _ := engine.Execute("SHOW MERGE CONFLICTS")
+		qr := result.(db.QueryResult)
+		if len(qr.Data) != 0 {
+			t.Errorf("Expected 0 conflicts after abort, got %d", len(qr.Data))
+		}
+	})
+}

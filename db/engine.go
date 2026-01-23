@@ -79,6 +79,14 @@ func (engine *Engine) Execute(query string) (Result, error) {
 		return engine.executeMergeStatement(statement.(sql.MergeStatement))
 	case sql.ShowBranchesStatementType:
 		return engine.executeShowBranchesStatement(statement.(sql.ShowBranchesStatement))
+	case sql.ShowMergeConflictsStatementType:
+		return engine.executeShowMergeConflictsStatement()
+	case sql.ResolveConflictStatementType:
+		return engine.executeResolveConflictStatement(statement.(sql.ResolveConflictStatement))
+	case sql.CommitMergeStatementType:
+		return engine.executeCommitMergeStatement()
+	case sql.AbortMergeStatementType:
+		return engine.executeAbortMergeStatement()
 	default:
 		return nil, fmt.Errorf("unsupported statement type: %v", statement.Type())
 	}
@@ -1119,16 +1127,42 @@ func (engine *Engine) executeCheckoutStatement(statement sql.CheckoutStatement) 
 	}, nil
 }
 
-func (engine *Engine) executeMergeStatement(statement sql.MergeStatement) (CommitResult, error) {
+func (engine *Engine) executeMergeStatement(statement sql.MergeStatement) (Result, error) {
 	startTime := time.Now()
 
-	txn, err := engine.Persistence.Merge(statement.SourceBranch, engine.Identity)
+	opts := ps.DefaultMergeOptions()
+	if statement.ManualResolution {
+		opts.Strategy = ps.MergeStrategyManual
+	}
+
+	result, err := engine.Persistence.MergeWithOptions(statement.SourceBranch, engine.Identity, opts)
 	if err != nil {
 		return CommitResult{}, err
 	}
 
+	// If pending (manual mode with conflicts)
+	if result.Pending {
+		// Return query result showing conflicts
+		data := make([][]string, len(result.Unresolved))
+		for i, conflict := range result.Unresolved {
+			data[i] = []string{
+				conflict.Database,
+				conflict.Table,
+				conflict.Key,
+				string(conflict.HeadVal),
+				string(conflict.SourceVal),
+			}
+		}
+		return QueryResult{
+			Columns:          []string{"Database", "Table", "Key", "HEAD", "SOURCE"},
+			Data:             data,
+			RecordsRead:      len(data),
+			ExecutionTimeSec: time.Since(startTime).Seconds(),
+		}, nil
+	}
+
 	return CommitResult{
-		Transaction:      txn,
+		Transaction:      result.Transaction,
 		ExecutionTimeSec: time.Since(startTime).Seconds(),
 		ExecutionOps:     1,
 	}, nil
@@ -1160,5 +1194,113 @@ func (engine *Engine) executeShowBranchesStatement(statement sql.ShowBranchesSta
 		RecordsRead:      len(data),
 		ExecutionTimeSec: time.Since(startTime).Seconds(),
 		ExecutionOps:     len(data),
+	}, nil
+}
+
+func (engine *Engine) executeShowMergeConflictsStatement() (QueryResult, error) {
+	startTime := time.Now()
+
+	pending := engine.Persistence.GetPendingMerge()
+	if pending == nil {
+		return QueryResult{
+			Columns:          []string{"Database", "Table", "Key", "HEAD", "SOURCE"},
+			Data:             [][]string{},
+			RecordsRead:      0,
+			ExecutionTimeSec: time.Since(startTime).Seconds(),
+		}, nil
+	}
+
+	data := make([][]string, len(pending.Unresolved))
+	for i, conflict := range pending.Unresolved {
+		data[i] = []string{
+			conflict.Database,
+			conflict.Table,
+			conflict.Key,
+			string(conflict.HeadVal),
+			string(conflict.SourceVal),
+		}
+	}
+
+	return QueryResult{
+		Columns:          []string{"Database", "Table", "Key", "HEAD", "SOURCE"},
+		Data:             data,
+		RecordsRead:      len(data),
+		ExecutionTimeSec: time.Since(startTime).Seconds(),
+	}, nil
+}
+
+func (engine *Engine) executeResolveConflictStatement(statement sql.ResolveConflictStatement) (QueryResult, error) {
+	startTime := time.Now()
+
+	pending := engine.Persistence.GetPendingMerge()
+	if pending == nil {
+		return QueryResult{}, fmt.Errorf("no pending merge")
+	}
+
+	var resolution []byte
+	switch statement.Resolution {
+	case "HEAD":
+		// Find HEAD value from pending conflicts
+		for _, c := range pending.Unresolved {
+			if c.Database == statement.Database && c.Table == statement.Table && c.Key == statement.Key {
+				resolution = c.HeadVal
+				break
+			}
+		}
+	case "SOURCE":
+		// Find SOURCE value from pending conflicts
+		for _, c := range pending.Unresolved {
+			if c.Database == statement.Database && c.Table == statement.Table && c.Key == statement.Key {
+				resolution = c.SourceVal
+				break
+			}
+		}
+	default:
+		resolution = []byte(statement.Resolution)
+	}
+
+	err := engine.Persistence.ResolveConflict(statement.Database, statement.Table, statement.Key, resolution)
+	if err != nil {
+		return QueryResult{}, err
+	}
+
+	// Return remaining conflicts count
+	remaining := len(engine.Persistence.GetPendingMerge().Unresolved)
+	return QueryResult{
+		Columns:          []string{"Resolved", "Remaining"},
+		Data:             [][]string{{fmt.Sprintf("%s.%s.%s", statement.Database, statement.Table, statement.Key), fmt.Sprintf("%d", remaining)}},
+		RecordsRead:      1,
+		ExecutionTimeSec: time.Since(startTime).Seconds(),
+	}, nil
+}
+
+func (engine *Engine) executeCommitMergeStatement() (CommitResult, error) {
+	startTime := time.Now()
+
+	txn, err := engine.Persistence.CompleteMerge(engine.Identity)
+	if err != nil {
+		return CommitResult{}, err
+	}
+
+	return CommitResult{
+		Transaction:      txn,
+		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionOps:     1,
+	}, nil
+}
+
+func (engine *Engine) executeAbortMergeStatement() (QueryResult, error) {
+	startTime := time.Now()
+
+	err := engine.Persistence.AbortMerge()
+	if err != nil {
+		return QueryResult{}, err
+	}
+
+	return QueryResult{
+		Columns:          []string{"Status"},
+		Data:             [][]string{{"Merge aborted"}},
+		RecordsRead:      1,
+		ExecutionTimeSec: time.Since(startTime).Seconds(),
 	}, nil
 }

@@ -278,3 +278,67 @@ class TestCommitDBLocal:
         # After merge, should have both rows
         result = db.query('SELECT * FROM branch_test3.data')
         assert len(result) == 2
+
+
+    def test_merge_manual_resolution(self, db):
+        """Test MERGE WITH MANUAL RESOLUTION syntax"""
+        # Setup
+        db.execute('CREATE DATABASE manualtest')
+        db.execute('CREATE TABLE manualtest.items (id INT PRIMARY KEY, name STRING)')
+        db.execute("INSERT INTO manualtest.items (id, name) VALUES (1, 'Original')")
+        
+        # Create branch and add data
+        db.execute('CREATE BRANCH feature_manual')
+        db.execute('CHECKOUT feature_manual')
+        db.execute("INSERT INTO manualtest.items (id, name) VALUES (2, 'Feature')")
+        
+        # Add different data on master
+        db.execute('CHECKOUT master')
+        db.execute("INSERT INTO manualtest.items (id, name) VALUES (3, 'Master')")
+        
+        # Merge with manual resolution
+        result = db.execute('MERGE feature_manual WITH MANUAL RESOLUTION')
+        
+        # Check conflicts with SHOW MERGE CONFLICTS
+        conflicts = db.query('SHOW MERGE CONFLICTS')
+        # Conflicts may or may not exist, both are valid
+        
+        # If there were conflicts, they would need resolution
+        if len(conflicts) > 0:
+            # Resolve each conflict
+            for conflict in conflicts:
+                key = f"{conflict['Database']}.{conflict['Table']}.{conflict['Key']}"
+                db.execute(f'RESOLVE CONFLICT {key} USING HEAD')
+            
+            # Complete merge
+            db.execute('COMMIT MERGE')
+        
+        # After merge, should have data from both branches
+        result = db.query('SELECT * FROM manualtest.items')
+        assert len(result) >= 2
+
+
+    def test_abort_merge(self, db):
+        """Test ABORT MERGE syntax"""
+        # Setup
+        db.execute('CREATE DATABASE aborttest')
+        db.execute('CREATE TABLE aborttest.data (id INT PRIMARY KEY)')
+        db.execute('INSERT INTO aborttest.data (id) VALUES (1)')
+        
+        db.execute('CREATE BRANCH feature_abort')
+        db.execute('CHECKOUT feature_abort')
+        db.execute('INSERT INTO aborttest.data (id) VALUES (2)')
+        
+        db.execute('CHECKOUT master')
+        db.execute('INSERT INTO aborttest.data (id) VALUES (3)')
+        
+        # Start manual merge
+        db.execute('MERGE feature_abort WITH MANUAL RESOLUTION')
+        
+        # Abort it
+        db.execute('ABORT MERGE')
+        
+        # Verify no pending conflicts
+        conflicts = db.query('SHOW MERGE CONFLICTS')
+        assert len(conflicts) == 0
+

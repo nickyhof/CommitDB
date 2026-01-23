@@ -19,8 +19,9 @@ var (
 )
 
 type Persistence struct {
-	repo *git.Repository
-	mu   sync.RWMutex
+	repo         *git.Repository
+	mu           sync.RWMutex
+	pendingMerge *PendingMerge // For manual conflict resolution
 }
 
 // IsInitialized returns true if the persistence layer has a valid repository

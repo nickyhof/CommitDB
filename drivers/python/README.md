@@ -1,11 +1,11 @@
 # CommitDB Python Driver
 
-Python client for connecting to CommitDB SQL Server.
+Python client for connecting to CommitDB.
 
 ## Installation
 
 ```bash
-pip install -e drivers/python
+pip install commitdb
 ```
 
 ## Quick Start
@@ -189,12 +189,43 @@ with CommitDBLocal() as db:
     # Switch back to master
     db.execute('CHECKOUT master')
     
-    # Merge feature branch
+    # Merge feature branch (auto-resolves conflicts with Last-Writer-Wins)
     db.execute('MERGE feature')
     
     # Now master has both rows
     result = db.query('SELECT * FROM mydb.users')
     print(f"Users after merge: {len(result)}")  # 2
+```
+
+### Manual Conflict Resolution
+
+When branches have conflicting changes, you can resolve them manually:
+
+```python
+with CommitDBLocal() as db:
+    # ... setup with conflicting changes on master and feature ...
+    
+    # Merge with manual resolution mode
+    db.execute('MERGE feature WITH MANUAL RESOLUTION')
+    
+    # View pending conflicts
+    conflicts = db.query('SHOW MERGE CONFLICTS')
+    for c in conflicts:
+        print(f"Conflict: {c['Database']}.{c['Table']}.{c['Key']}")
+        print(f"  HEAD: {c['HEAD']}")
+        print(f"  SOURCE: {c['SOURCE']}")
+    
+    # Resolve each conflict
+    for c in conflicts:
+        key = f"{c['Database']}.{c['Table']}.{c['Key']}"
+        # Choose HEAD, SOURCE, or custom value
+        db.execute(f'RESOLVE CONFLICT {key} USING HEAD')
+    
+    # Complete the merge
+    db.execute('COMMIT MERGE')
+    
+    # Or abort if needed
+    # db.execute('ABORT MERGE')
 ```
 
 **Branch Commands:**
@@ -203,5 +234,11 @@ with CommitDBLocal() as db:
 | `CREATE BRANCH name` | Create new branch at HEAD |
 | `CREATE BRANCH name FROM 'txn_id'` | Create branch at specific transaction |
 | `CHECKOUT name` | Switch to branch |
-| `MERGE name` | Merge branch into current |
+| `MERGE name` | Merge branch (Last-Writer-Wins auto-resolve) |
+| `MERGE name WITH MANUAL RESOLUTION` | Merge with manual conflict resolution |
 | `SHOW BRANCHES` | List all branches |
+| `SHOW MERGE CONFLICTS` | View pending conflicts |
+| `RESOLVE CONFLICT path USING HEAD\|SOURCE\|'value'` | Resolve a conflict |
+| `COMMIT MERGE` | Complete pending merge |
+| `ABORT MERGE` | Cancel pending merge |
+

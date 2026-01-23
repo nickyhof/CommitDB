@@ -51,85 +51,13 @@ func (p *Persistence) Checkout(name string) error {
 }
 
 // Merge merges the source branch into the current branch.
-// Currently supports fast-forward merges only.
+// Uses row-level merge strategy for diverged branches (Last-Writer-Wins).
 func (p *Persistence) Merge(source string, identity core.Identity) (Transaction, error) {
-	if err := p.ensureInitialized(); err != nil {
-		return Transaction{}, err
-	}
-
-	// Get current HEAD
-	headRef, err := p.repo.Head()
-	if err != nil {
-		return Transaction{}, fmt.Errorf("failed to get HEAD: %w", err)
-	}
-
-	// Get source branch reference
-	sourceBranchRef := plumbing.NewBranchReferenceName(source)
-	sourceRef, err := p.repo.Reference(sourceBranchRef, true)
-	if err != nil {
-		return Transaction{}, fmt.Errorf("branch '%s' not found: %w", source, err)
-	}
-
-	// Check if source is ancestor of HEAD (already merged)
-	sourceCommit, err := p.repo.CommitObject(sourceRef.Hash())
+	result, err := p.MergeWithOptions(source, identity, DefaultMergeOptions())
 	if err != nil {
 		return Transaction{}, err
 	}
-	headCommit, err := p.repo.CommitObject(headRef.Hash())
-	if err != nil {
-		return Transaction{}, err
-	}
-
-	// Check if HEAD is ancestor of source (fast-forward possible)
-	isAncestor, err := sourceCommit.IsAncestor(headCommit)
-	if err != nil {
-		return Transaction{}, fmt.Errorf("failed to check ancestry: %w", err)
-	}
-
-	if isAncestor {
-		// Source is ancestor of HEAD - already up to date
-		return Transaction{
-			Id:   headRef.Hash().String(),
-			When: headCommit.Committer.When,
-		}, nil
-	}
-
-	// Check if can fast-forward
-	canFF, err := headCommit.IsAncestor(sourceCommit)
-	if err != nil {
-		return Transaction{}, fmt.Errorf("failed to check ancestry: %w", err)
-	}
-
-	if !canFF {
-		return Transaction{}, fmt.Errorf("cannot fast-forward merge - branches have diverged. Manual merge required")
-	}
-
-	// Fast-forward: update HEAD to source
-	wt, err := p.repo.Worktree()
-	if err != nil {
-		return Transaction{}, fmt.Errorf("failed to get worktree: %w", err)
-	}
-
-	err = wt.Reset(&git.ResetOptions{
-		Mode:   git.HardReset,
-		Commit: sourceRef.Hash(),
-	})
-	if err != nil {
-		return Transaction{}, fmt.Errorf("failed to fast-forward: %w", err)
-	}
-
-	// Update the current branch ref
-	if headRef.Name().IsBranch() {
-		newRef := plumbing.NewHashReference(headRef.Name(), sourceRef.Hash())
-		if err := p.repo.Storer.SetReference(newRef); err != nil {
-			return Transaction{}, fmt.Errorf("failed to update branch ref: %w", err)
-		}
-	}
-
-	return Transaction{
-		Id:   sourceRef.Hash().String(),
-		When: sourceCommit.Committer.When,
-	}, nil
+	return result.Transaction, nil
 }
 
 // ListBranches returns all branch names

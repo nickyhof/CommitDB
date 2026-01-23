@@ -33,6 +33,10 @@ const (
 	CheckoutStatementType
 	MergeStatementType
 	ShowBranchesStatementType
+	ShowMergeConflictsStatementType
+	ResolveConflictStatementType
+	CommitMergeStatementType
+	AbortMergeStatementType
 )
 
 type Statement interface {
@@ -207,10 +211,24 @@ type CheckoutStatement struct {
 }
 
 type MergeStatement struct {
-	SourceBranch string
+	SourceBranch     string
+	ManualResolution bool
 }
 
 type ShowBranchesStatement struct{}
+
+type ShowMergeConflictsStatement struct{}
+
+type ResolveConflictStatement struct {
+	Database   string
+	Table      string
+	Key        string
+	Resolution string // "HEAD", "SOURCE", or a literal value
+}
+
+type CommitMergeStatement struct{}
+
+type AbortMergeStatement struct{}
 
 func (s SelectStatement) Type() StatementType {
 	return SelectStatementType
@@ -300,6 +318,22 @@ func (s ShowBranchesStatement) Type() StatementType {
 	return ShowBranchesStatementType
 }
 
+func (s ShowMergeConflictsStatement) Type() StatementType {
+	return ShowMergeConflictsStatementType
+}
+
+func (s ResolveConflictStatement) Type() StatementType {
+	return ResolveConflictStatementType
+}
+
+func (s CommitMergeStatement) Type() StatementType {
+	return CommitMergeStatementType
+}
+
+func (s AbortMergeStatement) Type() StatementType {
+	return AbortMergeStatementType
+}
+
 type Parser struct {
 	lexer *Lexer
 }
@@ -329,6 +363,12 @@ func (parser *Parser) Parse() (Statement, error) {
 	case Begin:
 		return BeginStatement{}, nil
 	case Commit:
+		// Could be regular COMMIT or COMMIT MERGE
+		nextToken := parser.lexer.PeekToken()
+		if nextToken.Type == Merge {
+			parser.lexer.NextToken() // consume MERGE
+			return CommitMergeStatement{}, nil
+		}
 		return CommitStatement{}, nil
 	case Rollback:
 		return RollbackStatement{}, nil
@@ -340,6 +380,10 @@ func (parser *Parser) Parse() (Statement, error) {
 		return ParseCheckout(parser)
 	case Merge:
 		return ParseMerge(parser)
+	case Resolve:
+		return ParseResolveConflict(parser)
+	case Abort:
+		return ParseAbortMerge(parser)
 	default:
 		return nil, errors.New("unknown statement type")
 	}
@@ -1250,8 +1294,15 @@ func ParseShow(parser *Parser) (Statement, error) {
 		return ShowIndexesStatement{Table: token.Value}, nil
 	case Branches:
 		return ShowBranchesStatement{}, nil
+	case Merge:
+		// SHOW MERGE CONFLICTS
+		token = parser.lexer.NextToken()
+		if token.Type != Conflicts {
+			return nil, errors.New("expected CONFLICTS after MERGE")
+		}
+		return ShowMergeConflictsStatement{}, nil
 	default:
-		return nil, errors.New("expected DATABASES, TABLES, INDEXES, or BRANCHES after SHOW")
+		return nil, errors.New("expected DATABASES, TABLES, INDEXES, BRANCHES, or MERGE CONFLICTS after SHOW")
 	}
 }
 
@@ -1370,11 +1421,102 @@ func ParseCheckout(parser *Parser) (Statement, error) {
 }
 
 // ParseMerge parses MERGE statements
-// Syntax: MERGE branch_name
+// Syntax: MERGE branch_name [WITH MANUAL RESOLUTION]
 func ParseMerge(parser *Parser) (Statement, error) {
 	token := parser.lexer.NextToken()
 	if token.Type != Identifier {
 		return nil, errors.New("expected branch name after MERGE")
 	}
-	return MergeStatement{SourceBranch: token.Value}, nil
+
+	stmt := MergeStatement{SourceBranch: token.Value}
+
+	// Check for WITH MANUAL RESOLUTION
+	nextToken := parser.lexer.PeekToken()
+	if nextToken.Type == With {
+		parser.lexer.NextToken() // consume WITH
+		token = parser.lexer.NextToken()
+		if token.Type != Manual {
+			return nil, errors.New("expected MANUAL after WITH")
+		}
+		token = parser.lexer.NextToken()
+		if token.Type != Resolution {
+			return nil, errors.New("expected RESOLUTION after MANUAL")
+		}
+		stmt.ManualResolution = true
+	}
+
+	return stmt, nil
+}
+
+// ParseResolveConflict parses RESOLVE CONFLICT statements
+// Syntax: RESOLVE CONFLICT db.table.key USING HEAD|SOURCE|'value'
+func ParseResolveConflict(parser *Parser) (Statement, error) {
+	// Expect CONFLICT
+	token := parser.lexer.NextToken()
+	if token.Type != Conflict {
+		return nil, errors.New("expected CONFLICT after RESOLVE")
+	}
+
+	// Get the conflict path (db.table.key)
+	token = parser.lexer.NextToken()
+	if token.Type != Identifier {
+		return nil, errors.New("expected conflict path (db.table.key)")
+	}
+	path := token.Value
+
+	// Parse db.table.key
+	parts := splitPath(path)
+	if len(parts) != 3 {
+		return nil, errors.New("conflict path must be db.table.key format")
+	}
+
+	// Expect USING
+	token = parser.lexer.NextToken()
+	if token.Type != Using {
+		return nil, errors.New("expected USING after conflict path")
+	}
+
+	// Get resolution: HEAD, SOURCE, or 'value'
+	token = parser.lexer.NextToken()
+	var resolution string
+	switch token.Type {
+	case Head:
+		resolution = "HEAD"
+	case Source:
+		resolution = "SOURCE"
+	case String:
+		resolution = token.Value
+	default:
+		return nil, errors.New("expected HEAD, SOURCE, or string value after USING")
+	}
+
+	return ResolveConflictStatement{
+		Database:   parts[0],
+		Table:      parts[1],
+		Key:        parts[2],
+		Resolution: resolution,
+	}, nil
+}
+
+// ParseAbortMerge parses ABORT MERGE statements
+func ParseAbortMerge(parser *Parser) (Statement, error) {
+	token := parser.lexer.NextToken()
+	if token.Type != Merge {
+		return nil, errors.New("expected MERGE after ABORT")
+	}
+	return AbortMergeStatement{}, nil
+}
+
+// splitPath splits "db.table.key" into parts
+func splitPath(path string) []string {
+	parts := make([]string, 0, 3)
+	start := 0
+	for i, c := range path {
+		if c == '.' {
+			parts = append(parts, path[start:i])
+			start = i + 1
+		}
+	}
+	parts = append(parts, path[start:])
+	return parts
 }
