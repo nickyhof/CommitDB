@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-01-23
+
+### Added
+
+#### Row-Level Merge Strategy
+- Three-way merge algorithm for handling diverged branches (`ps/merge.go`)
+- Automatic conflict resolution using Last-Writer-Wins (later commit wins)
+- Merge at record level by primary key, not file-level
+- `MergeWithOptions(source, identity, opts)` - Merge with configurable strategy
+- `MergeOptions` struct with `Strategy` field
+
+#### Manual Conflict Resolution
+- `MergeStrategyManual` - Pauses merge when conflicts detected
+- `GetPendingMerge()` - Get pending merge state
+- `ResolveConflict(db, table, key, resolution)` - Resolve individual conflicts
+- `CompleteMerge(identity)` - Finish merge after resolving all conflicts
+- `AbortMerge()` - Cancel pending merge
+
+#### SQL Syntax for Manual Resolution
+- `MERGE branch WITH MANUAL RESOLUTION` - Start merge with manual conflict handling
+- `SHOW MERGE CONFLICTS` - View pending conflicts (database, table, key, HEAD value, SOURCE value)
+- `RESOLVE CONFLICT db.table.key USING HEAD` - Keep current branch value
+- `RESOLVE CONFLICT db.table.key USING SOURCE` - Keep source branch value
+- `RESOLVE CONFLICT db.table.key USING 'value'` - Use custom value
+- `COMMIT MERGE` - Complete pending merge
+- `ABORT MERGE` - Cancel pending merge
+
+#### Documentation
+- Updated README with merge strategies table
+- Go API examples for manual conflict resolution
+- Python driver examples for conflict resolution workflow
+- Architecture diagram and package summary table
+- Package documentation for `op/` layer (`op/doc.go`)
+
+#### Tests
+- Unit tests: `TestMergeRowLevel`, `TestMergeRowLevelWithConflict`, `TestMergeRecordMaps`
+- Manual merge tests: `TestMergeManualMode`, `TestMergeManualResolveAndComplete`, `TestMergeAbort`
+- SQL integration tests: `TestMergeManualResolutionSQL`, `TestAbortMergeSQL`
+- Python tests: `test_merge_manual_resolution`, `test_abort_merge`
+
+### Changed
+- `Merge()` now uses row-level strategy by default instead of fast-forward only
+- Diverged branches no longer error; conflicts are auto-resolved with Last-Writer-Wins
+
 ## [1.3.0] - 2026-01-23
 
 ### Added
