@@ -448,12 +448,54 @@ Performance benchmarks run on Apple M1 Pro:
 ## Architecture
 
 ```
-CommitDB/
-├── cmd/cli/      # CLI application
-├── cmd/server/   # TCP SQL server
-├── core/         # Core types (Identity, Table, Column)
-├── db/           # Database engine and execution
-├── op/           # Table operations
-├── ps/           # Persistence layer (Git-backed)
-└── sql/          # SQL lexer and parser
+┌─────────────────────────────────────────────────────────────┐
+│                      Applications                           │
+│   cmd/cli/        CLI application                          │
+│   cmd/server/     TCP SQL server with JSON protocol        │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────┐
+│                    sql/  SQL Layer                          │
+│   Lexer:   Tokenizes SQL into keywords, identifiers, etc.  │
+│   Parser:  Builds AST (statement structs) from tokens      │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────┐
+│                    db/   Engine Layer                       │
+│   Executes parsed statements, handles transactions         │
+│   Returns QueryResult or CommitResult                      │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────┐
+│                    op/   Operations Layer                   │
+│   High-level wrappers for database and table operations    │
+│   DatabaseOp:  Create, Get, Drop, Restore, TableNames      │
+│   TableOp:     Get, Put, Delete, Scan, Keys, Count         │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────┐
+│                    ps/   Persistence Layer                  │
+│   Git-backed storage with go-git library                   │
+│   CRUD, branching, merging, snapshots, transactions        │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────┐
+│                    Git Repository                           │
+│   Every transaction = Git commit                           │
+│   Tables stored as JSON files in directories               │
+└─────────────────────────────────────────────────────────────┘
 ```
+
+### Package Summary
+
+| Package | Purpose |
+|---------|---------|
+| `core/` | Shared types: `Identity`, `Table`, `Column`, `Database` |
+| `sql/` | SQL lexer and parser, statement types |
+| `db/` | Query execution engine, result types |
+| `op/` | Database/table operations wrapper (convenience methods) |
+| `ps/` | Git-backed persistence, branching, merging |
+| `cmd/cli/` | Interactive command-line interface |
+| `cmd/server/` | TCP server with JSON protocol |
+| `bindings/` | CGO bindings for embedded use |
+| `drivers/python/` | Python client library |

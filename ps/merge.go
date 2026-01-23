@@ -337,7 +337,7 @@ func (p *Persistence) performRowLevelMerge(
 	}
 
 	// Create merge commit
-	msg := fmt.Sprintf("Merge branch into current")
+	msg := "Merge branch into current"
 	txn, err := p.createMergeCommit(msg, sourceCommit.Hash, identity)
 	if err != nil {
 		return result, err
