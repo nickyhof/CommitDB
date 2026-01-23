@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-01-23
+
+### Added
+
+#### SQL Server
+- TCP-based SQL server for remote database access
+- Line-based protocol: send SQL queries, receive JSON responses
+- Persistent connections supporting multiple queries
+- Server CLI with `-port`, `-baseDir`, and `-gitUrl` flags
+- Comprehensive test suite for server functionality
+
 ## [1.0.0] - 2026-01-23
 
 ### Added
@@ -61,4 +72,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests run with both memory and file persistence modes
 - Persistence reopen tests for data durability verification
 
+[1.1.0]: https://github.com/nickyhof/CommitDB/releases/tag/v1.1.0
 [1.0.0]: https://github.com/nickyhof/CommitDB/releases/tag/v1.0.0

@@ -14,6 +14,7 @@ https://pkg.go.dev/github.com/nickyhof/CommitDB
 - **Transactions**: BEGIN, COMMIT, ROLLBACK
 - **Indexing**: CREATE INDEX for faster queries
 - **Concurrency Safe**: Thread-safe operations with RWMutex
+- **SQL Server**: TCP server with JSON protocol for remote access
 
 ## Quick Start
 
@@ -27,13 +28,35 @@ go get github.com/nickyhof/CommitDB
 
 ```bash
 # Build the CLI
-go build -o commitdb ./cmd/cli
+go build -o commitdb-cli ./cmd/cli
 
 # Run with in-memory storage
-./commitdb
+./commitdb-cli
 
 # Run with file-based persistence
-./commitdb -baseDir=/path/to/data
+./commitdb-cli -baseDir=/path/to/data
+```
+
+### Using the SQL Server
+
+```bash
+# Build the server
+go build -o commitdb-server ./cmd/server
+
+# Run on default port (3306)
+./commitdb-server
+
+# Run with custom port and file persistence
+./commitdb-server -port 5432 -baseDir=/path/to/data
+
+# Connect with netcat
+echo 'CREATE DATABASE test' | nc localhost 3306
+echo 'SELECT * FROM test.users' | nc localhost 3306
+```
+
+The server accepts SQL queries (one per line) and returns JSON responses:
+```json
+{"success":true,"type":"query","result":{"columns":["id","name"],"data":[["1","Alice"]],"records_read":1}}
 ```
 
 ### Example Session
@@ -276,6 +299,7 @@ Performance benchmarks run on Apple M1 Pro:
 ```
 CommitDB/
 ├── cmd/cli/      # CLI application
+├── cmd/server/   # TCP SQL server
 ├── core/         # Core types (Identity, Table, Column)
 ├── db/           # Database engine and execution
 ├── op/           # Table operations
