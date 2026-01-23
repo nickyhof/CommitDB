@@ -33,16 +33,20 @@ jobs:
         run: |
           VERSION=${GITHUB_REF_NAME#v}
           LDFLAGS="-X main.Version=${VERSION}"
-          # Linux AMD64
-          GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/commitdb-linux-amd64 ./cmd/cli
-          # Linux ARM64
-          GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/commitdb-linux-arm64 ./cmd/cli
-          # macOS AMD64
-          GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/commitdb-darwin-amd64 ./cmd/cli
-          # macOS ARM64 (Apple Silicon)
-          GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/commitdb-darwin-arm64 ./cmd/cli
-          # Windows AMD64
-          GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/commitdb-windows-amd64.exe ./cmd/cli
+          
+          # CLI binaries
+          GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/commitdb-cli-linux-amd64 ./cmd/cli
+          GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/commitdb-cli-linux-arm64 ./cmd/cli
+          GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/commitdb-cli-darwin-amd64 ./cmd/cli
+          GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/commitdb-cli-darwin-arm64 ./cmd/cli
+          GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/commitdb-cli-windows-amd64.exe ./cmd/cli
+          
+          # Server binaries
+          GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/commitdb-server-linux-amd64 ./cmd/server
+          GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/commitdb-server-linux-arm64 ./cmd/server
+          GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/commitdb-server-darwin-amd64 ./cmd/server
+          GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/commitdb-server-darwin-arm64 ./cmd/server
+          GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/commitdb-server-windows-amd64.exe ./cmd/server
 
       - name: Extract release notes
         run: |
@@ -57,8 +61,14 @@ jobs:
           gh release create "${{ github.ref_name }}" \
             --title "${{ github.ref_name }}" \
             --notes-file release_notes.txt \
-            dist/commitdb-linux-amd64 \
-            dist/commitdb-linux-arm64 \
-            dist/commitdb-darwin-amd64 \
-            dist/commitdb-darwin-arm64 \
-            dist/commitdb-windows-amd64.exe
+            dist/commitdb-cli-linux-amd64 \
+            dist/commitdb-cli-linux-arm64 \
+            dist/commitdb-cli-darwin-amd64 \
+            dist/commitdb-cli-darwin-arm64 \
+            dist/commitdb-cli-windows-amd64.exe \
+            dist/commitdb-server-linux-amd64 \
+            dist/commitdb-server-linux-arm64 \
+            dist/commitdb-server-darwin-amd64 \
+            dist/commitdb-server-darwin-arm64 \
+            dist/commitdb-server-windows-amd64.exe
+
