@@ -81,6 +81,10 @@ const (
 	Outer
 	Describe
 	As
+	Branch
+	Branches
+	Checkout
+	Merge
 	EOF
 	Unknown
 )
@@ -476,6 +480,14 @@ func lookupIdentifier(id string) TokenType {
 		return Describe
 	case "AS":
 		return As
+	case "BRANCH":
+		return Branch
+	case "BRANCHES":
+		return Branches
+	case "CHECKOUT":
+		return Checkout
+	case "MERGE":
+		return Merge
 	default:
 		return Identifier
 	}

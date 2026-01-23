@@ -29,6 +29,10 @@ const (
 	ShowDatabasesStatementType
 	ShowTablesStatementType
 	ShowIndexesStatementType
+	CreateBranchStatementType
+	CheckoutStatementType
+	MergeStatementType
+	ShowBranchesStatementType
 )
 
 type Statement interface {
@@ -192,6 +196,22 @@ type ShowIndexesStatement struct {
 	Table    string
 }
 
+// Branch statements
+type CreateBranchStatement struct {
+	Name      string
+	FromTxnId string // Optional: create from specific transaction
+}
+
+type CheckoutStatement struct {
+	Branch string
+}
+
+type MergeStatement struct {
+	SourceBranch string
+}
+
+type ShowBranchesStatement struct{}
+
 func (s SelectStatement) Type() StatementType {
 	return SelectStatementType
 }
@@ -264,6 +284,22 @@ func (s ShowTablesStatement) Type() StatementType {
 	return ShowTablesStatementType
 }
 
+func (s CreateBranchStatement) Type() StatementType {
+	return CreateBranchStatementType
+}
+
+func (s CheckoutStatement) Type() StatementType {
+	return CheckoutStatementType
+}
+
+func (s MergeStatement) Type() StatementType {
+	return MergeStatementType
+}
+
+func (s ShowBranchesStatement) Type() StatementType {
+	return ShowBranchesStatementType
+}
+
 type Parser struct {
 	lexer *Lexer
 }
@@ -300,6 +336,10 @@ func (parser *Parser) Parse() (Statement, error) {
 		return ParseDescribe(parser)
 	case Show:
 		return ParseShow(parser)
+	case Checkout:
+		return ParseCheckout(parser)
+	case Merge:
+		return ParseMerge(parser)
 	default:
 		return nil, errors.New("unknown statement type")
 	}
@@ -953,8 +993,10 @@ func ParseCreate(parser *Parser) (Statement, error) {
 			return nil, errors.New("expected INDEX after UNIQUE")
 		}
 		return ParseCreateIndex(parser, true)
+	case Branch:
+		return ParseCreateBranch(parser)
 	default:
-		return nil, errors.New("expected TABLE, DATABASE, or INDEX after CREATE")
+		return nil, errors.New("expected TABLE, DATABASE, INDEX, or BRANCH after CREATE")
 	}
 }
 
@@ -1211,8 +1253,10 @@ func ParseShow(parser *Parser) (Statement, error) {
 			return ShowIndexesStatement{Database: tableParts[0], Table: tableParts[1]}, nil
 		}
 		return ShowIndexesStatement{Table: token.Value}, nil
+	case Branches:
+		return ShowBranchesStatement{}, nil
 	default:
-		return nil, errors.New("expected DATABASES, TABLES, or INDEXES after SHOW")
+		return nil, errors.New("expected DATABASES, TABLES, INDEXES, or BRANCHES after SHOW")
 	}
 }
 
@@ -1293,4 +1337,49 @@ func parse(sql string) (Statement, error) {
 	parser := NewParser(sql)
 
 	return parser.Parse()
+}
+
+// ParseCreateBranch parses CREATE BRANCH statements
+// Syntax: CREATE BRANCH name [FROM 'transaction_id']
+func ParseCreateBranch(parser *Parser) (Statement, error) {
+	var stmt CreateBranchStatement
+
+	// Parse branch name
+	token := parser.lexer.NextToken()
+	if token.Type != Identifier {
+		return nil, errors.New("expected branch name after CREATE BRANCH")
+	}
+	stmt.Name = token.Value
+
+	// Check for optional FROM clause
+	token = parser.lexer.NextToken()
+	if token.Type == From {
+		token = parser.lexer.NextToken()
+		if token.Type != String && token.Type != Identifier {
+			return nil, errors.New("expected transaction ID after FROM")
+		}
+		stmt.FromTxnId = token.Value
+	}
+
+	return stmt, nil
+}
+
+// ParseCheckout parses CHECKOUT statements
+// Syntax: CHECKOUT branch_name
+func ParseCheckout(parser *Parser) (Statement, error) {
+	token := parser.lexer.NextToken()
+	if token.Type != Identifier {
+		return nil, errors.New("expected branch name after CHECKOUT")
+	}
+	return CheckoutStatement{Branch: token.Value}, nil
+}
+
+// ParseMerge parses MERGE statements
+// Syntax: MERGE branch_name
+func ParseMerge(parser *Parser) (Statement, error) {
+	token := parser.lexer.NextToken()
+	if token.Type != Identifier {
+		return nil, errors.New("expected branch name after MERGE")
+	}
+	return MergeStatement{SourceBranch: token.Value}, nil
 }

@@ -9,6 +9,7 @@ https://pkg.go.dev/github.com/nickyhof/CommitDB
 - **SQL Support**: Full SQL parsing and execution
 - **Git-backed Storage**: Every transaction is a git commit
 - **Version Control**: Time-travel queries, restore to any point
+- **Branching & Merging**: Create branches, checkout, and merge like Git
 - **Aggregates**: SUM, AVG, MIN, MAX, COUNT with GROUP BY
 - **JOINs**: INNER, LEFT, RIGHT joins
 - **Transactions**: BEGIN, COMMIT, ROLLBACK
@@ -225,6 +226,55 @@ persistence.Restore(transaction, &db, nil)
 // Restore only a specific table
 table := "users"
 persistence.Restore(transaction, &db, &table)
+```
+
+### Branching & Merging
+
+Create isolated branches to experiment with changes, then merge back:
+
+```sql
+-- Create a new branch
+CREATE BRANCH feature_x
+
+-- Switch to the branch
+CHECKOUT feature_x
+
+-- Make changes (only visible on this branch)
+INSERT INTO mydb.users (id, name) VALUES (100, 'NewUser');
+ALTER TABLE mydb.users ADD COLUMN email STRING;
+
+-- See all branches
+SHOW BRANCHES
+
+-- Switch back to main branch
+CHECKOUT master
+
+-- Merge changes from feature branch
+MERGE feature_x
+```
+
+**Go API:**
+```go
+// Create branch at current HEAD
+persistence.Branch("feature", nil)
+
+// Create branch from specific transaction
+persistence.Branch("old-state", &transaction)
+
+// Switch branches
+persistence.Checkout("feature")
+
+// List all branches
+branches, _ := persistence.ListBranches()
+
+// Get current branch
+current, _ := persistence.CurrentBranch()
+
+// Merge (fast-forward)
+txn, err := persistence.Merge("feature", identity)
+
+// Delete branch
+persistence.DeleteBranch("feature")
 ```
 
 ### WHERE Operators

@@ -468,3 +468,100 @@ func TestFilePersistenceReopen(t *testing.T) {
 		t.Errorf("Expected 2 persisted rows, got %d", len(qr.Data))
 	}
 }
+
+// TestBranchingSQL tests branching SQL syntax
+func TestBranchingSQL(t *testing.T) {
+	runWithBothPersistence(t, func(t *testing.T, engine *db.Engine) {
+		// Setup: create database and table
+		engine.Execute("CREATE DATABASE branchtest")
+		engine.Execute("CREATE TABLE branchtest.items (id INT PRIMARY KEY, name STRING)")
+		engine.Execute("INSERT INTO branchtest.items (id, name) VALUES (1, 'original')")
+
+		// Test CREATE BRANCH
+		_, err := engine.Execute("CREATE BRANCH feature")
+		if err != nil {
+			t.Fatalf("CREATE BRANCH failed: %v", err)
+		}
+
+		// Test SHOW BRANCHES
+		result, err := engine.Execute("SHOW BRANCHES")
+		if err != nil {
+			t.Fatalf("SHOW BRANCHES failed: %v", err)
+		}
+		qr := result.(db.QueryResult)
+		if len(qr.Data) < 2 {
+			t.Errorf("Expected at least 2 branches (master + feature), got %d", len(qr.Data))
+		}
+
+		// Test CHECKOUT
+		_, err = engine.Execute("CHECKOUT feature")
+		if err != nil {
+			t.Fatalf("CHECKOUT failed: %v", err)
+		}
+
+		// Make changes on feature branch
+		engine.Execute("INSERT INTO branchtest.items (id, name) VALUES (2, 'feature-item')")
+
+		// Verify data on feature branch
+		result, err = engine.Execute("SELECT * FROM branchtest.items")
+		if err != nil {
+			t.Fatalf("SELECT failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 2 {
+			t.Errorf("Expected 2 rows on feature branch, got %d", len(qr.Data))
+		}
+
+		// Checkout master - should only have original row
+		_, err = engine.Execute("CHECKOUT master")
+		if err != nil {
+			t.Fatalf("CHECKOUT master failed: %v", err)
+		}
+
+		result, err = engine.Execute("SELECT * FROM branchtest.items")
+		if err != nil {
+			t.Fatalf("SELECT on master failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 {
+			t.Errorf("Expected 1 row on master branch, got %d", len(qr.Data))
+		}
+
+		// Test MERGE
+		_, err = engine.Execute("MERGE feature")
+		if err != nil {
+			t.Fatalf("MERGE failed: %v", err)
+		}
+
+		// After merge, master should have both rows
+		result, err = engine.Execute("SELECT * FROM branchtest.items")
+		if err != nil {
+			t.Fatalf("SELECT after merge failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 2 {
+			t.Errorf("Expected 2 rows after merge, got %d", len(qr.Data))
+		}
+	})
+}
+
+// TestBranchFromTransaction tests CREATE BRANCH FROM syntax
+func TestBranchFromTransaction(t *testing.T) {
+	runWithBothPersistence(t, func(t *testing.T, engine *db.Engine) {
+		// Create database and get the transaction ID
+		engine.Execute("CREATE DATABASE branchtest2")
+		engine.Execute("CREATE TABLE branchtest2.data (id INT PRIMARY KEY)")
+		engine.Execute("INSERT INTO branchtest2.data (id) VALUES (1)")
+
+		// Make more changes
+		engine.Execute("INSERT INTO branchtest2.data (id) VALUES (2)")
+		engine.Execute("INSERT INTO branchtest2.data (id) VALUES (3)")
+
+		// Current state should have 3 rows
+		result, _ := engine.Execute("SELECT * FROM branchtest2.data")
+		qr := result.(db.QueryResult)
+		if len(qr.Data) != 3 {
+			t.Errorf("Expected 3 rows, got %d", len(qr.Data))
+		}
+	})
+}

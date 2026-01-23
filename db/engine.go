@@ -71,6 +71,14 @@ func (engine *Engine) Execute(query string) (Result, error) {
 		return engine.executeShowTablesStatement(statement.(sql.ShowTablesStatement))
 	case sql.ShowIndexesStatementType:
 		return engine.executeShowIndexesStatement(statement.(sql.ShowIndexesStatement))
+	case sql.CreateBranchStatementType:
+		return engine.executeCreateBranchStatement(statement.(sql.CreateBranchStatement))
+	case sql.CheckoutStatementType:
+		return engine.executeCheckoutStatement(statement.(sql.CheckoutStatement))
+	case sql.MergeStatementType:
+		return engine.executeMergeStatement(statement.(sql.MergeStatement))
+	case sql.ShowBranchesStatementType:
+		return engine.executeShowBranchesStatement(statement.(sql.ShowBranchesStatement))
 	default:
 		return nil, fmt.Errorf("unsupported statement type: %v", statement.Type())
 	}
@@ -1067,6 +1075,87 @@ func (engine *Engine) executeShowIndexesStatement(statement sql.ShowIndexesState
 	return QueryResult{
 		Transaction:      engine.Persistence.LatestTransaction(),
 		Columns:          []string{"Name", "Column", "Unique"},
+		Data:             data,
+		RecordsRead:      len(data),
+		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionOps:     len(data),
+	}, nil
+}
+
+// Branching execution methods
+
+func (engine *Engine) executeCreateBranchStatement(statement sql.CreateBranchStatement) (CommitResult, error) {
+	startTime := time.Now()
+
+	var from *ps.Transaction
+	if statement.FromTxnId != "" {
+		from = &ps.Transaction{Id: statement.FromTxnId}
+	}
+
+	err := engine.Persistence.Branch(statement.Name, from)
+	if err != nil {
+		return CommitResult{}, err
+	}
+
+	return CommitResult{
+		Transaction:      engine.Persistence.LatestTransaction(),
+		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionOps:     1,
+	}, nil
+}
+
+func (engine *Engine) executeCheckoutStatement(statement sql.CheckoutStatement) (CommitResult, error) {
+	startTime := time.Now()
+
+	err := engine.Persistence.Checkout(statement.Branch)
+	if err != nil {
+		return CommitResult{}, err
+	}
+
+	return CommitResult{
+		Transaction:      engine.Persistence.LatestTransaction(),
+		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionOps:     1,
+	}, nil
+}
+
+func (engine *Engine) executeMergeStatement(statement sql.MergeStatement) (CommitResult, error) {
+	startTime := time.Now()
+
+	txn, err := engine.Persistence.Merge(statement.SourceBranch, engine.Identity)
+	if err != nil {
+		return CommitResult{}, err
+	}
+
+	return CommitResult{
+		Transaction:      txn,
+		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionOps:     1,
+	}, nil
+}
+
+func (engine *Engine) executeShowBranchesStatement(statement sql.ShowBranchesStatement) (QueryResult, error) {
+	startTime := time.Now()
+
+	branches, err := engine.Persistence.ListBranches()
+	if err != nil {
+		return QueryResult{}, err
+	}
+
+	currentBranch, _ := engine.Persistence.CurrentBranch()
+
+	data := make([][]string, len(branches))
+	for i, branch := range branches {
+		isCurrent := ""
+		if branch == currentBranch {
+			isCurrent = "*"
+		}
+		data[i] = []string{branch, isCurrent}
+	}
+
+	return QueryResult{
+		Transaction:      engine.Persistence.LatestTransaction(),
+		Columns:          []string{"Branch", "Current"},
 		Data:             data,
 		RecordsRead:      len(data),
 		ExecutionTimeSec: time.Since(startTime).Seconds(),

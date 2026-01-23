@@ -219,3 +219,62 @@ class TestCommitDBLocal:
         with pytest.raises(CommitDBError):
             db.query('SELECT * FROM nonexistent.table')
 
+    def test_create_branch(self, db):
+        """Test CREATE BRANCH SQL syntax."""
+        db.execute('CREATE DATABASE branch_test1')
+        db.execute('CREATE TABLE branch_test1.items (id INT PRIMARY KEY, name STRING)')
+        db.execute("INSERT INTO branch_test1.items (id, name) VALUES (1, 'original')")
+        
+        # Create branch
+        result = db.execute('CREATE BRANCH feature')
+        assert isinstance(result, CommitResult)
+        
+        # Show branches
+        result = db.query('SHOW BRANCHES')
+        assert len(result) >= 2  # master/main + feature
+        
+    def test_checkout(self, db):
+        """Test CHECKOUT SQL syntax."""
+        db.execute('CREATE DATABASE branch_test2')
+        db.execute('CREATE TABLE branch_test2.data (id INT PRIMARY KEY)')
+        db.execute('INSERT INTO branch_test2.data (id) VALUES (1)')
+        
+        db.execute('CREATE BRANCH feature2')
+        
+        # Checkout feature branch
+        result = db.execute('CHECKOUT feature2')
+        assert isinstance(result, CommitResult)
+        
+        # Make changes on feature branch
+        db.execute('INSERT INTO branch_test2.data (id) VALUES (2)')
+        
+        # Verify 2 rows on feature
+        result = db.query('SELECT * FROM branch_test2.data')
+        assert len(result) == 2
+        
+        # Checkout master - should only have 1 row
+        db.execute('CHECKOUT master')
+        result = db.query('SELECT * FROM branch_test2.data')
+        assert len(result) == 1
+        
+    def test_merge(self, db):
+        """Test MERGE SQL syntax."""
+        db.execute('CREATE DATABASE branch_test3')
+        db.execute('CREATE TABLE branch_test3.data (id INT PRIMARY KEY)')
+        db.execute('INSERT INTO branch_test3.data (id) VALUES (1)')
+        
+        # Create and checkout feature branch
+        db.execute('CREATE BRANCH feature3')
+        db.execute('CHECKOUT feature3')
+        
+        # Make changes
+        db.execute('INSERT INTO branch_test3.data (id) VALUES (2)')
+        
+        # Merge back to master
+        db.execute('CHECKOUT master')
+        result = db.execute('MERGE feature3')
+        assert isinstance(result, CommitResult)
+        
+        # After merge, should have both rows
+        result = db.query('SELECT * FROM branch_test3.data')
+        assert len(result) == 2

@@ -159,3 +159,49 @@ with CommitDBLocal() as db:
     db.execute('DELETE FROM app.users WHERE id = 2')
 ```
 
+### Branching & Merging
+
+Use Git-like branching for isolated experimentation:
+
+```python
+from commitdb import CommitDBLocal
+
+with CommitDBLocal() as db:
+    # Setup
+    db.execute('CREATE DATABASE mydb')
+    db.execute('CREATE TABLE mydb.users (id INT PRIMARY KEY, name STRING)')
+    db.execute("INSERT INTO mydb.users (id, name) VALUES (1, 'Alice')")
+    
+    # Create a branch
+    db.execute('CREATE BRANCH feature')
+    
+    # Switch to the branch
+    db.execute('CHECKOUT feature')
+    
+    # Make changes (only visible on this branch)
+    db.execute("INSERT INTO mydb.users (id, name) VALUES (2, 'Bob')")
+    
+    # See all branches
+    branches = db.query('SHOW BRANCHES')
+    for branch in branches:
+        print(f"{branch['Branch']} {'(current)' if branch['Current'] == '*' else ''}")
+    
+    # Switch back to master
+    db.execute('CHECKOUT master')
+    
+    # Merge feature branch
+    db.execute('MERGE feature')
+    
+    # Now master has both rows
+    result = db.query('SELECT * FROM mydb.users')
+    print(f"Users after merge: {len(result)}")  # 2
+```
+
+**Branch Commands:**
+| Command | Description |
+|---------|-------------|
+| `CREATE BRANCH name` | Create new branch at HEAD |
+| `CREATE BRANCH name FROM 'txn_id'` | Create branch at specific transaction |
+| `CHECKOUT name` | Switch to branch |
+| `MERGE name` | Merge branch into current |
+| `SHOW BRANCHES` | List all branches |
