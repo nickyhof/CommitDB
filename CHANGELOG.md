@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-01-23
+
+### Added
+
+#### Snapshots & Restore Documentation
+- Added "Snapshots & Restore" section to README
+- Comprehensive test suite for `Snapshot`, `Recover`, and `Restore` functions
+
+#### Release Pipeline
+- Release binaries for both CLI (`commitdb-cli-*`) and Server (`commitdb-server-*`)
+- Cross-platform builds: Linux, macOS, Windows (amd64/arm64)
+
+### Fixed
+- Fixed nil pointer dereference in `Recover` when snapshot doesn't exist
+- Added proper error handling to `Restore` function
+
 ## [1.1.0] - 2026-01-23
 
 ### Added
@@ -72,5 +88,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests run with both memory and file persistence modes
 - Persistence reopen tests for data durability verification
 
+[1.1.1]: https://github.com/nickyhof/CommitDB/releases/tag/v1.1.1
 [1.1.0]: https://github.com/nickyhof/CommitDB/releases/tag/v1.1.0
 [1.0.0]: https://github.com/nickyhof/CommitDB/releases/tag/v1.0.0
