@@ -234,7 +234,7 @@ func TestImportFile(t *testing.T) {
 	cli := setupTestCLI(t)
 
 	// Test importing the example file
-	err := cli.importFile("../../examples/shop.sql")
+	err := cli.importFile("../../tests/shop.sql")
 	if err != nil {
 		t.Fatalf("importFile failed: %v", err)
 	}

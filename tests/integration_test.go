@@ -1,10 +1,11 @@
-package CommitDB
+package tests
 
 import (
 	"os"
 	"strconv"
 	"testing"
 
+	"github.com/nickyhof/CommitDB"
 	"github.com/nickyhof/CommitDB/core"
 	"github.com/nickyhof/CommitDB/db"
 	"github.com/nickyhof/CommitDB/ps"
@@ -20,7 +21,7 @@ func runWithBothPersistence(t *testing.T, testFunc TestFunc) {
 		if err != nil {
 			t.Fatalf("Failed to initialize memory persistence: %v", err)
 		}
-		DB := Open(&persistence)
+		DB := CommitDB.Open(&persistence)
 		engine := DB.Engine(core.Identity{Name: "test", Email: "test@test.com"})
 		testFunc(t, engine)
 	})
@@ -36,7 +37,7 @@ func runWithBothPersistence(t *testing.T, testFunc TestFunc) {
 		if err != nil {
 			t.Fatalf("Failed to initialize file persistence: %v", err)
 		}
-		DB := Open(&persistence)
+		DB := CommitDB.Open(&persistence)
 		engine := DB.Engine(core.Identity{Name: "test", Email: "test@test.com"})
 		testFunc(t, engine)
 	})
@@ -444,7 +445,7 @@ func TestFilePersistenceReopen(t *testing.T) {
 
 	// First session: create and populate
 	persistence1, _ := ps.NewFilePersistence(tmpDir, nil)
-	db1 := Open(&persistence1)
+	db1 := CommitDB.Open(&persistence1)
 	engine1 := db1.Engine(core.Identity{Name: "test", Email: "test@test.com"})
 
 	engine1.Execute("CREATE DATABASE persist")
@@ -454,7 +455,7 @@ func TestFilePersistenceReopen(t *testing.T) {
 
 	// Second session: reopen and verify
 	persistence2, _ := ps.NewFilePersistence(tmpDir, nil)
-	db2 := Open(&persistence2)
+	db2 := CommitDB.Open(&persistence2)
 	engine2 := db2.Engine(core.Identity{Name: "test", Email: "test@test.com"})
 
 	result, err := engine2.Execute("SELECT * FROM persist.data")

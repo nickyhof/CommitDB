@@ -1,9 +1,10 @@
-package CommitDB
+package tests
 
 import (
 	"strconv"
 	"testing"
 
+	"github.com/nickyhof/CommitDB"
 	"github.com/nickyhof/CommitDB/core"
 	"github.com/nickyhof/CommitDB/db"
 	"github.com/nickyhof/CommitDB/ps"
@@ -16,7 +17,7 @@ func setupBenchmarkDB(b *testing.B) *db.Engine {
 	if err != nil {
 		b.Fatalf("Failed to initialize persistence: %v", err)
 	}
-	instance := Open(&persistence)
+	instance := CommitDB.Open(&persistence)
 	engine := instance.Engine(core.Identity{Name: "benchmark", Email: "bench@test.com"})
 
 	// Create database and table
@@ -156,7 +157,7 @@ func BenchmarkAggregates(b *testing.B) {
 // BenchmarkInsert benchmarks INSERT performance
 func BenchmarkInsert(b *testing.B) {
 	persistence, _ := ps.NewMemoryPersistence()
-	instance := Open(&persistence)
+	instance := CommitDB.Open(&persistence)
 	engine := instance.Engine(core.Identity{Name: "benchmark", Email: "bench@test.com"})
 
 	engine.Execute("CREATE DATABASE bench")
