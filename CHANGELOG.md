@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-01-23
+
+### Added
+
+#### Python Driver
+- Python client library at `drivers/python/`
+- `CommitDB` class with connection handling and query execution
+- `QueryResult` and `CommitResult` dataclasses for typed results
+- Context manager support for automatic connection cleanup
+- Convenience methods: `create_database`, `create_table`, `insert`, `show_databases`, `show_tables`
+- Unit tests and documentation
+
 ## [1.1.1] - 2026-01-23
 
 ### Added
@@ -88,6 +100,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests run with both memory and file persistence modes
 - Persistence reopen tests for data durability verification
 
+[1.1.2]: https://github.com/nickyhof/CommitDB/releases/tag/v1.1.2
 [1.1.1]: https://github.com/nickyhof/CommitDB/releases/tag/v1.1.1
 [1.1.0]: https://github.com/nickyhof/CommitDB/releases/tag/v1.1.0
 [1.0.0]: https://github.com/nickyhof/CommitDB/releases/tag/v1.0.0
