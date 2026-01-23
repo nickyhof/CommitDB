@@ -59,6 +59,24 @@ The server accepts SQL queries (one per line) and returns JSON responses:
 {"success":true,"type":"query","result":{"columns":["id","name"],"data":[["1","Alice"]],"records_read":1}}
 ```
 
+### Python Driver
+
+```bash
+pip install commitdb
+```
+
+```python
+from commitdb import CommitDB
+
+with CommitDB('localhost', 3306) as db:
+    db.execute('CREATE DATABASE mydb')
+    result = db.query('SELECT * FROM mydb.users')
+    for row in result:
+        print(row)
+```
+
+See [drivers/python/README.md](drivers/python/README.md) for full documentation.
+
 ### Example Session
 
 ```
