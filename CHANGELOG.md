@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-01-24
+
+### Added
+
+#### Server Authentication (JWT)
+- Optional JWT-based authentication for TCP connections
+- Per-connection identity tracking for Git commit authorship
+- JWT validation with HS256 shared secret
+- CLI flags: `--jwt-secret`, `--jwt-issuer`, `--jwt-audience`, `--jwt-name-claim`, `--jwt-email-claim`
+- `AUTH JWT <token>` command for client authentication
+- Authenticated identity flows through to Git commits
+
+#### TLS/SSL Encryption
+- Optional TLS encryption for secure connections
+- CLI flags: `--tls-cert`, `--tls-key`
+- Minimum TLS 1.2 support
+- Combined TLS + JWT authentication support
+
+#### Docker Support
+- Multi-stage Dockerfile with Alpine base
+- Multi-architecture builds (linux/amd64, linux/arm64)
+- Published to GitHub Container Registry (`ghcr.io/nickyhof/commitdb`)
+- Volume mount support for persistent storage
+
+#### Python Driver Updates
+- `jwt_token` parameter for auto-authentication on connect
+- `authenticate_jwt(token)` method for explicit authentication
+- `authenticated` and `identity` properties
+- `use_ssl`, `ssl_verify`, `ssl_ca_cert` parameters for TLS
+- Unit tests for auth and SSL features
+- Integration tests for auth-enabled server scenarios
+
+#### Documentation
+- JWT authentication architecture diagram
+- TLS/SSL server and client usage examples
+- Docker usage examples in README
+
+### Changed
+- Server now supports per-connection engines with separate identities
+- CI pipeline generates TLS certificates for SSL integration tests
+- Release workflow includes Docker image build and push
+
 ## [1.5.0] - 2026-01-23
 
 ### Added
@@ -218,6 +260,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests run with both memory and file persistence modes
 - Persistence reopen tests for data durability verification
 
+[1.6.0]: https://github.com/nickyhof/CommitDB/releases/tag/v1.6.0
+[1.5.0]: https://github.com/nickyhof/CommitDB/releases/tag/v1.5.0
+[1.4.0]: https://github.com/nickyhof/CommitDB/releases/tag/v1.4.0
 [1.3.0]: https://github.com/nickyhof/CommitDB/releases/tag/v1.3.0
 [1.2.0]: https://github.com/nickyhof/CommitDB/releases/tag/v1.2.0
 [1.1.2]: https://github.com/nickyhof/CommitDB/releases/tag/v1.1.2
