@@ -190,6 +190,54 @@ func (persistence *Persistence) GetTable(database string, table string) (t *core
 	return t, nil
 }
 
+// UpdateTable updates an existing table's schema
+func (persistence *Persistence) UpdateTable(table core.Table, identity core.Identity, message string) (txn Transaction, err error) {
+	if err := persistence.ensureInitialized(); err != nil {
+		return Transaction{}, err
+	}
+
+	wt, err := persistence.repo.Worktree()
+	if err != nil {
+		return Transaction{}, fmt.Errorf("failed to get worktree: %w", err)
+	}
+
+	path := fmt.Sprintf("%s/%s.table", table.Database, table.Name)
+
+	tableBytes, err := json.Marshal(table)
+	if err != nil {
+		return Transaction{}, fmt.Errorf("failed to marshal table: %w", err)
+	}
+
+	if err := util.WriteFile(wt.Filesystem, path, tableBytes, 0o644); err != nil {
+		return Transaction{}, fmt.Errorf("failed to write table file: %w", err)
+	}
+
+	if _, err := wt.Add(path); err != nil {
+		return Transaction{}, fmt.Errorf("failed to stage table file: %w", err)
+	}
+
+	commit, err := wt.Commit(message, &git.CommitOptions{
+		Author: &object.Signature{
+			Name:  identity.Name,
+			Email: identity.Email,
+			When:  time.Now(),
+		},
+	})
+	if err != nil {
+		return Transaction{}, fmt.Errorf("failed to commit: %w", err)
+	}
+
+	obj, err := persistence.repo.CommitObject(commit)
+	if err != nil {
+		return Transaction{}, fmt.Errorf("failed to get commit object: %w", err)
+	}
+
+	return Transaction{
+		Id:   obj.Hash.String(),
+		When: obj.Committer.When,
+	}, nil
+}
+
 func (persistence *Persistence) DropTable(database string, table string, identity core.Identity) (txn Transaction, err error) {
 	if err := persistence.ensureInitialized(); err != nil {
 		return Transaction{}, err

@@ -978,14 +978,118 @@ func (engine *Engine) executeAlterTableStatement(statement sql.AlterTableStateme
 	startTime := time.Now()
 	opCount := 1
 
-	// TODO: Implement actual ALTER TABLE functionality
-	// This would require modifying the table schema in storage
+	// Get existing table
+	table, err := engine.Persistence.GetTable(statement.Database, statement.Table)
+	if err != nil {
+		return CommitResult{}, fmt.Errorf("table %s.%s does not exist", statement.Database, statement.Table)
+	}
+
+	switch statement.Action {
+	case "ADD":
+		// Check if column already exists
+		for _, col := range table.Columns {
+			if col.Name == statement.ColumnName {
+				return CommitResult{}, fmt.Errorf("column %s already exists", statement.ColumnName)
+			}
+		}
+		// Parse column type
+		colType := parseColumnType(statement.ColumnType)
+		table.Columns = append(table.Columns, core.Column{
+			Name: statement.ColumnName,
+			Type: colType,
+		})
+
+	case "DROP":
+		// Find and remove column
+		found := false
+		newColumns := make([]core.Column, 0, len(table.Columns))
+		for _, col := range table.Columns {
+			if col.Name == statement.ColumnName {
+				if col.PrimaryKey {
+					return CommitResult{}, fmt.Errorf("cannot drop primary key column %s", statement.ColumnName)
+				}
+				found = true
+				continue
+			}
+			newColumns = append(newColumns, col)
+		}
+		if !found {
+			return CommitResult{}, fmt.Errorf("column %s does not exist", statement.ColumnName)
+		}
+		table.Columns = newColumns
+
+	case "MODIFY":
+		// Find and update column type
+		found := false
+		for i, col := range table.Columns {
+			if col.Name == statement.ColumnName {
+				colType := parseColumnType(statement.ColumnType)
+				table.Columns[i].Type = colType
+				found = true
+				break
+			}
+		}
+		if !found {
+			return CommitResult{}, fmt.Errorf("column %s does not exist", statement.ColumnName)
+		}
+
+	case "RENAME":
+		// Check new name doesn't already exist
+		for _, col := range table.Columns {
+			if col.Name == statement.NewColumnName {
+				return CommitResult{}, fmt.Errorf("column %s already exists", statement.NewColumnName)
+			}
+		}
+		// Find and rename column
+		found := false
+		for i, col := range table.Columns {
+			if col.Name == statement.ColumnName {
+				table.Columns[i].Name = statement.NewColumnName
+				found = true
+				break
+			}
+		}
+		if !found {
+			return CommitResult{}, fmt.Errorf("column %s does not exist", statement.ColumnName)
+		}
+
+	default:
+		return CommitResult{}, fmt.Errorf("unknown ALTER action: %s", statement.Action)
+	}
+
+	// Update table schema
+	message := fmt.Sprintf("ALTER TABLE %s.%s %s COLUMN %s", statement.Database, statement.Table, statement.Action, statement.ColumnName)
+	txn, err := engine.Persistence.UpdateTable(*table, engine.Identity, message)
+	if err != nil {
+		return CommitResult{}, err
+	}
 
 	return CommitResult{
-		Transaction:      engine.Persistence.LatestTransaction(),
+		Transaction:      txn,
+		TablesAltered:    1,
 		ExecutionTimeSec: time.Since(startTime).Seconds(),
 		ExecutionOps:     opCount,
 	}, nil
+}
+
+// parseColumnType converts string type to core.ColumnType
+func parseColumnType(typeName string) core.ColumnType {
+	switch strings.ToUpper(typeName) {
+	case "INT", "INTEGER":
+		return core.IntType
+	case "STRING", "VARCHAR":
+		return core.StringType
+	case "FLOAT", "DOUBLE", "REAL":
+		return core.FloatType
+	case "BOOL", "BOOLEAN":
+		return core.BoolType
+	case "TEXT":
+		return core.TextType
+	case "TIMESTAMP", "DATETIME":
+		return core.TimestampType
+	default:
+		return core.StringType
+	}
 }
 
 func (engine *Engine) executeBeginStatement() (CommitResult, error) {

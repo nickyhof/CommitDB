@@ -35,6 +35,7 @@ type CommitResult struct {
 	DatabasesDeleted int
 	TablesCreated    int
 	TablesDeleted    int
+	TablesAltered    int
 	RecordsWritten   int
 	RecordsDeleted   int
 	ExecutionTimeSec float64
@@ -124,6 +125,9 @@ func (result CommitResult) Display() {
 	}
 	if result.TablesDeleted > 0 {
 		parts = append(parts, fmt.Sprintf("%d table(s) deleted", result.TablesDeleted))
+	}
+	if result.TablesAltered > 0 {
+		parts = append(parts, fmt.Sprintf("%d table(s) altered", result.TablesAltered))
 	}
 	if result.RecordsWritten > 0 {
 		parts = append(parts, fmt.Sprintf("%d record(s) written", result.RecordsWritten))

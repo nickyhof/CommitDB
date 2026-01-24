@@ -422,6 +422,91 @@ func TestIntegrationErrorHandling(t *testing.T) {
 	})
 }
 
+// TestIntegrationAlterTable tests ALTER TABLE operations
+func TestIntegrationAlterTable(t *testing.T) {
+	runWithBothPersistence(t, func(t *testing.T, engine *db.Engine) {
+		// Setup
+		engine.Execute("CREATE DATABASE alter_test")
+		engine.Execute("CREATE TABLE alter_test.users (id INT PRIMARY KEY, name STRING)")
+
+		// Test ADD COLUMN
+		result, err := engine.Execute("ALTER TABLE alter_test.users ADD COLUMN email STRING")
+		if err != nil {
+			t.Fatalf("ADD COLUMN failed: %v", err)
+		}
+		cr := result.(db.CommitResult)
+		if cr.TablesAltered != 1 {
+			t.Errorf("Expected 1 table altered, got %d", cr.TablesAltered)
+		}
+
+		// Verify column was added via DESCRIBE
+		result, err = engine.Execute("DESCRIBE alter_test.users")
+		if err != nil {
+			t.Fatalf("DESCRIBE failed: %v", err)
+		}
+		qr := result.(db.QueryResult)
+		if len(qr.Data) != 3 {
+			t.Errorf("Expected 3 columns after ADD, got %d", len(qr.Data))
+		}
+
+		// Test ADD COLUMN with existing name (should fail)
+		_, err = engine.Execute("ALTER TABLE alter_test.users ADD COLUMN name STRING")
+		if err == nil {
+			t.Error("Expected error when adding existing column")
+		}
+
+		// Test MODIFY COLUMN
+		_, err = engine.Execute("ALTER TABLE alter_test.users MODIFY COLUMN email TEXT")
+		if err != nil {
+			t.Fatalf("MODIFY COLUMN failed: %v", err)
+		}
+
+		// Test RENAME COLUMN
+		_, err = engine.Execute("ALTER TABLE alter_test.users RENAME COLUMN email TO contact")
+		if err != nil {
+			t.Fatalf("RENAME COLUMN failed: %v", err)
+		}
+
+		// Verify rename via DESCRIBE
+		result, _ = engine.Execute("DESCRIBE alter_test.users")
+		qr = result.(db.QueryResult)
+		foundContact := false
+		for _, row := range qr.Data {
+			if row[0] == "contact" {
+				foundContact = true
+			}
+		}
+		if !foundContact {
+			t.Error("Column 'contact' not found after RENAME")
+		}
+
+		// Test DROP COLUMN
+		_, err = engine.Execute("ALTER TABLE alter_test.users DROP COLUMN contact")
+		if err != nil {
+			t.Fatalf("DROP COLUMN failed: %v", err)
+		}
+
+		// Verify column was dropped
+		result, _ = engine.Execute("DESCRIBE alter_test.users")
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 2 {
+			t.Errorf("Expected 2 columns after DROP, got %d", len(qr.Data))
+		}
+
+		// Test DROP non-existent column (should fail)
+		_, err = engine.Execute("ALTER TABLE alter_test.users DROP COLUMN nonexistent")
+		if err == nil {
+			t.Error("Expected error when dropping non-existent column")
+		}
+
+		// Test DROP PRIMARY KEY column (should fail)
+		_, err = engine.Execute("ALTER TABLE alter_test.users DROP COLUMN id")
+		if err == nil {
+			t.Error("Expected error when dropping primary key column")
+		}
+	})
+}
+
 // TestIntegrationTransactionCommands tests BEGIN/COMMIT/ROLLBACK
 func TestIntegrationTransactionCommands(t *testing.T) {
 	runWithBothPersistence(t, func(t *testing.T, engine *db.Engine) {

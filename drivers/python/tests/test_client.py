@@ -346,6 +346,41 @@ class TestCommitDBLocal:
         result = db.query("SELECT * FROM in_test.items WHERE NOT status IN ('archived')")
         assert len(result) == 4
 
+    def test_alter_table(self, db):
+        """Test ALTER TABLE operations."""
+        db.execute('CREATE DATABASE alter_test')
+        db.execute('CREATE TABLE alter_test.users (id INT PRIMARY KEY, name STRING)')
+        
+        # Test ADD COLUMN
+        result = db.execute('ALTER TABLE alter_test.users ADD COLUMN email STRING')
+        assert isinstance(result, CommitResult)
+        
+        # Verify column was added
+        result = db.query('DESCRIBE alter_test.users')
+        assert len(result) == 3
+        
+        # Test MODIFY COLUMN
+        result = db.execute('ALTER TABLE alter_test.users MODIFY COLUMN email TEXT')
+        assert isinstance(result, CommitResult)
+        
+        # Test RENAME COLUMN
+        result = db.execute('ALTER TABLE alter_test.users RENAME COLUMN email TO contact')
+        assert isinstance(result, CommitResult)
+        
+        # Verify rename
+        result = db.query('DESCRIBE alter_test.users')
+        column_names = [row['Column'] for row in result]
+        assert 'contact' in column_names
+        assert 'email' not in column_names
+        
+        # Test DROP COLUMN
+        result = db.execute('ALTER TABLE alter_test.users DROP COLUMN contact')
+        assert isinstance(result, CommitResult)
+        
+        # Verify column was dropped
+        result = db.query('DESCRIBE alter_test.users')
+        assert len(result) == 2
+
     def test_create_branch(self, db):
         """Test CREATE BRANCH SQL syntax."""
         db.execute('CREATE DATABASE branch_test1')

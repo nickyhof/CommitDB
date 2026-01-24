@@ -282,6 +282,12 @@ CREATE INDEX idx_name ON mydb.users(name);
 CREATE UNIQUE INDEX idx_email ON mydb.users(email);
 DROP INDEX idx_name ON mydb.users;
 SHOW INDEXES ON mydb.users;
+
+-- Alter Table
+ALTER TABLE mydb.users ADD COLUMN phone STRING;
+ALTER TABLE mydb.users DROP COLUMN phone;
+ALTER TABLE mydb.users MODIFY COLUMN name TEXT;
+ALTER TABLE mydb.users RENAME COLUMN name TO username;
 ```
 
 ### Data Manipulation

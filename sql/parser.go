@@ -187,11 +187,12 @@ type DropIndexStatement struct {
 }
 
 type AlterTableStatement struct {
-	Database   string
-	Table      string
-	Action     string // ADD, DROP, MODIFY
-	ColumnName string
-	ColumnType string
+	Database      string
+	Table         string
+	Action        string // ADD, DROP, MODIFY, RENAME
+	ColumnName    string
+	NewColumnName string // for RENAME
+	ColumnType    string
 }
 
 type BeginStatement struct{}
@@ -1453,7 +1454,7 @@ func ParseAlter(parser *Parser) (Statement, error) {
 		statement.Table = token.Value
 	}
 
-	// Parse action: ADD, DROP, MODIFY
+	// Parse action: ADD, DROP, MODIFY, RENAME
 	token = parser.lexer.NextToken()
 	switch token.Type {
 	case Add:
@@ -1462,8 +1463,10 @@ func ParseAlter(parser *Parser) (Statement, error) {
 		statement.Action = "DROP"
 	case Modify:
 		statement.Action = "MODIFY"
+	case Rename:
+		statement.Action = "RENAME"
 	default:
-		return nil, errors.New("expected ADD, DROP, or MODIFY")
+		return nil, errors.New("expected ADD, DROP, MODIFY, or RENAME")
 	}
 
 	// Parse COLUMN (optional)
@@ -1485,6 +1488,19 @@ func ParseAlter(parser *Parser) (Statement, error) {
 			return nil, errors.New("expected column type")
 		}
 		statement.ColumnType = token.Value
+	}
+
+	// Parse TO newname for RENAME
+	if statement.Action == "RENAME" {
+		token = parser.lexer.NextToken()
+		if token.Type != To {
+			return nil, errors.New("expected TO after RENAME COLUMN oldname")
+		}
+		token = parser.lexer.NextToken()
+		if token.Type != Identifier {
+			return nil, errors.New("expected new column name after TO")
+		}
+		statement.NewColumnName = token.Value
 	}
 
 	return statement, nil

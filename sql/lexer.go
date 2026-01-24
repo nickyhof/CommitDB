@@ -107,6 +107,7 @@ const (
 	// Password - reuse String literal
 	Ssh
 	To
+	Rename
 	EOF
 	Unknown
 )
@@ -550,6 +551,8 @@ func lookupIdentifier(id string) TokenType {
 		return Ssh
 	case "TO":
 		return To
+	case "RENAME":
+		return Rename
 	default:
 		return Identifier
 	}

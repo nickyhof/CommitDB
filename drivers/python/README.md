@@ -52,6 +52,11 @@ with CommitDB('localhost', 3306) as db:
 
     # Use IN operator for multiple values
     result = db.query("SELECT * FROM mydb.users WHERE id IN (1, 3)")
+
+    # Modify table schema
+    db.execute('ALTER TABLE mydb.users ADD COLUMN phone STRING')
+    db.execute('ALTER TABLE mydb.users RENAME COLUMN phone TO mobile')
+    db.execute('ALTER TABLE mydb.users DROP COLUMN mobile')
 ```
 
 ### Embedded Mode (no server required)
