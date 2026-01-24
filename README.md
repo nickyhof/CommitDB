@@ -59,6 +59,30 @@ go build -o commitdb-cli ./cmd/cli
 ./commitdb-cli -baseDir=/path/to/data
 ```
 
+### Docker
+
+```bash
+# Pull from GitHub Container Registry
+docker pull ghcr.io/nickyhof/commitdb:latest
+
+# Run with in-memory storage
+docker run -p 3306:3306 ghcr.io/nickyhof/commitdb
+
+# Run with persistent storage
+docker run -p 3306:3306 -v /path/to/data:/data ghcr.io/nickyhof/commitdb
+
+# Run with TLS
+docker run -p 3306:3306 \
+  -v /path/to/certs:/certs \
+  ghcr.io/nickyhof/commitdb \
+  --tls-cert /certs/cert.pem --tls-key /certs/key.pem
+
+# Run with JWT authentication
+docker run -p 3306:3306 -v /path/to/data:/data \
+  ghcr.io/nickyhof/commitdb \
+  --jwt-secret "your-secret" --jwt-issuer "https://auth.example.com"
+```
+
 ### Using the SQL Server
 
 ```bash
