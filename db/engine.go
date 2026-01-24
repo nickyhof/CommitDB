@@ -603,8 +603,161 @@ func evalStringFunction(fn sql.FunctionExpr, row map[string]string) string {
 				return formatDate(t, args[1])
 			}
 		}
+	// JSON functions
+	case "JSON_EXTRACT":
+		// JSON_EXTRACT(json, path) - e.g., JSON_EXTRACT(data, '$.name')
+		if len(args) >= 2 {
+			return jsonExtract(args[0], args[1])
+		}
+	case "JSON_KEYS":
+		// JSON_KEYS(json) - returns comma-separated list of keys
+		if len(args) >= 1 {
+			return jsonKeys(args[0])
+		}
+	case "JSON_LENGTH":
+		// JSON_LENGTH(json) - returns number of elements
+		if len(args) >= 1 {
+			return jsonLength(args[0])
+		}
+	case "JSON_TYPE":
+		// JSON_TYPE(json) - returns type (object, array, string, number, boolean, null)
+		if len(args) >= 1 {
+			return jsonType(args[0])
+		}
+	case "JSON_CONTAINS":
+		// JSON_CONTAINS(json, value) - returns 1 if value exists, 0 otherwise
+		if len(args) >= 2 {
+			return jsonContains(args[0], args[1])
+		}
 	}
 	return ""
+}
+
+// jsonExtract extracts a value from JSON using a path like $.key.nested
+func jsonExtract(jsonStr, path string) string {
+	var data interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
+		return ""
+	}
+	// Parse path (supports $.key.nested format)
+	path = strings.TrimPrefix(path, "$")
+	if path == "" || path == "." {
+		// Return whole JSON
+		return jsonStr
+	}
+	parts := strings.Split(strings.TrimPrefix(path, "."), ".")
+	current := data
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		// Check for array index like [0]
+		if strings.HasPrefix(part, "[") && strings.HasSuffix(part, "]") {
+			idx, err := strconv.Atoi(part[1 : len(part)-1])
+			if err != nil {
+				return ""
+			}
+			if arr, ok := current.([]interface{}); ok && idx < len(arr) {
+				current = arr[idx]
+			} else {
+				return ""
+			}
+		} else if obj, ok := current.(map[string]interface{}); ok {
+			if val, exists := obj[part]; exists {
+				current = val
+			} else {
+				return ""
+			}
+		} else {
+			return ""
+		}
+	}
+	// Return result as string
+	switch v := current.(type) {
+	case string:
+		return v
+	case float64:
+		if v == float64(int(v)) {
+			return strconv.Itoa(int(v))
+		}
+		return strconv.FormatFloat(v, 'f', -1, 64)
+	case bool:
+		if v {
+			return "true"
+		}
+		return "false"
+	case nil:
+		return "null"
+	default:
+		// Return as JSON
+		b, _ := json.Marshal(v)
+		return string(b)
+	}
+}
+
+// jsonKeys returns comma-separated list of object keys
+func jsonKeys(jsonStr string) string {
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
+		return ""
+	}
+	var keys []string
+	for k := range data {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return strings.Join(keys, ",")
+}
+
+// jsonLength returns length of array or object
+func jsonLength(jsonStr string) string {
+	var data interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
+		return "0"
+	}
+	switch v := data.(type) {
+	case []interface{}:
+		return strconv.Itoa(len(v))
+	case map[string]interface{}:
+		return strconv.Itoa(len(v))
+	default:
+		return "1"
+	}
+}
+
+// jsonType returns the type of JSON value
+func jsonType(jsonStr string) string {
+	jsonStr = strings.TrimSpace(jsonStr)
+	if jsonStr == "" {
+		return "null"
+	}
+	var data interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
+		return "string"
+	}
+	switch data.(type) {
+	case map[string]interface{}:
+		return "object"
+	case []interface{}:
+		return "array"
+	case string:
+		return "string"
+	case float64:
+		return "number"
+	case bool:
+		return "boolean"
+	case nil:
+		return "null"
+	}
+	return "unknown"
+}
+
+// jsonContains checks if JSON contains a value
+func jsonContains(jsonStr, value string) string {
+	if strings.Contains(jsonStr, value) {
+		return "1"
+	}
+	return "0"
 }
 
 // parseDateTime parses various date/time formats
@@ -960,6 +1113,12 @@ func (engine *Engine) executeInsertStatement(statement sql.InsertStatement) (Com
 		} else if colType == core.TimestampType {
 			if _, err := parseDateTime(value); err != nil {
 				return CommitResult{}, fmt.Errorf("invalid TIMESTAMP format for column %s: %s (expected YYYY-MM-DD HH:MM:SS)", column, value)
+			}
+		} else if colType == core.JsonType {
+			// Validate JSON format
+			var js interface{}
+			if err := json.Unmarshal([]byte(value), &js); err != nil {
+				return CommitResult{}, fmt.Errorf("invalid JSON format for column %s: %s", column, err.Error())
 			}
 		}
 
@@ -1415,6 +1574,8 @@ func parseColumnType(typeName string) core.ColumnType {
 		return core.DateType
 	case "TIMESTAMP", "DATETIME":
 		return core.TimestampType
+	case "JSON":
+		return core.JsonType
 	default:
 		return core.StringType
 	}
@@ -1488,6 +1649,8 @@ func (engine *Engine) executeDescribeStatement(statement sql.DescribeStatement) 
 			typeStr = "DATE"
 		case core.TimestampType:
 			typeStr = "TIMESTAMP"
+		case core.JsonType:
+			typeStr = "JSON"
 		}
 
 		pkStr := "NO"

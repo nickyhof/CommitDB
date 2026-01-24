@@ -761,6 +761,70 @@ func ParseSelect(parser *Parser) (Statement, error) {
 			}
 			break
 		}
+	} else if token.Type == JsonExtract || token.Type == JsonSet || token.Type == JsonRemove ||
+		token.Type == JsonContains || token.Type == JsonKeys || token.Type == JsonLength || token.Type == JsonType {
+		// Parse JSON functions
+		for {
+			funcName := ""
+			switch token.Type {
+			case JsonExtract:
+				funcName = "JSON_EXTRACT"
+			case JsonSet:
+				funcName = "JSON_SET"
+			case JsonRemove:
+				funcName = "JSON_REMOVE"
+			case JsonContains:
+				funcName = "JSON_CONTAINS"
+			case JsonKeys:
+				funcName = "JSON_KEYS"
+			case JsonLength:
+				funcName = "JSON_LENGTH"
+			case JsonType:
+				funcName = "JSON_TYPE"
+			}
+			if funcName == "" {
+				break
+			}
+			token = parser.lexer.NextToken()
+			if token.Type != ParenOpen {
+				return nil, errors.New("expected '(' after " + funcName)
+			}
+			var args []string
+			token = parser.lexer.NextToken()
+			if token.Type != ParenClose {
+				for {
+					if token.Type == Identifier || token.Type == String || token.Type == Int {
+						args = append(args, token.Value)
+					} else {
+						return nil, errors.New("expected argument in " + funcName + "()")
+					}
+					token = parser.lexer.NextToken()
+					if token.Type == ParenClose {
+						break
+					}
+					if token.Type != Comma {
+						return nil, errors.New("expected ',' or ')' in " + funcName + "()")
+					}
+					token = parser.lexer.NextToken()
+				}
+			}
+			fn := FunctionExpr{Function: funcName, Args: args}
+			token = parser.lexer.NextToken()
+			if token.Type == As {
+				token = parser.lexer.NextToken()
+				if token.Type != Identifier {
+					return nil, errors.New("expected alias after AS")
+				}
+				fn.Alias = token.Value
+				token = parser.lexer.NextToken()
+			}
+			selectStatement.Functions = append(selectStatement.Functions, fn)
+			if token.Type == Comma {
+				token = parser.lexer.NextToken()
+				continue
+			}
+			break
+		}
 	} else if token.Type == Wildcard {
 		// Parse wildcard
 		selectStatement.Columns = []string{}
@@ -1420,8 +1484,10 @@ func ParseCreateTable(parser *Parser) (Statement, error) {
 			columnType = core.DateType
 		case "TIMESTAMP", "DATETIME":
 			columnType = core.TimestampType
+		case "JSON":
+			columnType = core.JsonType
 		default:
-			return nil, errors.New("expected column type (STRING, INT, FLOAT, BOOL, TEXT, DATE, TIMESTAMP)")
+			return nil, errors.New("expected column type (STRING, INT, FLOAT, BOOL, TEXT, DATE, TIMESTAMP, JSON)")
 		}
 
 		// Check for PRIMARY KEY

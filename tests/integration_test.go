@@ -616,6 +616,109 @@ func TestIntegrationDateColumns(t *testing.T) {
 	})
 }
 
+// TestIntegrationJsonType tests JSON column type and JSON functions
+func TestIntegrationJsonType(t *testing.T) {
+	runWithBothPersistence(t, func(t *testing.T, engine *db.Engine) {
+
+		engine.Execute("CREATE DATABASE json_test")
+		engine.Execute("CREATE TABLE json_test.documents (id INT PRIMARY KEY, name STRING, data JSON)")
+
+		// Verify JSON type in schema
+		result, err := engine.Execute("DESCRIBE json_test.documents")
+		if err != nil {
+			t.Fatalf("DESCRIBE failed: %v", err)
+		}
+		qr := result.(db.QueryResult)
+		foundJson := false
+		for _, row := range qr.Data {
+			if row[0] == "data" && row[1] == "JSON" {
+				foundJson = true
+			}
+		}
+		if !foundJson {
+			t.Error("JSON type not found in schema")
+		}
+
+		// Insert valid JSON
+		_, err = engine.Execute(`INSERT INTO json_test.documents (id, name, data) VALUES (1, 'Doc1', '{"name":"Alice","age":30,"tags":["admin","user"]}')`)
+		if err != nil {
+			t.Fatalf("INSERT with valid JSON failed: %v", err)
+		}
+
+		// Insert another JSON document
+		_, err = engine.Execute(`INSERT INTO json_test.documents (id, name, data) VALUES (2, 'Doc2', '{"name":"Bob","age":25}')`)
+		if err != nil {
+			t.Fatalf("INSERT second JSON failed: %v", err)
+		}
+
+		// Test JSON_EXTRACT with path
+		result, err = engine.Execute(`SELECT JSON_EXTRACT(data, '$.name') FROM json_test.documents WHERE id = 1`)
+		if err != nil {
+			t.Fatalf("JSON_EXTRACT failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 || qr.Data[0][0] != "Alice" {
+			t.Errorf("JSON_EXTRACT: expected 'Alice', got '%s'", qr.Data[0][0])
+		}
+
+		// Test JSON_EXTRACT nested
+		result, err = engine.Execute(`SELECT JSON_EXTRACT(data, '$.age') FROM json_test.documents WHERE id = 1`)
+		if err != nil {
+			t.Fatalf("JSON_EXTRACT age failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 || qr.Data[0][0] != "30" {
+			t.Errorf("JSON_EXTRACT age: expected '30', got '%s'", qr.Data[0][0])
+		}
+
+		// Test JSON_KEYS
+		result, err = engine.Execute(`SELECT JSON_KEYS(data) FROM json_test.documents WHERE id = 2`)
+		if err != nil {
+			t.Fatalf("JSON_KEYS failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 || qr.Data[0][0] != "age,name" {
+			t.Errorf("JSON_KEYS: expected 'age,name', got '%s'", qr.Data[0][0])
+		}
+
+		// Test JSON_LENGTH
+		result, err = engine.Execute(`SELECT JSON_LENGTH(data) FROM json_test.documents WHERE id = 1`)
+		if err != nil {
+			t.Fatalf("JSON_LENGTH failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 || qr.Data[0][0] != "3" {
+			t.Errorf("JSON_LENGTH: expected '3', got '%s'", qr.Data[0][0])
+		}
+
+		// Test JSON_TYPE
+		result, err = engine.Execute(`SELECT JSON_TYPE(data) FROM json_test.documents WHERE id = 1`)
+		if err != nil {
+			t.Fatalf("JSON_TYPE failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 || qr.Data[0][0] != "object" {
+			t.Errorf("JSON_TYPE: expected 'object', got '%s'", qr.Data[0][0])
+		}
+
+		// Test JSON_CONTAINS
+		result, err = engine.Execute(`SELECT JSON_CONTAINS(data, 'Alice') FROM json_test.documents WHERE id = 1`)
+		if err != nil {
+			t.Fatalf("JSON_CONTAINS failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 || qr.Data[0][0] != "1" {
+			t.Errorf("JSON_CONTAINS: expected '1', got '%s'", qr.Data[0][0])
+		}
+
+		// Test invalid JSON format (should fail)
+		_, err = engine.Execute(`INSERT INTO json_test.documents (id, name, data) VALUES (3, 'Doc3', 'not-valid-json')`)
+		if err == nil {
+			t.Error("Expected error for invalid JSON format")
+		}
+	})
+}
+
 // TestIntegrationOffsetLimit tests OFFSET and LIMIT
 func TestIntegrationOffsetLimit(t *testing.T) {
 	runWithBothPersistence(t, func(t *testing.T, engine *db.Engine) {

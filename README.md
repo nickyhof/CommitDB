@@ -256,6 +256,19 @@ commitdb> SELECT * FROM myapp.users;
 
 ## SQL Reference
 
+### Data Types
+
+| Type | Description | Example Values |
+|------|-------------|----------------|
+| `INT` / `INTEGER` | 64-bit signed integer | `42`, `-100`, `0` |
+| `FLOAT` / `DOUBLE` / `REAL` | 64-bit floating-point number | `3.14`, `-0.5`, `1.0` |
+| `STRING` / `VARCHAR` | Variable-length text (short) | `'hello'`, `'Alice'` |
+| `TEXT` | Variable-length text (long) | Long text content |
+| `BOOL` / `BOOLEAN` | Boolean value | `true`, `false` |
+| `DATE` | Date only (YYYY-MM-DD) | `'2024-06-15'` |
+| `TIMESTAMP` / `DATETIME` | Date and time (YYYY-MM-DD HH:MM:SS) | `'2024-06-15 14:30:00'` |
+| `JSON` | JSON object or array (validated) | `'{"name":"Alice"}'` |
+
 ### Data Definition
 
 ```sql
@@ -272,7 +285,8 @@ CREATE TABLE mydb.users (
     age INT,
     active BOOL,
     birth_date DATE,       -- Date only (YYYY-MM-DD)
-    created TIMESTAMP      -- Date + time (YYYY-MM-DD HH:MM:SS)
+    created TIMESTAMP,     -- Date + time (YYYY-MM-DD HH:MM:SS)
+    metadata JSON          -- JSON object or array
 );
 DROP TABLE mydb.users;
 SHOW TABLES IN mydb;
@@ -379,6 +393,62 @@ SELECT DATEDIFF(end_date, start_date) FROM mydb.events;    -- Days between
 SELECT DATE(created_at) FROM mydb.events;                   -- Just the date
 SELECT DATE_FORMAT(created_at, '%Y-%m-%d') FROM mydb.events;
 ```
+
+### JSON Data Type
+
+```sql
+-- Create table with JSON column
+CREATE TABLE mydb.documents (
+    id INT PRIMARY KEY,
+    name STRING,
+    data JSON
+);
+
+-- Insert JSON data (validated on insert)
+INSERT INTO mydb.documents (id, name, data) VALUES 
+    (1, 'doc1', '{"name":"Alice","age":30,"tags":["admin"]}');
+
+-- Extract values using JSON path expressions
+SELECT JSON_EXTRACT(data, '$.name') FROM mydb.documents;           -- Returns 'Alice'
+SELECT JSON_EXTRACT(data, '$.age') FROM mydb.documents;            -- Returns '30'
+SELECT JSON_EXTRACT(data, '$.tags') FROM mydb.documents;           -- Returns '["admin"]'
+
+-- Other JSON functions
+SELECT JSON_KEYS(data) FROM mydb.documents;                        -- Returns 'age,name,tags'
+SELECT JSON_LENGTH(data) FROM mydb.documents;                      -- Returns '3'
+SELECT JSON_TYPE(data) FROM mydb.documents;                        -- Returns 'object'
+SELECT JSON_CONTAINS(data, 'Alice') FROM mydb.documents;           -- Returns '1' if found
+```
+
+### Functions Reference
+
+| Category | Function | Description |
+|----------|----------|-------------|
+| **Aggregate** | `COUNT(*)` | Count rows |
+| | `SUM(column)` | Sum numeric values |
+| | `AVG(column)` | Average of numeric values |
+| | `MIN(column)` | Minimum value |
+| | `MAX(column)` | Maximum value |
+| **String** | `UPPER(str)` | Convert to uppercase |
+| | `LOWER(str)` | Convert to lowercase |
+| | `CONCAT(a, b, ...)` | Concatenate strings |
+| | `SUBSTRING(str, start, len)` | Extract substring (1-indexed) |
+| | `TRIM(str)` | Remove leading/trailing whitespace |
+| | `LENGTH(str)` | String length |
+| | `REPLACE(str, old, new)` | Replace occurrences |
+| **Date** | `NOW()` | Current date/time |
+| | `DATE(timestamp)` | Extract date part |
+| | `YEAR(date)`, `MONTH(date)`, `DAY(date)` | Extract date components |
+| | `HOUR(ts)`, `MINUTE(ts)`, `SECOND(ts)` | Extract time components |
+| | `DATE_ADD(date, n, unit)` | Add interval (DAY, MONTH, YEAR, HOUR, etc.) |
+| | `DATE_SUB(date, n, unit)` | Subtract interval |
+| | `DATEDIFF(date1, date2)` | Days between dates |
+| | `DATE_FORMAT(date, format)` | Format date (%Y, %m, %d, %H, %i, %s) |
+| **JSON** | `JSON_EXTRACT(json, path)` | Extract value using path (`$.key.nested`) |
+| | `JSON_KEYS(json)` | Get comma-separated keys |
+| | `JSON_LENGTH(json)` | Number of elements |
+| | `JSON_TYPE(json)` | Type (object, array, string, number, boolean, null) |
+| | `JSON_CONTAINS(json, value)` | Returns 1 if value exists |
 
 ### Transactions
 

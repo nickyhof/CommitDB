@@ -103,8 +103,6 @@ const (
 	TokenKeyword
 	Key
 	Passphrase
-	// User already exists as Identifier
-	// Password - reuse String literal
 	Ssh
 	To
 	Rename
@@ -129,6 +127,13 @@ const (
 	Minute
 	Second
 	DateFormat
+	JsonExtract
+	JsonSet
+	JsonRemove
+	JsonContains
+	JsonKeys
+	JsonLength
+	JsonType
 	EOF
 	Unknown
 )
@@ -612,6 +617,20 @@ func lookupIdentifier(id string) TokenType {
 		return Second
 	case "DATE_FORMAT", "DATEFORMAT":
 		return DateFormat
+	case "JSON_EXTRACT":
+		return JsonExtract
+	case "JSON_SET":
+		return JsonSet
+	case "JSON_REMOVE":
+		return JsonRemove
+	case "JSON_CONTAINS":
+		return JsonContains
+	case "JSON_KEYS":
+		return JsonKeys
+	case "JSON_LENGTH":
+		return JsonLength
+	case "JSON_TYPE":
+		return JsonType
 	default:
 		return Identifier
 	}

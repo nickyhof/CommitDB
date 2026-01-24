@@ -65,6 +65,11 @@ with CommitDB('localhost', 3306) as db:
     # Use date functions
     result = db.query('SELECT NOW() FROM mydb.users')
     result = db.query("SELECT YEAR(created_at), MONTH(created_at) FROM mydb.events")
+
+    # Use JSON columns and functions
+    db.execute("CREATE TABLE mydb.docs (id INT PRIMARY KEY, data JSON)")
+    db.execute("INSERT INTO mydb.docs (id, data) VALUES (1, '{\"name\":\"Alice\"}')")
+    result = db.query("SELECT JSON_EXTRACT(data, '$.name') FROM mydb.docs")
 ```
 
 ### Embedded Mode (no server required)
