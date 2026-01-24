@@ -1,6 +1,22 @@
 # CommitDB Python Driver
 
-Python client for connecting to CommitDB.
+[![PyPI version](https://badge.fury.io/py/commitdb.svg)](https://badge.fury.io/py/commitdb)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+
+Python client for CommitDB - a Git-backed SQL database engine. Use CommitDB from Python applications with full support for branching, merging, and remote sync.
+
+**Two modes:**
+- **Remote mode** (`CommitDB`) - Connect to a CommitDB server over TCP
+- **Embedded mode** (`CommitDBLocal`) - Run the database directly in-process
+
+## Table of Contents
+
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [API Reference](#api-reference)
+- [Embedded Mode](#embedded-mode-commitdblocal)
+- [Branching & Merging](#branching--merging)
+- [Remote Commands](#remote-commands)
 
 ## Installation
 
@@ -10,35 +26,46 @@ pip install commitdb
 
 ## Quick Start
 
+### Remote Mode (connect to server)
+
 ```python
 from commitdb import CommitDB
 
-# Connect to server
-db = CommitDB('localhost', 3306)
-db.connect()
-
-# Or use context manager
+# Using context manager (recommended)
 with CommitDB('localhost', 3306) as db:
     # Create database and table
     db.execute('CREATE DATABASE mydb')
-    db.execute('CREATE TABLE mydb.users (id INT PRIMARY KEY, name STRING)')
+    db.execute('CREATE TABLE mydb.users (id INT PRIMARY KEY, name STRING, email STRING)')
 
     # Insert data
-    db.execute("INSERT INTO mydb.users (id, name) VALUES (1, 'Alice')")
-    db.execute("INSERT INTO mydb.users (id, name) VALUES (2, 'Bob')")
+    db.execute("INSERT INTO mydb.users (id, name, email) VALUES (1, 'Alice', 'alice@example.com')")
+    db.execute("INSERT INTO mydb.users (id, name, email) VALUES (2, 'Bob', 'bob@example.com')")
 
-    # Query data
+    # Query data - returns iterable of dictionaries
     result = db.query('SELECT * FROM mydb.users')
-    print(f"Columns: {result.columns}")
-    print(f"Rows: {len(result)}")
-
-    # Iterate over rows as dictionaries
+    print(f"Found {len(result)} users:")
     for row in result:
-        print(f"  {row['id']}: {row['name']}")
+        print(f"  {row['id']}: {row['name']} ({row['email']})")
 
     # Use convenience methods
-    db.insert('mydb', 'users', ['id', 'name'], [3, 'Charlie'])
-    tables = db.show_tables('mydb')
+    db.insert('mydb', 'users', ['id', 'name', 'email'], [3, 'Charlie', 'charlie@example.com'])
+```
+
+### Embedded Mode (no server required)
+
+```python
+from commitdb import CommitDBLocal
+
+# In-memory (data lost when process exits)
+with CommitDBLocal() as db:
+    db.execute('CREATE DATABASE app')
+    db.execute('CREATE TABLE app.users (id INT PRIMARY KEY, name STRING)')
+    result = db.query('SELECT * FROM app.users')
+
+# File-based (data persists between sessions)
+with CommitDBLocal('/path/to/data') as db:
+    db.execute('CREATE DATABASE app')
+    # Data is saved to disk and available next time
 ```
 
 ## API Reference
@@ -81,6 +108,20 @@ result = db.execute('INSERT INTO mydb.users ...')
 result.records_written   # 1
 result.affected_rows     # 1
 result.time_ms           # 1.5
+```
+
+### Error Handling
+
+```python
+from commitdb import CommitDB, CommitDBError
+
+try:
+    with CommitDB('localhost', 3306) as db:
+        db.execute('SELECT * FROM nonexistent.table')
+except CommitDBError as e:
+    print(f"Database error: {e}")
+except ConnectionError as e:
+    print(f"Connection failed: {e}")
 ```
 
 ## Embedded Mode (CommitDBLocal)

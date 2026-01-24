@@ -1,22 +1,42 @@
 # CommitDB
 
-A Git-backed SQL database engine written in Go. Every transaction is a Git commit, providing built-in version control, history, and the ability to restore to any point in time.
+[![Go Reference](https://pkg.go.dev/badge/github.com/nickyhof/CommitDB.svg)](https://pkg.go.dev/github.com/nickyhof/CommitDB)
+[![Go Report Card](https://goreportcard.com/badge/github.com/nickyhof/CommitDB)](https://goreportcard.com/report/github.com/nickyhof/CommitDB)
 
-https://pkg.go.dev/github.com/nickyhof/CommitDB
+A Git-backed SQL database engine written in Go. Every transaction is a Git commit, providing built-in version control, complete history, branching, and the ability to restore to any point in time.
+
+**Why CommitDB?**
+- 🔄 **Full version history** - Every change is tracked, nothing is lost
+- 🌿 **Git branching** - Experiment in branches, merge when ready
+- ⏪ **Time travel** - Restore any table to any previous state
+- 🔗 **Remote sync** - Push/pull to GitHub, GitLab, or any Git remote
+- 🐍 **Python support** - Native driver for Python applications
+
+## Table of Contents
+
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [SQL Reference](#sql-reference)
+- [Branching & Merging](#branching--merging)
+- [Remote Operations](#remote-operations)
+- [Programmatic API](#programmatic-api)
+- [CLI Commands](#cli-commands)
+- [Benchmarks](#benchmarks)
+- [Architecture](#architecture)
 
 ## Features
 
-- **SQL Support**: Full SQL parsing and execution
-- **Git-backed Storage**: Every transaction is a git commit
-- **Version Control**: Time-travel queries, restore to any point
-- **Branching & Merging**: Create branches, checkout, and merge like Git
-- **Remote Sync**: Push/pull branches to/from remote Git repositories
-- **Aggregates**: SUM, AVG, MIN, MAX, COUNT with GROUP BY
-- **JOINs**: INNER, LEFT, RIGHT joins
-- **Transactions**: BEGIN, COMMIT, ROLLBACK
-- **Indexing**: CREATE INDEX for faster queries
-- **Concurrency Safe**: Thread-safe operations with RWMutex
-- **SQL Server**: TCP server with JSON protocol for remote access
+| Category | Features |
+|----------|----------|
+| **SQL** | SELECT, INSERT, UPDATE, DELETE, CREATE/DROP TABLE/DATABASE/INDEX |
+| **Queries** | WHERE, ORDER BY, LIMIT, OFFSET, DISTINCT, GROUP BY, HAVING |
+| **Aggregates** | SUM, AVG, MIN, MAX, COUNT |
+| **JOINs** | INNER, LEFT, RIGHT |
+| **Version Control** | Branching, merging, snapshots, time-travel restore |
+| **Remote** | Push, pull, fetch with token/SSH/basic authentication |
+| **Performance** | Indexing, in-memory or file-based storage |
+| **Concurrency** | Thread-safe with RWMutex |
+| **Drivers** | Python, Go, TCP/JSON protocol |
 
 ## Quick Start
 
@@ -100,7 +120,7 @@ See [drivers/python/README.md](drivers/python/README.md) for full documentation.
 
 ```
 ╔═══════════════════════════════════════╗
-║         CommitDB v1.0.0               ║
+║         CommitDB v1.5.0               ║
 ║   Git-backed SQL Database Engine      ║
 ╚═══════════════════════════════════════╝
 
@@ -489,39 +509,39 @@ go test -run Integration ./...
 
 ## Benchmarks
 
-Performance benchmarks run on Apple M1 Pro:
+Performance benchmarks run on Apple M1 Pro (v1.5.0):
 
 ### SQL Parsing (no I/O)
 
 | Benchmark | Time | Memory |
 |-----------|------|--------|
-| Simple SELECT | 178 ns | 336 B |
-| SELECT with WHERE | 275 ns | 389 B |
-| SELECT with ORDER BY | 302 ns | 365 B |
-| Complex SELECT | 578 ns | 528 B |
-| INSERT | 569 ns | 405 B |
-| UPDATE | 297 ns | 240 B |
-| DELETE | 217 ns | 176 B |
+| Simple SELECT | 184 ns | 336 B |
+| SELECT with WHERE | 282 ns | 389 B |
+| SELECT with ORDER BY | 310 ns | 365 B |
+| Complex SELECT | 587 ns | 528 B |
+| INSERT | 573 ns | 405 B |
+| UPDATE | 308 ns | 240 B |
+| DELETE | 219 ns | 176 B |
 
 ### Query Execution (1000 rows, in-memory)
 
 | Benchmark | Time | Throughput |
 |-----------|------|------------|
-| SELECT * | 2.3 ms | ~430 ops/sec |
-| SELECT with WHERE | 2.3 ms | ~430 ops/sec |
-| SELECT with ORDER BY | 3.0 ms | ~330 ops/sec |
-| SELECT with LIMIT | 2.4 ms | ~420 ops/sec |
-| COUNT(*) | 2.5 ms | ~400 ops/sec |
+| SELECT * | 2.5 ms | ~400 ops/sec |
+| SELECT with WHERE | 2.6 ms | ~385 ops/sec |
+| SELECT with ORDER BY | 3.3 ms | ~305 ops/sec |
+| SELECT with LIMIT | 2.4 ms | ~415 ops/sec |
+| COUNT(*) | 2.4 ms | ~415 ops/sec |
 | SUM/AVG/MIN/MAX | 2.5 ms | ~400 ops/sec |
 | DISTINCT | 2.5 ms | ~400 ops/sec |
-| INSERT | 11.3 ms | ~88 ops/sec |
-| UPDATE | 4.6 ms | ~220 ops/sec |
+| INSERT | 11.2 ms | ~89 ops/sec |
+| UPDATE | 4.9 ms | ~205 ops/sec |
 
 ### Lexer
 
 | Benchmark | Time | Memory |
 |-----------|------|--------|
-| Tokenize complex query | 442 ns | 48 B |
+| Tokenize complex query | 447 ns | 48 B |
 
 ## Architecture
 
@@ -572,7 +592,7 @@ Performance benchmarks run on Apple M1 Pro:
 | `sql/` | SQL lexer and parser, statement types |
 | `db/` | Query execution engine, result types |
 | `op/` | Database/table operations wrapper (convenience methods) |
-| `ps/` | Git-backed persistence, branching, merging |
+| `ps/` | Git-backed persistence, branching, merging, remotes |
 | `cmd/cli/` | Interactive command-line interface |
 | `cmd/server/` | TCP server with JSON protocol |
 | `bindings/` | CGO bindings for embedded use |
