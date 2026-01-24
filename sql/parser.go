@@ -37,6 +37,12 @@ const (
 	ResolveConflictStatementType
 	CommitMergeStatementType
 	AbortMergeStatementType
+	AddRemoteStatementType
+	ShowRemotesStatementType
+	DropRemoteStatementType
+	PushStatementType
+	PullStatementType
+	FetchStatementType
 )
 
 type Statement interface {
@@ -230,6 +236,43 @@ type CommitMergeStatement struct{}
 
 type AbortMergeStatement struct{}
 
+// AuthConfig represents authentication configuration for remote operations
+type AuthConfig struct {
+	Token      string // Token-based authentication
+	SSHKeyPath string // Path to SSH private key
+	Passphrase string // Passphrase for SSH key
+	Username   string // Username for basic auth
+	Password   string // Password for basic auth
+}
+
+type AddRemoteStatement struct {
+	Name string
+	URL  string
+}
+
+type ShowRemotesStatement struct{}
+
+type DropRemoteStatement struct {
+	Name string
+}
+
+type PushStatement struct {
+	Remote string
+	Branch string
+	Auth   *AuthConfig
+}
+
+type PullStatement struct {
+	Remote string
+	Branch string
+	Auth   *AuthConfig
+}
+
+type FetchStatement struct {
+	Remote string
+	Auth   *AuthConfig
+}
+
 func (s SelectStatement) Type() StatementType {
 	return SelectStatementType
 }
@@ -334,6 +377,30 @@ func (s AbortMergeStatement) Type() StatementType {
 	return AbortMergeStatementType
 }
 
+func (s AddRemoteStatement) Type() StatementType {
+	return AddRemoteStatementType
+}
+
+func (s ShowRemotesStatement) Type() StatementType {
+	return ShowRemotesStatementType
+}
+
+func (s DropRemoteStatement) Type() StatementType {
+	return DropRemoteStatementType
+}
+
+func (s PushStatement) Type() StatementType {
+	return PushStatementType
+}
+
+func (s PullStatement) Type() StatementType {
+	return PullStatementType
+}
+
+func (s FetchStatement) Type() StatementType {
+	return FetchStatementType
+}
+
 type Parser struct {
 	lexer *Lexer
 }
@@ -384,6 +451,12 @@ func (parser *Parser) Parse() (Statement, error) {
 		return ParseResolveConflict(parser)
 	case Abort:
 		return ParseAbortMerge(parser)
+	case Push:
+		return ParsePush(parser)
+	case Pull:
+		return ParsePull(parser)
+	case Fetch:
+		return ParseFetch(parser)
 	default:
 		return nil, errors.New("unknown statement type")
 	}
@@ -1034,8 +1107,10 @@ func ParseCreate(parser *Parser) (Statement, error) {
 		return ParseCreateIndex(parser, true)
 	case Branch:
 		return ParseCreateBranch(parser)
+	case Remote:
+		return ParseAddRemote(parser)
 	default:
-		return nil, errors.New("expected TABLE, DATABASE, INDEX, or BRANCH after CREATE")
+		return nil, errors.New("expected TABLE, DATABASE, INDEX, BRANCH, or REMOTE after CREATE")
 	}
 }
 
@@ -1176,8 +1251,10 @@ func ParseDrop(parser *Parser) (Statement, error) {
 		return ParseDropDatabase(parser)
 	case IndexIdentifier:
 		return ParseDropIndex(parser)
+	case Remote:
+		return ParseDropRemote(parser)
 	default:
-		return nil, errors.New("expected TABLE, DATABASE, or INDEX after DROP")
+		return nil, errors.New("expected TABLE, DATABASE, INDEX, or REMOTE after DROP")
 	}
 }
 
@@ -1301,8 +1378,10 @@ func ParseShow(parser *Parser) (Statement, error) {
 			return nil, errors.New("expected CONFLICTS after MERGE")
 		}
 		return ShowMergeConflictsStatement{}, nil
+	case Remotes:
+		return ShowRemotesStatement{}, nil
 	default:
-		return nil, errors.New("expected DATABASES, TABLES, INDEXES, BRANCHES, or MERGE CONFLICTS after SHOW")
+		return nil, errors.New("expected DATABASES, TABLES, INDEXES, BRANCHES, REMOTES, or MERGE CONFLICTS after SHOW")
 	}
 }
 
@@ -1519,4 +1598,214 @@ func splitPath(path string) []string {
 	}
 	parts = append(parts, path[start:])
 	return parts
+}
+
+// ParseAddRemote parses CREATE REMOTE <name> <url> statements
+func ParseAddRemote(parser *Parser) (Statement, error) {
+	// Expect remote name
+	token := parser.lexer.NextToken()
+	if token.Type != Identifier && token.Type != String {
+		return nil, errors.New("expected remote name after REMOTE")
+	}
+	name := token.Value
+
+	// Expect URL
+	token = parser.lexer.NextToken()
+	if token.Type != String && token.Type != Identifier {
+		return nil, errors.New("expected URL after remote name")
+	}
+	url := token.Value
+
+	return AddRemoteStatement{Name: name, URL: url}, nil
+}
+
+// ParseDropRemote parses DROP REMOTE <name> statements
+func ParseDropRemote(parser *Parser) (Statement, error) {
+	token := parser.lexer.NextToken()
+	if token.Type != Identifier && token.Type != String {
+		return nil, errors.New("expected remote name after REMOTE")
+	}
+	return DropRemoteStatement{Name: token.Value}, nil
+}
+
+// ParsePush parses PUSH [TO <remote>] [BRANCH <branch>] [WITH TOKEN 'xxx' | WITH SSH KEY 'path' [PASSPHRASE 'xxx']]
+func ParsePush(parser *Parser) (Statement, error) {
+	stmt := PushStatement{Remote: "origin"} // default remote
+
+	for {
+		token := parser.lexer.NextToken()
+		if token.Type == EOF || token.Type == Unknown {
+			break
+		}
+
+		switch token.Type {
+		case To:
+			// TO <remote>
+			token = parser.lexer.NextToken()
+			if token.Type != Identifier && token.Type != String {
+				return nil, errors.New("expected remote name after TO")
+			}
+			stmt.Remote = token.Value
+		case Branch:
+			// BRANCH <branch>
+			token = parser.lexer.NextToken()
+			if token.Type != Identifier && token.Type != String {
+				return nil, errors.New("expected branch name after BRANCH")
+			}
+			stmt.Branch = token.Value
+		case With:
+			// WITH TOKEN 'xxx' | WITH SSH KEY 'path' [PASSPHRASE 'xxx']
+			auth, err := parseAuth(parser)
+			if err != nil {
+				return nil, err
+			}
+			stmt.Auth = auth
+		default:
+			// Unknown token, might be end of statement
+			return stmt, nil
+		}
+	}
+
+	return stmt, nil
+}
+
+// ParsePull parses PULL [FROM <remote>] [BRANCH <branch>] [WITH TOKEN 'xxx' | WITH SSH KEY 'path' [PASSPHRASE 'xxx']]
+func ParsePull(parser *Parser) (Statement, error) {
+	stmt := PullStatement{Remote: "origin"} // default remote
+
+	for {
+		token := parser.lexer.NextToken()
+		if token.Type == EOF || token.Type == Unknown {
+			break
+		}
+
+		switch token.Type {
+		case From:
+			// FROM <remote>
+			token = parser.lexer.NextToken()
+			if token.Type != Identifier && token.Type != String {
+				return nil, errors.New("expected remote name after FROM")
+			}
+			stmt.Remote = token.Value
+		case Branch:
+			// BRANCH <branch>
+			token = parser.lexer.NextToken()
+			if token.Type != Identifier && token.Type != String {
+				return nil, errors.New("expected branch name after BRANCH")
+			}
+			stmt.Branch = token.Value
+		case With:
+			// WITH TOKEN 'xxx' | WITH SSH KEY 'path' [PASSPHRASE 'xxx']
+			auth, err := parseAuth(parser)
+			if err != nil {
+				return nil, err
+			}
+			stmt.Auth = auth
+		default:
+			// Unknown token, might be end of statement
+			return stmt, nil
+		}
+	}
+
+	return stmt, nil
+}
+
+// ParseFetch parses FETCH [FROM <remote>] [WITH TOKEN 'xxx' | WITH SSH KEY 'path' [PASSPHRASE 'xxx']]
+func ParseFetch(parser *Parser) (Statement, error) {
+	stmt := FetchStatement{Remote: "origin"} // default remote
+
+	for {
+		token := parser.lexer.NextToken()
+		if token.Type == EOF || token.Type == Unknown {
+			break
+		}
+
+		switch token.Type {
+		case From:
+			// FROM <remote>
+			token = parser.lexer.NextToken()
+			if token.Type != Identifier && token.Type != String {
+				return nil, errors.New("expected remote name after FROM")
+			}
+			stmt.Remote = token.Value
+		case With:
+			// WITH TOKEN 'xxx' | WITH SSH KEY 'path' [PASSPHRASE 'xxx']
+			auth, err := parseAuth(parser)
+			if err != nil {
+				return nil, err
+			}
+			stmt.Auth = auth
+		default:
+			// Unknown token, might be end of statement
+			return stmt, nil
+		}
+	}
+
+	return stmt, nil
+}
+
+// parseAuth parses authentication options: TOKEN 'xxx' | SSH KEY 'path' [PASSPHRASE 'xxx'] | USER 'username' PASSWORD 'password'
+func parseAuth(parser *Parser) (*AuthConfig, error) {
+	token := parser.lexer.NextToken()
+	auth := &AuthConfig{}
+
+	switch token.Type {
+	case TokenKeyword:
+		// TOKEN 'value'
+		token = parser.lexer.NextToken()
+		if token.Type != String {
+			return nil, errors.New("expected string value after TOKEN")
+		}
+		auth.Token = token.Value
+		return auth, nil
+
+	case Ssh:
+		// SSH KEY 'path' [PASSPHRASE 'xxx']
+		token = parser.lexer.NextToken()
+		if token.Type != Key {
+			return nil, errors.New("expected KEY after SSH")
+		}
+		token = parser.lexer.NextToken()
+		if token.Type != String {
+			return nil, errors.New("expected path string after SSH KEY")
+		}
+		auth.SSHKeyPath = token.Value
+
+		// Check for optional PASSPHRASE
+		token = parser.lexer.PeekToken()
+		if token.Type == Passphrase {
+			parser.lexer.NextToken() // consume PASSPHRASE
+			token = parser.lexer.NextToken()
+			if token.Type != String {
+				return nil, errors.New("expected string value after PASSPHRASE")
+			}
+			auth.Passphrase = token.Value
+		}
+		return auth, nil
+
+	case Identifier:
+		// Check for USER 'username' PASSWORD 'password'
+		if strings.ToUpper(token.Value) == "USER" {
+			token = parser.lexer.NextToken()
+			if token.Type != String {
+				return nil, errors.New("expected string value after USER")
+			}
+			auth.Username = token.Value
+
+			token = parser.lexer.NextToken()
+			if token.Type != Identifier || strings.ToUpper(token.Value) != "PASSWORD" {
+				return nil, errors.New("expected PASSWORD after username")
+			}
+			token = parser.lexer.NextToken()
+			if token.Type != String {
+				return nil, errors.New("expected string value after PASSWORD")
+			}
+			auth.Password = token.Value
+			return auth, nil
+		}
+		return nil, errors.New("expected TOKEN, SSH, or USER after WITH")
+
+	default:
+		return nil, errors.New("expected TOKEN, SSH, or USER after WITH")
+	}
 }

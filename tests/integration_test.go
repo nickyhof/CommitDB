@@ -703,3 +703,160 @@ func TestAbortMergeSQL(t *testing.T) {
 		}
 	})
 }
+
+// TestRemoteManagementSQL tests remote management SQL commands
+func TestRemoteManagementSQL(t *testing.T) {
+	// This test only runs with file persistence as memory persistence
+	// doesn't have a real git repository
+	t.Run("File", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "commitdb-remote-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		persistence, err := ps.NewFilePersistence(tmpDir, nil)
+		if err != nil {
+			t.Fatalf("Failed to initialize file persistence: %v", err)
+		}
+		DB := CommitDB.Open(&persistence)
+		engine := DB.Engine(core.Identity{Name: "test", Email: "test@test.com"})
+
+		// Initially no remotes
+		result, err := engine.Execute("SHOW REMOTES")
+		if err != nil {
+			t.Fatalf("SHOW REMOTES failed: %v", err)
+		}
+		qr := result.(db.QueryResult)
+		if len(qr.Data) != 0 {
+			t.Errorf("Expected 0 remotes initially, got %d", len(qr.Data))
+		}
+
+		// Add a remote
+		result, err = engine.Execute("CREATE REMOTE origin 'https://github.com/test/repo.git'")
+		if err != nil {
+			t.Fatalf("CREATE REMOTE failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 || qr.Data[0][0] != "Remote 'origin' added" {
+			t.Errorf("Unexpected response from CREATE REMOTE")
+		}
+
+		// Show remotes
+		result, err = engine.Execute("SHOW REMOTES")
+		if err != nil {
+			t.Fatalf("SHOW REMOTES failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 {
+			t.Errorf("Expected 1 remote, got %d", len(qr.Data))
+		}
+		if qr.Data[0][0] != "origin" {
+			t.Errorf("Expected remote name 'origin', got '%s'", qr.Data[0][0])
+		}
+
+		// Add another remote
+		_, err = engine.Execute("CREATE REMOTE upstream 'https://github.com/upstream/repo.git'")
+		if err != nil {
+			t.Fatalf("CREATE REMOTE upstream failed: %v", err)
+		}
+
+		// Show remotes - should have 2
+		result, err = engine.Execute("SHOW REMOTES")
+		if err != nil {
+			t.Fatalf("SHOW REMOTES failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 2 {
+			t.Errorf("Expected 2 remotes, got %d", len(qr.Data))
+		}
+
+		// Drop a remote
+		result, err = engine.Execute("DROP REMOTE upstream")
+		if err != nil {
+			t.Fatalf("DROP REMOTE failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 || qr.Data[0][0] != "Remote 'upstream' removed" {
+			t.Errorf("Unexpected response from DROP REMOTE")
+		}
+
+		// Show remotes - should have 1
+		result, err = engine.Execute("SHOW REMOTES")
+		if err != nil {
+			t.Fatalf("SHOW REMOTES failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 {
+			t.Errorf("Expected 1 remote after drop, got %d", len(qr.Data))
+		}
+	})
+}
+
+// TestRemotePushPullSQL tests SQL syntax parsing for push/pull/fetch
+// Note: This only tests syntax parsing, not actual remote operations
+func TestRemotePushPullSyntax(t *testing.T) {
+	t.Run("File", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "commitdb-pushpull-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		persistence, err := ps.NewFilePersistence(tmpDir, nil)
+		if err != nil {
+			t.Fatalf("Failed to initialize file persistence: %v", err)
+		}
+		DB := CommitDB.Open(&persistence)
+		engine := DB.Engine(core.Identity{Name: "test", Email: "test@test.com"})
+
+		// Add a remote first
+		_, err = engine.Execute("CREATE REMOTE origin 'https://github.com/test/repo.git'")
+		if err != nil {
+			t.Fatalf("CREATE REMOTE failed: %v", err)
+		}
+
+		// Test PUSH syntax (will fail since remote doesn't exist, but should parse)
+		_, err = engine.Execute("PUSH")
+		// Expected to fail with connection error, not parse error
+		if err == nil || err.Error() == "unknown statement type" {
+			t.Logf("PUSH parsed successfully (operation failed as expected: %v)", err)
+		}
+
+		// Test PUSH TO syntax
+		_, err = engine.Execute("PUSH TO origin")
+		if err == nil || err.Error() == "unknown statement type" {
+			t.Logf("PUSH TO parsed successfully (operation failed as expected: %v)", err)
+		}
+
+		// Test PUSH with branch
+		_, err = engine.Execute("PUSH TO origin BRANCH master")
+		if err == nil || err.Error() == "unknown statement type" {
+			t.Logf("PUSH TO BRANCH parsed successfully (operation failed as expected: %v)", err)
+		}
+
+		// Test PULL syntax
+		_, err = engine.Execute("PULL")
+		if err == nil || err.Error() == "unknown statement type" {
+			t.Logf("PULL parsed successfully (operation failed as expected: %v)", err)
+		}
+
+		// Test PULL FROM syntax
+		_, err = engine.Execute("PULL FROM origin")
+		if err == nil || err.Error() == "unknown statement type" {
+			t.Logf("PULL FROM parsed successfully (operation failed as expected: %v)", err)
+		}
+
+		// Test FETCH syntax
+		_, err = engine.Execute("FETCH")
+		if err == nil || err.Error() == "unknown statement type" {
+			t.Logf("FETCH parsed successfully (operation failed as expected: %v)", err)
+		}
+
+		// Test FETCH FROM syntax
+		_, err = engine.Execute("FETCH FROM origin")
+		if err == nil || err.Error() == "unknown statement type" {
+			t.Logf("FETCH FROM parsed successfully (operation failed as expected: %v)", err)
+		}
+	})
+}

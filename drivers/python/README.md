@@ -242,3 +242,30 @@ with CommitDBLocal() as db:
 | `COMMIT MERGE` | Complete pending merge |
 | `ABORT MERGE` | Cancel pending merge |
 
+**Remote Commands:**
+| Command | Description |
+|---------|-------------|
+| `CREATE REMOTE name 'url'` | Add a remote repository |
+| `SHOW REMOTES` | List configured remotes |
+| `DROP REMOTE name` | Remove a remote |
+| `PUSH` | Push to origin (default) |
+| `PUSH TO remote` | Push to specific remote |
+| `PUSH TO remote BRANCH name` | Push specific branch |
+| `PULL` | Pull from origin (default) |
+| `PULL FROM remote` | Pull from specific remote |
+| `PULL FROM remote BRANCH name` | Pull specific branch |
+| `FETCH` | Fetch from origin |
+| `FETCH FROM remote` | Fetch from specific remote |
+
+**Remote Authentication:**
+```python
+# Token-based auth
+db.execute("PUSH WITH TOKEN 'ghp_xxxxxxxxxxxx'")
+
+# SSH key auth
+db.execute("PUSH WITH SSH KEY '/path/to/id_rsa'")
+db.execute("PUSH WITH SSH KEY '/path/to/id_rsa' PASSPHRASE 'password'")
+
+# Basic auth
+db.execute("PULL FROM origin WITH USER 'username' PASSWORD 'password'")
+```

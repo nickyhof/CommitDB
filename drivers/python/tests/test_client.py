@@ -346,3 +346,78 @@ class TestCommitDBLocal:
         conflicts = db.query('SHOW MERGE CONFLICTS')
         assert len(conflicts) == 0
 
+    def test_remote_management(self, db):
+        """Test remote management SQL commands"""
+        # Initially no remotes
+        remotes = db.query('SHOW REMOTES')
+        assert len(remotes) == 0
+        
+        # Add a remote
+        result = db.query("CREATE REMOTE origin 'https://github.com/test/repo.git'")
+        assert len(result) == 1
+        
+        # Show remotes
+        remotes = db.query('SHOW REMOTES')
+        assert len(remotes) == 1
+        assert remotes[0]['Name'] == 'origin'
+        
+        # Add another remote
+        db.execute("CREATE REMOTE upstream 'https://github.com/upstream/repo.git'")
+        
+        # Show remotes - should have 2
+        remotes = db.query('SHOW REMOTES')
+        assert len(remotes) == 2
+        
+        # Drop a remote
+        result = db.query('DROP REMOTE upstream')
+        assert len(result) == 1
+        
+        # Show remotes - should have 1
+        remotes = db.query('SHOW REMOTES')
+        assert len(remotes) == 1
+        assert remotes[0]['Name'] == 'origin'
+
+    def test_push_pull_syntax(self, db):
+        """Test PUSH/PULL/FETCH SQL syntax parsing (operations will fail but should parse)"""
+        # Add a remote first
+        db.execute("CREATE REMOTE origin 'https://github.com/test/repo.git'")
+        
+        # Test various PUSH syntax variations - they should parse but fail at execution
+        # since the remote doesn't actually exist
+        try:
+            db.execute('PUSH')
+        except Exception as e:
+            # Expected to fail with connection error, not parse error
+            assert 'unknown statement type' not in str(e).lower()
+        
+        try:
+            db.execute('PUSH TO origin')
+        except Exception as e:
+            assert 'unknown statement type' not in str(e).lower()
+        
+        try:
+            db.execute('PUSH TO origin BRANCH master')
+        except Exception as e:
+            assert 'unknown statement type' not in str(e).lower()
+        
+        # Test PULL syntax
+        try:
+            db.execute('PULL')
+        except Exception as e:
+            assert 'unknown statement type' not in str(e).lower()
+        
+        try:
+            db.execute('PULL FROM origin')
+        except Exception as e:
+            assert 'unknown statement type' not in str(e).lower()
+        
+        # Test FETCH syntax
+        try:
+            db.execute('FETCH')
+        except Exception as e:
+            assert 'unknown statement type' not in str(e).lower()
+        
+        try:
+            db.execute('FETCH FROM origin')
+        except Exception as e:
+            assert 'unknown statement type' not in str(e).lower()

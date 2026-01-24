@@ -87,6 +87,18 @@ func (engine *Engine) Execute(query string) (Result, error) {
 		return engine.executeCommitMergeStatement()
 	case sql.AbortMergeStatementType:
 		return engine.executeAbortMergeStatement()
+	case sql.AddRemoteStatementType:
+		return engine.executeAddRemoteStatement(statement.(sql.AddRemoteStatement))
+	case sql.ShowRemotesStatementType:
+		return engine.executeShowRemotesStatement()
+	case sql.DropRemoteStatementType:
+		return engine.executeDropRemoteStatement(statement.(sql.DropRemoteStatement))
+	case sql.PushStatementType:
+		return engine.executePushStatement(statement.(sql.PushStatement))
+	case sql.PullStatementType:
+		return engine.executePullStatement(statement.(sql.PullStatement))
+	case sql.FetchStatementType:
+		return engine.executeFetchStatement(statement.(sql.FetchStatement))
 	default:
 		return nil, fmt.Errorf("unsupported statement type: %v", statement.Type())
 	}
@@ -1303,4 +1315,141 @@ func (engine *Engine) executeAbortMergeStatement() (QueryResult, error) {
 		RecordsRead:      1,
 		ExecutionTimeSec: time.Since(startTime).Seconds(),
 	}, nil
+}
+
+func (engine *Engine) executeAddRemoteStatement(statement sql.AddRemoteStatement) (QueryResult, error) {
+	startTime := time.Now()
+
+	err := engine.Persistence.AddRemote(statement.Name, statement.URL)
+	if err != nil {
+		return QueryResult{}, err
+	}
+
+	return QueryResult{
+		Columns:          []string{"Status"},
+		Data:             [][]string{{fmt.Sprintf("Remote '%s' added", statement.Name)}},
+		RecordsRead:      1,
+		ExecutionTimeSec: time.Since(startTime).Seconds(),
+	}, nil
+}
+
+func (engine *Engine) executeShowRemotesStatement() (QueryResult, error) {
+	startTime := time.Now()
+
+	remotes, err := engine.Persistence.ListRemotes()
+	if err != nil {
+		return QueryResult{}, err
+	}
+
+	data := make([][]string, len(remotes))
+	for i, remote := range remotes {
+		urls := strings.Join(remote.URLs, ", ")
+		data[i] = []string{remote.Name, urls}
+	}
+
+	return QueryResult{
+		Columns:          []string{"Name", "URLs"},
+		Data:             data,
+		RecordsRead:      len(remotes),
+		ExecutionTimeSec: time.Since(startTime).Seconds(),
+	}, nil
+}
+
+func (engine *Engine) executeDropRemoteStatement(statement sql.DropRemoteStatement) (QueryResult, error) {
+	startTime := time.Now()
+
+	err := engine.Persistence.RemoveRemote(statement.Name)
+	if err != nil {
+		return QueryResult{}, err
+	}
+
+	return QueryResult{
+		Columns:          []string{"Status"},
+		Data:             [][]string{{fmt.Sprintf("Remote '%s' removed", statement.Name)}},
+		RecordsRead:      1,
+		ExecutionTimeSec: time.Since(startTime).Seconds(),
+	}, nil
+}
+
+func (engine *Engine) executePushStatement(statement sql.PushStatement) (QueryResult, error) {
+	startTime := time.Now()
+
+	auth := convertAuthConfig(statement.Auth)
+	err := engine.Persistence.Push(statement.Remote, statement.Branch, auth)
+	if err != nil {
+		return QueryResult{}, err
+	}
+
+	return QueryResult{
+		Columns:          []string{"Status"},
+		Data:             [][]string{{fmt.Sprintf("Pushed to '%s'", statement.Remote)}},
+		RecordsRead:      1,
+		ExecutionTimeSec: time.Since(startTime).Seconds(),
+	}, nil
+}
+
+func (engine *Engine) executePullStatement(statement sql.PullStatement) (QueryResult, error) {
+	startTime := time.Now()
+
+	auth := convertAuthConfig(statement.Auth)
+	err := engine.Persistence.Pull(statement.Remote, statement.Branch, auth)
+	if err != nil {
+		return QueryResult{}, err
+	}
+
+	return QueryResult{
+		Columns:          []string{"Status"},
+		Data:             [][]string{{fmt.Sprintf("Pulled from '%s'", statement.Remote)}},
+		RecordsRead:      1,
+		ExecutionTimeSec: time.Since(startTime).Seconds(),
+	}, nil
+}
+
+func (engine *Engine) executeFetchStatement(statement sql.FetchStatement) (QueryResult, error) {
+	startTime := time.Now()
+
+	auth := convertAuthConfig(statement.Auth)
+	err := engine.Persistence.Fetch(statement.Remote, auth)
+	if err != nil {
+		return QueryResult{}, err
+	}
+
+	return QueryResult{
+		Columns:          []string{"Status"},
+		Data:             [][]string{{fmt.Sprintf("Fetched from '%s'", statement.Remote)}},
+		RecordsRead:      1,
+		ExecutionTimeSec: time.Since(startTime).Seconds(),
+	}, nil
+}
+
+// convertAuthConfig converts sql.AuthConfig to ps.RemoteAuth
+func convertAuthConfig(auth *sql.AuthConfig) *ps.RemoteAuth {
+	if auth == nil {
+		return nil
+	}
+
+	if auth.Token != "" {
+		return &ps.RemoteAuth{
+			Type:  ps.AuthTypeToken,
+			Token: auth.Token,
+		}
+	}
+
+	if auth.SSHKeyPath != "" {
+		return &ps.RemoteAuth{
+			Type:       ps.AuthTypeSSH,
+			KeyPath:    auth.SSHKeyPath,
+			Passphrase: auth.Passphrase,
+		}
+	}
+
+	if auth.Username != "" {
+		return &ps.RemoteAuth{
+			Type:     ps.AuthTypeBasic,
+			Username: auth.Username,
+			Password: auth.Password,
+		}
+	}
+
+	return nil
 }

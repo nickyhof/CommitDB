@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-01-23
+
+### Added
+
+#### Remote Repository Operations
+- Push/pull/fetch branches to/from remote Git repositories (`ps/remote.go`)
+- Remote management: Add, list, and remove remotes
+- Multiple authentication methods: Token, SSH key (with optional passphrase), Basic auth
+- `AddRemote(name, url)` - Add a remote repository
+- `ListRemotes()` - List all configured remotes
+- `RemoveRemote(name)` - Remove a remote
+- `Push(remote, branch, auth)` - Push to remote (defaults to origin)
+- `Pull(remote, branch, auth)` - Pull from remote with merge
+- `Fetch(remote, auth)` - Fetch without merging
+
+#### Remote SQL Syntax
+- `CREATE REMOTE name 'url'` - Add a remote
+- `SHOW REMOTES` - List configured remotes
+- `DROP REMOTE name` - Remove a remote
+- `PUSH [TO remote] [BRANCH name]` - Push to remote
+- `PULL [FROM remote] [BRANCH name]` - Pull from remote
+- `FETCH [FROM remote]` - Fetch without merging
+
+#### Remote Authentication Syntax
+- `WITH TOKEN 'token'` - Token-based auth (GitHub, GitLab, etc.)
+- `WITH SSH KEY 'path' [PASSPHRASE 'pass']` - SSH key authentication
+- `WITH USER 'username' PASSWORD 'password'` - Basic authentication
+
+#### Documentation
+- Remote operations section in README
+- Python driver remote commands reference
+- Go API examples for remote operations
+
 ## [1.4.0] - 2026-01-23
 
 ### Added

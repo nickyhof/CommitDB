@@ -95,6 +95,18 @@ const (
 	Abort
 	Head
 	Source
+	Remote
+	Remotes
+	Push
+	Pull
+	Fetch
+	TokenKeyword
+	Key
+	Passphrase
+	// User already exists as Identifier
+	// Password - reuse String literal
+	Ssh
+	To
 	EOF
 	Unknown
 )
@@ -518,6 +530,26 @@ func lookupIdentifier(id string) TokenType {
 		return Head
 	case "SOURCE":
 		return Source
+	case "REMOTE":
+		return Remote
+	case "REMOTES":
+		return Remotes
+	case "PUSH":
+		return Push
+	case "PULL":
+		return Pull
+	case "FETCH":
+		return Fetch
+	case "TOKEN":
+		return TokenKeyword
+	case "KEY":
+		return Key
+	case "PASSPHRASE":
+		return Passphrase
+	case "SSH":
+		return Ssh
+	case "TO":
+		return To
 	default:
 		return Identifier
 	}

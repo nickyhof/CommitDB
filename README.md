@@ -10,6 +10,7 @@ https://pkg.go.dev/github.com/nickyhof/CommitDB
 - **Git-backed Storage**: Every transaction is a git commit
 - **Version Control**: Time-travel queries, restore to any point
 - **Branching & Merging**: Create branches, checkout, and merge like Git
+- **Remote Sync**: Push/pull branches to/from remote Git repositories
 - **Aggregates**: SUM, AVG, MIN, MAX, COUNT with GROUP BY
 - **JOINs**: INNER, LEFT, RIGHT joins
 - **Transactions**: BEGIN, COMMIT, ROLLBACK
@@ -315,6 +316,83 @@ persistence.AbortMerge()
 
 // Delete branch
 persistence.DeleteBranch("feature")
+```
+
+### Remote Operations
+
+Push and pull branches to/from remote Git repositories:
+
+```sql
+-- Add a remote
+CREATE REMOTE origin 'https://github.com/user/repo.git'
+CREATE REMOTE upstream 'git@github.com:upstream/repo.git'
+
+-- List remotes
+SHOW REMOTES
+
+-- Remove a remote
+DROP REMOTE upstream
+
+-- Push to remote (default: origin, current branch)
+PUSH
+PUSH TO origin
+PUSH TO origin BRANCH feature
+
+-- Pull from remote
+PULL
+PULL FROM origin
+PULL FROM origin BRANCH master
+
+-- Fetch without merging
+FETCH
+FETCH FROM upstream
+```
+
+**Authentication:**
+```sql
+-- Token-based (GitHub, GitLab, etc.)
+PUSH WITH TOKEN 'ghp_xxxxxxxxxxxx'
+PULL FROM origin WITH TOKEN 'ghp_xxxxxxxxxxxx'
+
+-- SSH key authentication
+PUSH WITH SSH KEY '/path/to/id_rsa'
+PUSH WITH SSH KEY '/path/to/id_rsa' PASSPHRASE 'mypassword'
+
+-- Basic auth (username/password)
+PULL FROM origin WITH USER 'username' PASSWORD 'password'
+```
+
+**Go API:**
+```go
+// Add a remote
+persistence.AddRemote("origin", "https://github.com/user/repo.git")
+
+// List remotes
+remotes, _ := persistence.ListRemotes()
+
+// Remove a remote
+persistence.RemoveRemote("origin")
+
+// Push (no auth)
+persistence.Push("origin", "master", nil)
+
+// Push with token auth
+auth := &ps.RemoteAuth{
+    Type:  ps.AuthTypeToken,
+    Token: "ghp_xxxxxxxxxxxx",
+}
+persistence.Push("origin", "master", auth)
+
+// Pull with SSH auth
+auth := &ps.RemoteAuth{
+    Type:       ps.AuthTypeSSH,
+    KeyPath:    "/path/to/id_rsa",
+    Passphrase: "optional_passphrase",
+}
+persistence.Pull("origin", "master", auth)
+
+// Fetch
+persistence.Fetch("origin", nil)
 ```
 
 ### WHERE Operators
