@@ -10,12 +10,13 @@ import (
 )
 
 type Transaction struct {
-	Id   string
-	When time.Time
+	Id     string
+	When   time.Time
+	Author string // "Name <email>" format
 }
 
 func (transaction Transaction) String() string {
-	return fmt.Sprintf("Transaction{Id: %s, When: %s}", transaction.Id, transaction.When)
+	return fmt.Sprintf("Transaction{Id: %s, When: %s, Author: %s}", transaction.Id, transaction.When, transaction.Author)
 }
 
 func (persistence *Persistence) LatestTransaction() Transaction {
@@ -30,9 +31,15 @@ func (persistence *Persistence) LatestTransaction() Transaction {
 		return Transaction{}
 	}
 
+	author := ""
+	if commit.Author.Name != "" || commit.Author.Email != "" {
+		author = fmt.Sprintf("%s <%s>", commit.Author.Name, commit.Author.Email)
+	}
+
 	return Transaction{
-		Id:   headRef.Hash().String(),
-		When: commit.Committer.When,
+		Id:     headRef.Hash().String(),
+		When:   commit.Committer.When,
+		Author: author,
 	}
 }
 

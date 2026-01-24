@@ -21,6 +21,14 @@ func main() {
 	baseDir := flag.String("baseDir", "", "Base directory for persistence (memory if empty)")
 	gitUrl := flag.String("gitUrl", "", "Git URL for remote sync")
 	showVersion := flag.Bool("version", false, "Show version and exit")
+
+	// JWT authentication flags
+	jwtSecret := flag.String("jwt-secret", "", "JWT shared secret for HS256 validation (enables auth)")
+	jwtIssuer := flag.String("jwt-issuer", "", "Expected JWT issuer (iss claim)")
+	jwtAudience := flag.String("jwt-audience", "", "Expected JWT audience (aud claim)")
+	jwtNameClaim := flag.String("jwt-name-claim", "name", "JWT claim for user name")
+	jwtEmailClaim := flag.String("jwt-email-claim", "email", "JWT claim for user email")
+
 	flag.Parse()
 
 	if *showVersion {
@@ -50,13 +58,30 @@ func main() {
 		instance = CommitDB.Open(&persistence)
 	}
 
-	// Create and start server
-	identity := core.Identity{
+	// Create server with or without auth
+	var server *Server
+	defaultIdentity := core.Identity{
 		Name:  "CommitDB Server",
 		Email: "server@commitdb.local",
 	}
 
-	server := NewServer(instance, identity)
+	if *jwtSecret != "" {
+		// Auth enabled
+		authConfig := &AuthConfig{
+			Enabled:    true,
+			JWTSecret:  *jwtSecret,
+			Issuer:     *jwtIssuer,
+			Audience:   *jwtAudience,
+			NameClaim:  *jwtNameClaim,
+			EmailClaim: *jwtEmailClaim,
+		}
+		server = NewServerWithAuth(instance, authConfig)
+		log.Printf("JWT authentication enabled (issuer: %s)", *jwtIssuer)
+	} else {
+		// No auth - use default identity
+		server = NewServer(instance, defaultIdentity)
+	}
+
 	addr := fmt.Sprintf(":%d", *port)
 
 	if err := server.Start(addr); err != nil {

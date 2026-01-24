@@ -17,22 +17,30 @@ import (
 
 // Server is a TCP SQL server that exposes the CommitDB engine.
 type Server struct {
-	listener net.Listener
-	instance *CommitDB.Instance
-	identity core.Identity
-	mu       sync.Mutex
-	engine   *db.Engine
-	done     chan struct{}
-	wg       sync.WaitGroup
+	listener        net.Listener
+	instance        *CommitDB.Instance
+	defaultIdentity core.Identity
+	authConfig      *AuthConfig
+	done            chan struct{}
+	wg              sync.WaitGroup
 }
 
 // NewServer creates a new SQL server with the given CommitDB instance.
+// The defaultIdentity is used when auth is disabled or for anonymous connections.
 func NewServer(instance *CommitDB.Instance, identity core.Identity) *Server {
 	return &Server{
-		instance: instance,
-		identity: identity,
-		engine:   instance.Engine(identity),
-		done:     make(chan struct{}),
+		instance:        instance,
+		defaultIdentity: identity,
+		done:            make(chan struct{}),
+	}
+}
+
+// NewServerWithAuth creates a new SQL server with authentication enabled.
+func NewServerWithAuth(instance *CommitDB.Instance, authConfig *AuthConfig) *Server {
+	return &Server{
+		instance:   instance,
+		authConfig: authConfig,
+		done:       make(chan struct{}),
 	}
 }
 
@@ -45,6 +53,11 @@ func (s *Server) Start(addr string) error {
 	s.listener = listener
 
 	log.Printf("SQL Server listening on %s", addr)
+	if s.authConfig != nil && s.authConfig.Enabled {
+		log.Printf("Authentication: enabled (JWT)")
+	} else {
+		log.Printf("Authentication: disabled (using default identity)")
+	}
 
 	go s.acceptLoop()
 	return nil
@@ -86,11 +99,30 @@ func (s *Server) acceptLoop() {
 	}
 }
 
+// connContext holds per-connection state including auth and engine.
+type connContext struct {
+	state  *ConnectionState
+	engine *db.Engine
+	mu     sync.Mutex
+}
+
 func (s *Server) handleConnection(conn net.Conn) {
 	defer s.wg.Done()
 	defer conn.Close()
 
 	log.Printf("Client connected: %s", conn.RemoteAddr())
+
+	// Initialize connection context
+	ctx := &connContext{
+		state: &ConnectionState{},
+	}
+
+	// If auth is not enabled, pre-authenticate with default identity
+	if s.authConfig == nil || !s.authConfig.Enabled {
+		ctx.state.identity = &s.defaultIdentity
+		ctx.state.authenticated = true
+		ctx.engine = s.instance.Engine(s.defaultIdentity)
+	}
 
 	reader := bufio.NewReader(conn)
 
@@ -121,29 +153,66 @@ func (s *Server) handleConnection(conn net.Conn) {
 			return
 		}
 
-		// Execute query
-		response := s.executeQuery(query)
-
-		// Send response
-		data, err := EncodeResponse(response)
-		if err != nil {
-			log.Printf("Failed to encode response: %v", err)
+		// Check for AUTH command
+		if strings.HasPrefix(strings.ToUpper(query), "AUTH ") {
+			response := s.handleAuthCommand(query, ctx)
+			s.sendResponse(conn, response)
 			continue
 		}
 
-		_, err = conn.Write(data)
-		if err != nil {
-			log.Printf("Write error to %s: %v", conn.RemoteAddr(), err)
-			return
+		// Check if authenticated
+		if !ctx.state.authenticated {
+			response := Response{
+				Success: false,
+				Error:   "authentication required: send AUTH JWT <token>",
+			}
+			s.sendResponse(conn, response)
+			continue
 		}
+
+		// Execute query with connection's engine
+		response := s.executeQueryWithEngine(query, ctx.engine)
+		s.sendResponse(conn, response)
 	}
 }
 
-func (s *Server) executeQuery(query string) Response {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// handleAuthCommand processes AUTH commands
+func (s *Server) handleAuthCommand(query string, ctx *connContext) Response {
+	// If auth is not configured, allow simple identity declaration
+	if s.authConfig == nil || !s.authConfig.Enabled {
+		return Response{
+			Success: false,
+			Error:   "authentication not enabled on this server",
+		}
+	}
 
-	result, err := s.engine.Execute(query)
+	response := s.handleAuth(query, ctx.state)
+
+	// If auth succeeded, create engine with new identity
+	if response.Success && ctx.state.identity != nil {
+		ctx.mu.Lock()
+		ctx.engine = s.instance.Engine(*ctx.state.identity)
+		ctx.mu.Unlock()
+	}
+
+	return response
+}
+
+func (s *Server) sendResponse(conn net.Conn, response Response) {
+	data, err := EncodeResponse(response)
+	if err != nil {
+		log.Printf("Failed to encode response: %v", err)
+		return
+	}
+
+	_, err = conn.Write(data)
+	if err != nil {
+		log.Printf("Write error to %s: %v", conn.RemoteAddr(), err)
+	}
+}
+
+func (s *Server) executeQueryWithEngine(query string, engine *db.Engine) Response {
+	result, err := engine.Execute(query)
 	if err != nil {
 		return Response{
 			Success: false,

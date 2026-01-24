@@ -81,6 +81,63 @@ The server accepts SQL queries (one per line) and returns JSON responses:
 {"success":true,"type":"query","result":{"columns":["id","name"],"data":[["1","Alice"]],"records_read":1}}
 ```
 
+### Server Authentication (JWT)
+
+The server supports optional JWT authentication. When enabled, clients must authenticate before executing queries, and their identity is used for Git commit authorship.
+
+**Architecture:**
+```
+┌────────────────┐      ┌─────────────────┐      ┌────────────────┐
+│ Identity       │      │ CommitDB        │      │ Client         │
+│ Provider       │◄─────│ Server          │◄─────│ (Python/CLI)   │
+│ (Auth0/etc)    │      │                 │      │                │
+└────────────────┘      └─────────────────┘      └────────────────┘
+        │                        │                       │
+        │ 1. JWKS keys           │                       │
+        │───────────────────────►│                       │
+        │                        │                       │
+        │                        │ 2. AUTH JWT <token>   │
+        │                        │◄──────────────────────│
+        │                        │                       │
+        │                        │ 3. Validate + extract │
+        │                        │    name/email claims  │
+        │                        │                       │
+        │                        │ 4. OK (authenticated) │
+        │                        │──────────────────────►│
+        │                        │                       │
+        │                        │ 5. SQL queries with   │
+        │                        │    authenticated      │
+        │                        │    identity for Git   │
+```
+
+**Server Configuration:**
+```bash
+# Run with JWT authentication (HS256 shared secret)
+./commitdb-server --jwt-secret "your-shared-secret" --jwt-issuer "https://auth.example.com"
+
+# Without auth (default identity used for all connections)
+./commitdb-server
+```
+
+**Client Authentication:**
+```bash
+# Authenticate via netcat
+echo 'AUTH JWT eyJhbGciOiJIUzI1NiIs...' | nc localhost 3306
+# Response: {"success":true,"type":"auth","result":{"authenticated":true,"identity":"Alice <alice@example.com>"}}
+
+# Then execute queries
+echo 'CREATE DATABASE mydb' | nc localhost 3306
+```
+
+**Expected JWT Claims:**
+```json
+{
+  "name": "Alice Smith",
+  "email": "alice@example.com",
+  "exp": 1706140800
+}
+```
+
 ### Python Driver
 
 ```bash

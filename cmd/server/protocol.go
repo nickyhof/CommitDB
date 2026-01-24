@@ -37,6 +37,13 @@ type CommitResponse struct {
 	TimeMs           float64 `json:"time_ms"`
 }
 
+// AuthResponse contains authentication result.
+type AuthResponse struct {
+	Authenticated bool   `json:"authenticated"`
+	Identity      string `json:"identity,omitempty"`   // "Name <email>"
+	ExpiresIn     int    `json:"expires_in,omitempty"` // Seconds until token expires
+}
+
 // EncodeResponse serializes a Response to JSON with a newline.
 func EncodeResponse(resp Response) ([]byte, error) {
 	data, err := json.Marshal(resp)

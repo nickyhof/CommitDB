@@ -80,6 +80,7 @@ CommitDB(host='localhost', port=3306)
 
 - `connect(timeout=10.0)` - Connect to server
 - `close()` - Close connection
+- `authenticate_jwt(token)` - Authenticate with JWT token
 - `execute(sql)` - Execute any SQL query
 - `query(sql)` - Execute SELECT query, returns QueryResult
 - `create_database(name)` - Create a database
@@ -88,6 +89,37 @@ CommitDB(host='localhost', port=3306)
 - `insert(database, table, columns, values)` - Insert a row
 - `show_databases()` - List databases
 - `show_tables(database)` - List tables
+
+**Properties:**
+- `authenticated` - Whether connection is authenticated
+- `identity` - Authenticated identity string ("Name <email>")
+
+### Authentication
+
+When connecting to a server with JWT authentication enabled, you must authenticate before executing queries:
+
+```python
+from commitdb import CommitDB
+
+# Option 1: Auto-authenticate on connect
+db = CommitDB('localhost', 3306, jwt_token='eyJhbG...')
+db.connect()  # Automatically authenticates
+print(f"Authenticated as: {db.identity}")
+
+# Option 2: Authenticate after connecting
+db = CommitDB('localhost', 3306)
+db.connect()
+db.authenticate_jwt('eyJhbG...')
+print(f"Authenticated: {db.authenticated}")
+
+# Queries now use authenticated identity for Git commits
+db.execute('CREATE DATABASE mydb')
+```
+
+**Authentication flow:**
+1. Client sends `AUTH JWT <token>`
+2. Server validates token and extracts name/email claims
+3. All subsequent queries use that identity for Git commit authorship
 
 ### QueryResult
 

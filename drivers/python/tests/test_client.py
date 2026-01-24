@@ -72,10 +72,21 @@ class TestCommitDBUnit:
         assert db.host == 'localhost'
         assert db.port == 3306
 
+    def test_init_with_jwt_token(self):
+        db = CommitDB('localhost', 3306, jwt_token='test.jwt.token')
+        assert db.jwt_token == 'test.jwt.token'
+        assert db.authenticated is False
+        assert db.identity is None
+
     def test_not_connected_error(self):
         db = CommitDB('localhost', 3306)
         with pytest.raises(CommitDBError, match="Not connected"):
             db.execute("SELECT 1")
+
+    def test_auth_not_connected_error(self):
+        db = CommitDB('localhost', 3306)
+        with pytest.raises(CommitDBError, match="Not connected"):
+            db.authenticate_jwt("some.jwt.token")
 
 
 # Integration tests require a running server
@@ -120,6 +131,92 @@ class TestCommitDBIntegration:
         assert result[0] == {'id': '1', 'value': 'hello'}
 
 
+# Auth integration tests require a server running with --jwt-secret
+# Run with: go run ./cmd/server --jwt-secret "test-secret" &
+# Set env: COMMITDB_JWT_SECRET=test-secret pytest drivers/python/tests/ -v -k auth
+
+SKIP_AUTH_INTEGRATION = os.environ.get('COMMITDB_JWT_SECRET') is None
+
+
+@pytest.mark.skipif(SKIP_AUTH_INTEGRATION, reason="Auth server not running - set COMMITDB_JWT_SECRET")
+class TestCommitDBAuthIntegration:
+    """Integration tests for JWT authentication (requires server with --jwt-secret)."""
+
+    @pytest.fixture
+    def jwt_secret(self):
+        return os.environ.get('COMMITDB_JWT_SECRET', 'test-secret')
+
+    @pytest.fixture
+    def jwt_token(self, jwt_secret):
+        """Generate a valid JWT token for testing."""
+        import jwt
+        import time
+        payload = {
+            'name': 'Test User',
+            'email': 'testuser@example.com',
+            'exp': int(time.time()) + 3600,
+        }
+        return jwt.encode(payload, jwt_secret, algorithm='HS256')
+
+    def test_unauthenticated_rejected(self):
+        """Verify server rejects unauthenticated requests."""
+        host = os.environ.get('COMMITDB_HOST', 'localhost')
+        port = int(os.environ.get('COMMITDB_PORT', '3306'))
+        db = CommitDB(host, port)
+        db.connect()
+        try:
+            with pytest.raises(CommitDBError, match="authentication"):
+                db.execute('CREATE DATABASE auth_test_reject')
+        finally:
+            db.close()
+
+    def test_authenticate_jwt(self, jwt_token):
+        """Verify JWT authentication works."""
+        host = os.environ.get('COMMITDB_HOST', 'localhost')
+        port = int(os.environ.get('COMMITDB_PORT', '3306'))
+        db = CommitDB(host, port)
+        db.connect()
+        try:
+            result = db.authenticate_jwt(jwt_token)
+            assert db.authenticated is True
+            assert 'Test User' in db.identity
+            assert 'testuser@example.com' in db.identity
+        finally:
+            db.close()
+
+    def test_auto_authenticate_on_connect(self, jwt_token):
+        """Verify jwt_token parameter auto-authenticates on connect."""
+        host = os.environ.get('COMMITDB_HOST', 'localhost')
+        port = int(os.environ.get('COMMITDB_PORT', '3306'))
+        db = CommitDB(host, port, jwt_token=jwt_token)
+        db.connect()
+        try:
+            assert db.authenticated is True
+            # Query should work
+            result = db.execute('CREATE DATABASE auth_test_auto')
+            assert result.databases_created == 1
+        finally:
+            db.close()
+
+    def test_query_after_auth(self, jwt_token):
+        """Verify queries work after authentication."""
+        host = os.environ.get('COMMITDB_HOST', 'localhost')
+        port = int(os.environ.get('COMMITDB_PORT', '3306'))
+        db = CommitDB(host, port)
+        db.connect()
+        try:
+            db.authenticate_jwt(jwt_token)
+            
+            # Execute various operations
+            db.execute('CREATE DATABASE auth_test_query')
+            db.execute('CREATE TABLE auth_test_query.items (id INT PRIMARY KEY, name STRING)')
+            db.execute("INSERT INTO auth_test_query.items (id, name) VALUES (1, 'test')")
+            
+            result = db.query('SELECT * FROM auth_test_query.items')
+            assert len(result) == 1
+            assert result[0]['name'] == 'test'
+        finally:
+            db.close()
 
 
 # Embedded mode tests (require libcommitdb shared library)

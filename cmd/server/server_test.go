@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/nickyhof/CommitDB"
 	"github.com/nickyhof/CommitDB/core"
 	"github.com/nickyhof/CommitDB/ps"
@@ -214,5 +215,273 @@ func TestServerPersistentConnection(t *testing.T) {
 		if !resp.Success {
 			t.Errorf("Query '%s' failed: %s", query, resp.Error)
 		}
+	}
+}
+
+// setupAuthTestServer creates a server with authentication enabled
+func setupAuthTestServer(t *testing.T, secret string) (*Server, func()) {
+	persistence, err := ps.NewMemoryPersistence()
+	if err != nil {
+		t.Fatalf("Failed to create persistence: %v", err)
+	}
+	instance := CommitDB.Open(&persistence)
+
+	authConfig := &AuthConfig{
+		Enabled:   true,
+		JWTSecret: secret,
+	}
+
+	server := NewServerWithAuth(instance, authConfig)
+	if err := server.Start(":0"); err != nil {
+		t.Fatalf("Failed to start server: %v", err)
+	}
+
+	return server, func() {
+		server.Stop()
+	}
+}
+
+func TestAuthRequired(t *testing.T) {
+	server, cleanup := setupAuthTestServer(t, "test-secret")
+	defer cleanup()
+
+	// Try to query without authenticating
+	resp := sendQuery(t, server.Addr(), "CREATE DATABASE testdb")
+	if resp.Success {
+		t.Error("Expected failure when not authenticated")
+	}
+	if !containsString(resp.Error, "authentication required") {
+		t.Errorf("Expected 'authentication required' error, got: %s", resp.Error)
+	}
+}
+
+func TestAuthWithValidJWT(t *testing.T) {
+	secret := "test-secret"
+	server, cleanup := setupAuthTestServer(t, secret)
+	defer cleanup()
+
+	// Create a valid JWT token
+	token := createTestJWT(t, secret, "Test User", "test@example.com")
+
+	conn, err := net.DialTimeout("tcp", server.Addr(), 2*time.Second)
+	if err != nil {
+		t.Fatalf("Failed to connect: %v", err)
+	}
+	defer conn.Close()
+
+	reader := bufio.NewReader(conn)
+
+	// Send AUTH command
+	_, err = conn.Write([]byte("AUTH JWT " + token + "\n"))
+	if err != nil {
+		t.Fatalf("Failed to send auth: %v", err)
+	}
+
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("Failed to read auth response: %v", err)
+	}
+
+	var resp Response
+	if err := json.Unmarshal([]byte(line), &resp); err != nil {
+		t.Fatalf("Failed to parse auth response: %v", err)
+	}
+
+	if !resp.Success {
+		t.Errorf("Auth failed: %s", resp.Error)
+	}
+	if resp.Type != "auth" {
+		t.Errorf("Expected 'auth' type, got: %s", resp.Type)
+	}
+
+	// Parse auth response
+	var authResp AuthResponse
+	if err := json.Unmarshal(resp.Result, &authResp); err != nil {
+		t.Fatalf("Failed to parse auth result: %v", err)
+	}
+	if !authResp.Authenticated {
+		t.Error("Expected authenticated to be true")
+	}
+	if authResp.Identity != "Test User <test@example.com>" {
+		t.Errorf("Expected identity 'Test User <test@example.com>', got: %s", authResp.Identity)
+	}
+
+	// Now query should work
+	_, err = conn.Write([]byte("CREATE DATABASE authtest\n"))
+	if err != nil {
+		t.Fatalf("Failed to send query: %v", err)
+	}
+
+	line, err = reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("Failed to read query response: %v", err)
+	}
+
+	if err := json.Unmarshal([]byte(line), &resp); err != nil {
+		t.Fatalf("Failed to parse query response: %v", err)
+	}
+
+	if !resp.Success {
+		t.Errorf("Query after auth failed: %s", resp.Error)
+	}
+}
+
+func TestAuthWithInvalidJWT(t *testing.T) {
+	server, cleanup := setupAuthTestServer(t, "test-secret")
+	defer cleanup()
+
+	// Create token with wrong secret
+	wrongToken := createTestJWT(t, "wrong-secret", "Test User", "test@example.com")
+
+	conn, err := net.DialTimeout("tcp", server.Addr(), 2*time.Second)
+	if err != nil {
+		t.Fatalf("Failed to connect: %v", err)
+	}
+	defer conn.Close()
+
+	reader := bufio.NewReader(conn)
+
+	// Send AUTH command with invalid token
+	_, err = conn.Write([]byte("AUTH JWT " + wrongToken + "\n"))
+	if err != nil {
+		t.Fatalf("Failed to send auth: %v", err)
+	}
+
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("Failed to read auth response: %v", err)
+	}
+
+	var resp Response
+	if err := json.Unmarshal([]byte(line), &resp); err != nil {
+		t.Fatalf("Failed to parse auth response: %v", err)
+	}
+
+	if resp.Success {
+		t.Error("Expected auth to fail with wrong secret")
+	}
+	if resp.Error == "" {
+		t.Error("Expected error message")
+	}
+}
+
+// createTestJWT creates a JWT token for testing
+func createTestJWT(t *testing.T, secret, name, email string) string {
+	// Using github.com/golang-jwt/jwt/v5
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"name":  name,
+		"email": email,
+		"exp":   time.Now().Add(time.Hour).Unix(),
+	})
+
+	tokenString, err := token.SignedString([]byte(secret))
+	if err != nil {
+		t.Fatalf("Failed to create test JWT: %v", err)
+	}
+	return tokenString
+}
+
+func containsString(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsString(s[1:], substr) || s[:len(substr)] == substr)
+}
+
+// TestIdentityInCommitsUnauthenticated verifies the default identity is used in Git commits
+// when auth is disabled
+func TestIdentityInCommitsUnauthenticated(t *testing.T) {
+	persistence, err := ps.NewMemoryPersistence()
+	if err != nil {
+		t.Fatalf("Failed to create persistence: %v", err)
+	}
+	instance := CommitDB.Open(&persistence)
+	defaultIdentity := core.Identity{Name: "Default User", Email: "default@test.com"}
+
+	server := NewServer(instance, defaultIdentity)
+	if err := server.Start(":0"); err != nil {
+		t.Fatalf("Failed to start server: %v", err)
+	}
+	defer server.Stop()
+
+	// Execute a mutation query
+	resp := sendQuery(t, server.Addr(), "CREATE DATABASE testdb_identity1")
+	if !resp.Success {
+		t.Fatalf("Query failed: %s", resp.Error)
+	}
+
+	// Check the commit author
+	txn := persistence.LatestTransaction()
+	expectedAuthor := "Default User <default@test.com>"
+	if txn.Author != expectedAuthor {
+		t.Errorf("Expected commit author '%s', got '%s'", expectedAuthor, txn.Author)
+	}
+}
+
+// TestIdentityInCommitsAuthenticated verifies the JWT identity is used in Git commits
+func TestIdentityInCommitsAuthenticated(t *testing.T) {
+	secret := "test-secret-for-identity"
+
+	persistence, err := ps.NewMemoryPersistence()
+	if err != nil {
+		t.Fatalf("Failed to create persistence: %v", err)
+	}
+	instance := CommitDB.Open(&persistence)
+
+	authConfig := &AuthConfig{
+		Enabled:   true,
+		JWTSecret: secret,
+	}
+	server := NewServerWithAuth(instance, authConfig)
+	if err := server.Start(":0"); err != nil {
+		t.Fatalf("Failed to start server: %v", err)
+	}
+	defer server.Stop()
+
+	// Create JWT with specific identity
+	jwtName := "JWT Test User"
+	jwtEmail := "jwtuser@example.com"
+	token := createTestJWT(t, secret, jwtName, jwtEmail)
+
+	conn, err := net.DialTimeout("tcp", server.Addr(), 2*time.Second)
+	if err != nil {
+		t.Fatalf("Failed to connect: %v", err)
+	}
+	defer conn.Close()
+
+	reader := bufio.NewReader(conn)
+
+	// Authenticate
+	_, err = conn.Write([]byte("AUTH JWT " + token + "\n"))
+	if err != nil {
+		t.Fatalf("Failed to send auth: %v", err)
+	}
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("Failed to read auth response: %v", err)
+	}
+	var authResp Response
+	json.Unmarshal([]byte(line), &authResp)
+	if !authResp.Success {
+		t.Fatalf("Auth failed: %s", authResp.Error)
+	}
+
+	// Execute a mutation query
+	_, err = conn.Write([]byte("CREATE DATABASE testdb_identity2\n"))
+	if err != nil {
+		t.Fatalf("Failed to send query: %v", err)
+	}
+	line, err = reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("Failed to read response: %v", err)
+	}
+	var resp Response
+	json.Unmarshal([]byte(line), &resp)
+	if !resp.Success {
+		t.Fatalf("Query failed: %s", resp.Error)
+	}
+
+	// Check the commit author matches JWT identity
+	txn := persistence.LatestTransaction()
+	expectedAuthor := jwtName + " <" + jwtEmail + ">"
+	if txn.Author != expectedAuthor {
+		t.Errorf("Expected commit author '%s', got '%s'", expectedAuthor, txn.Author)
 	}
 }

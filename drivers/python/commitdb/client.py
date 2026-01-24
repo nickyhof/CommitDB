@@ -5,7 +5,7 @@ CommitDB Client - Python driver for CommitDB SQL Server.
 import json
 import socket
 from dataclasses import dataclass, field
-from typing import Iterator, Optional
+from typing import Iterator, Optional, Union
 
 
 class CommitDBError(Exception):
@@ -57,24 +57,35 @@ class CommitDB:
     CommitDB Python client.
 
     Example:
+        # Basic connection (no auth)
         db = CommitDB('localhost', 3306)
         db.connect()
+        
+        # With JWT authentication
+        db = CommitDB('localhost', 3306, jwt_token='your.jwt.token')
+        db.connect()  # Auto-authenticates
+        
         result = db.query('SELECT * FROM mydb.users')
         db.close()
     """
 
-    def __init__(self, host: str = 'localhost', port: int = 3306):
+    def __init__(self, host: str = 'localhost', port: int = 3306, 
+                 jwt_token: Optional[str] = None):
         """
         Initialize CommitDB client.
 
         Args:
             host: Server hostname
             port: Server port (default 3306)
+            jwt_token: Optional JWT token for authentication
         """
         self.host = host
         self.port = port
+        self.jwt_token = jwt_token
         self._socket: Optional[socket.socket] = None
         self._buffer = b''
+        self._authenticated = False
+        self._identity: Optional[str] = None
 
     def connect(self, timeout: float = 10.0) -> 'CommitDB':
         """
@@ -89,7 +100,46 @@ class CommitDB:
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._socket.settimeout(timeout)
         self._socket.connect((self.host, self.port))
+        
+        # Auto-authenticate if JWT token provided
+        if self.jwt_token:
+            self.authenticate_jwt(self.jwt_token)
+        
         return self
+
+    def authenticate_jwt(self, token: str) -> dict:
+        """
+        Authenticate with a JWT token.
+
+        Args:
+            token: JWT token string
+
+        Returns:
+            Auth response dict with 'authenticated', 'identity', 'expires_in'
+
+        Raises:
+            CommitDBError: If authentication fails
+        """
+        response = self._send(f'AUTH JWT {token}')
+        
+        if not response.get('success'):
+            raise CommitDBError(f"Authentication failed: {response.get('error')}")
+        
+        result = response.get('result', {})
+        self._authenticated = result.get('authenticated', False)
+        self._identity = result.get('identity')
+        
+        return result
+
+    @property
+    def authenticated(self) -> bool:
+        """Whether this connection is authenticated."""
+        return self._authenticated
+
+    @property
+    def identity(self) -> Optional[str]:
+        """The authenticated identity (Name <email>), or None."""
+        return self._identity
 
     def close(self) -> None:
         """Close the connection."""
