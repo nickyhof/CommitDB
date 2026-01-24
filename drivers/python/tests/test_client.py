@@ -318,6 +318,34 @@ class TestCommitDBLocal:
         with pytest.raises(CommitDBError):
             db.query('SELECT * FROM nonexistent.table')
 
+    def test_in_operator(self, db):
+        """Test IN operator for filtering."""
+        db.execute('CREATE DATABASE in_test')
+        db.execute('CREATE TABLE in_test.items (id INT PRIMARY KEY, status STRING, category STRING)')
+        
+        # Insert test data
+        db.execute("INSERT INTO in_test.items (id, status, category) VALUES (1, 'active', 'A')")
+        db.execute("INSERT INTO in_test.items (id, status, category) VALUES (2, 'pending', 'B')")
+        db.execute("INSERT INTO in_test.items (id, status, category) VALUES (3, 'active', 'C')")
+        db.execute("INSERT INTO in_test.items (id, status, category) VALUES (4, 'archived', 'A')")
+        db.execute("INSERT INTO in_test.items (id, status, category) VALUES (5, 'pending', 'B')")
+        
+        # Test IN with strings
+        result = db.query("SELECT * FROM in_test.items WHERE status IN ('active', 'pending')")
+        assert len(result) == 4
+        
+        # Test IN with single value
+        result = db.query("SELECT * FROM in_test.items WHERE status IN ('archived')")
+        assert len(result) == 1
+        
+        # Test IN with integers
+        result = db.query("SELECT * FROM in_test.items WHERE id IN (1, 3, 5)")
+        assert len(result) == 3
+        
+        # Test NOT IN
+        result = db.query("SELECT * FROM in_test.items WHERE NOT status IN ('archived')")
+        assert len(result) == 4
+
     def test_create_branch(self, db):
         """Test CREATE BRANCH SQL syntax."""
         db.execute('CREATE DATABASE branch_test1')

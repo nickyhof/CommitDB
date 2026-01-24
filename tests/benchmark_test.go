@@ -42,6 +42,7 @@ func BenchmarkSQLParsing(b *testing.B) {
 		{"SimpleSelect", "SELECT * FROM bench.users"},
 		{"SelectWithWhere", "SELECT * FROM bench.users WHERE age > 30"},
 		{"SelectWithOrderBy", "SELECT * FROM bench.users ORDER BY age DESC"},
+		{"SelectWithIn", "SELECT * FROM bench.users WHERE city IN ('City1', 'City2', 'City3')"},
 		{"SelectComplex", "SELECT * FROM bench.users WHERE age > 25 AND city = 'City5' ORDER BY name ASC LIMIT 10"},
 		{"Insert", "INSERT INTO bench.users (id, name, age, city) VALUES (1, 'Test', 25, 'NYC')"},
 		{"Update", "UPDATE bench.users SET age = 30 WHERE id = 1"},
@@ -82,6 +83,19 @@ func BenchmarkSelectWithWhere(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		_, err := engine.Execute("SELECT * FROM bench.users WHERE age > 40")
+		if err != nil {
+			b.Fatalf("Execute error: %v", err)
+		}
+	}
+}
+
+// BenchmarkSelectWithIn benchmarks SELECT with IN clause
+func BenchmarkSelectWithIn(b *testing.B) {
+	engine := setupBenchmarkDB(b)
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, err := engine.Execute("SELECT * FROM bench.users WHERE city IN ('City1', 'City2', 'City3')")
 		if err != nil {
 			b.Fatalf("Execute error: %v", err)
 		}

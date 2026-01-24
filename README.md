@@ -544,6 +544,8 @@ persistence.Fetch("origin", nil)
 | `<=`, `>=` | `WHERE price <= 100` |
 | `AND` | `WHERE age > 18 AND active = true` |
 | `OR` | `WHERE city = 'NYC' OR city = 'LA'` |
+| `IN` | `WHERE status IN ('active', 'pending')` |
+| `NOT IN` | `WHERE NOT category IN ('archived')` |
 | `IS NULL` | `WHERE email IS NULL` |
 | `IS NOT NULL` | `WHERE email IS NOT NULL` |
 | `LIKE` | `WHERE name LIKE 'A%'` |

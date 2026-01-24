@@ -49,6 +49,9 @@ with CommitDB('localhost', 3306) as db:
 
     # Use convenience methods
     db.insert('mydb', 'users', ['id', 'name', 'email'], [3, 'Charlie', 'charlie@example.com'])
+
+    # Use IN operator for multiple values
+    result = db.query("SELECT * FROM mydb.users WHERE id IN (1, 3)")
 ```
 
 ### Embedded Mode (no server required)

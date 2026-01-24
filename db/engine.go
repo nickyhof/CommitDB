@@ -523,6 +523,14 @@ func evaluateCondition(row map[string]string, cond sql.WhereCondition) bool {
 		result = compareValues(value, cond.Right) >= 0
 	case sql.LikeOperator:
 		result = matchLike(value, cond.Right)
+	case sql.InOperator:
+		result = false
+		for _, v := range cond.InValues {
+			if value == v {
+				result = true
+				break
+			}
+		}
 	default:
 		result = false
 	}

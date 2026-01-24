@@ -140,7 +140,8 @@ type WhereCondition struct {
 	Left     string
 	Operator WhereOperator
 	Right    string
-	Negated  bool // for NOT
+	InValues []string // for IN operator
+	Negated  bool     // for NOT
 }
 
 type WhereOperator int
@@ -155,6 +156,7 @@ const (
 	LikeOperator
 	IsNullOperator
 	IsNotNullOperator
+	InOperator
 )
 
 type OrderByClause struct {
@@ -856,6 +858,50 @@ func ParseWhere(parser *Parser) (WhereClause, error) {
 				return whereClause, errors.New("expected NULL or NOT after IS")
 			}
 			right = ""
+		} else if token.Type == In {
+			// Handle IN (val1, val2, ...)
+			operator = InOperator
+			token = parser.lexer.NextToken()
+			if token.Type != ParenOpen {
+				return whereClause, errors.New("expected '(' after IN")
+			}
+
+			var inValues []string
+			for {
+				token = parser.lexer.NextToken()
+				if token.Type != String && token.Type != Int {
+					return whereClause, errors.New("expected value in IN list")
+				}
+				inValues = append(inValues, token.Value)
+
+				token = parser.lexer.NextToken()
+				if token.Type == ParenClose {
+					break
+				}
+				if token.Type != Comma {
+					return whereClause, errors.New("expected ',' or ')' in IN list")
+				}
+			}
+
+			whereClause.Conditions = append(whereClause.Conditions, WhereCondition{
+				Left:     left,
+				Operator: operator,
+				InValues: inValues,
+				Negated:  negated,
+			})
+
+			token = parser.lexer.PeekToken()
+			if token.Type == And {
+				parser.lexer.NextToken() // consume AND
+				whereClause.LogicalOps = append(whereClause.LogicalOps, LogicalAnd)
+				continue
+			} else if token.Type == Or {
+				parser.lexer.NextToken() // consume OR
+				whereClause.LogicalOps = append(whereClause.LogicalOps, LogicalOr)
+				continue
+			} else {
+				break
+			}
 		} else {
 			// Handle comparison operators
 			switch token.Type {

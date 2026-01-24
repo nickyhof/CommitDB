@@ -313,6 +313,46 @@ func TestIntegrationWhereOperators(t *testing.T) {
 	})
 }
 
+// TestIntegrationInOperator tests IN operator
+func TestIntegrationInOperator(t *testing.T) {
+	runWithBothPersistence(t, func(t *testing.T, engine *db.Engine) {
+
+		engine.Execute("CREATE DATABASE in_test")
+		engine.Execute("CREATE TABLE in_test.items (id INT PRIMARY KEY, status STRING, category STRING)")
+
+		// Insert test data
+		engine.Execute("INSERT INTO in_test.items (id, status, category) VALUES (1, 'active', 'A')")
+		engine.Execute("INSERT INTO in_test.items (id, status, category) VALUES (2, 'pending', 'B')")
+		engine.Execute("INSERT INTO in_test.items (id, status, category) VALUES (3, 'active', 'C')")
+		engine.Execute("INSERT INTO in_test.items (id, status, category) VALUES (4, 'archived', 'A')")
+		engine.Execute("INSERT INTO in_test.items (id, status, category) VALUES (5, 'pending', 'B')")
+
+		tests := []struct {
+			where    string
+			expected int
+		}{
+			{"status IN ('active', 'pending')", 4},
+			{"status IN ('active')", 2},
+			{"status IN ('archived')", 1},
+			{"category IN ('A', 'B')", 4},
+			{"category IN ('C')", 1},
+			{"id IN (1, 3, 5)", 3},
+			{"NOT status IN ('archived')", 4},
+		}
+
+		for _, test := range tests {
+			result, err := engine.Execute("SELECT * FROM in_test.items WHERE " + test.where)
+			if err != nil {
+				t.Fatalf("Failed to execute WHERE %s: %v", test.where, err)
+			}
+			qr := result.(db.QueryResult)
+			if len(qr.Data) != test.expected {
+				t.Errorf("WHERE %s: expected %d rows, got %d", test.where, test.expected, len(qr.Data))
+			}
+		}
+	})
+}
+
 // TestIntegrationOffsetLimit tests OFFSET and LIMIT
 func TestIntegrationOffsetLimit(t *testing.T) {
 	runWithBothPersistence(t, func(t *testing.T, engine *db.Engine) {
