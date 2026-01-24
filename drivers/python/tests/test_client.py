@@ -409,6 +409,58 @@ class TestCommitDBLocal:
         assert len(result) == 1
         assert list(result[0].values())[0] == 'Alice-test'
 
+    def test_date_functions(self, db):
+        """Test date functions like NOW, YEAR, MONTH, DAY, etc."""
+        db.execute('CREATE DATABASE datefunc_test')
+        db.execute('CREATE TABLE datefunc_test.events (id INT PRIMARY KEY, name STRING, created STRING)')
+        
+        db.execute("INSERT INTO datefunc_test.events (id, name, created) VALUES (1, 'Event1', '2024-06-15 14:30:00')")
+        
+        # Test NOW()
+        result = db.query('SELECT NOW() FROM datefunc_test.events WHERE id = 1')
+        assert len(result) == 1
+        assert len(list(result[0].values())[0]) > 0  # Non-empty
+        
+        # Test YEAR
+        result = db.query('SELECT YEAR(created) FROM datefunc_test.events WHERE id = 1')
+        assert len(result) == 1
+        assert list(result[0].values())[0] == '2024'
+        
+        # Test MONTH
+        result = db.query('SELECT MONTH(created) FROM datefunc_test.events WHERE id = 1')
+        assert len(result) == 1
+        assert list(result[0].values())[0] == '6'
+        
+        # Test DAY
+        result = db.query('SELECT DAY(created) FROM datefunc_test.events WHERE id = 1')
+        assert len(result) == 1
+        assert list(result[0].values())[0] == '15'
+        
+        # Test DATE
+        result = db.query('SELECT DATE(created) FROM datefunc_test.events WHERE id = 1')
+        assert len(result) == 1
+        assert list(result[0].values())[0] == '2024-06-15'
+
+    def test_date_columns(self, db):
+        """Test DATE/TIMESTAMP column types and NOW() in INSERT."""
+        db.execute('CREATE DATABASE datecol_test')
+        db.execute('CREATE TABLE datecol_test.events (id INT PRIMARY KEY, name STRING, event_date DATE, created_at TIMESTAMP)')
+        
+        # Test INSERT with NOW()
+        result = db.execute("INSERT INTO datecol_test.events (id, name, event_date, created_at) VALUES (1, 'Event1', '2024-06-15', NOW())")
+        assert isinstance(result, CommitResult)
+        
+        # Verify the data was inserted
+        result = db.query('SELECT created_at FROM datecol_test.events WHERE id = 1')
+        assert len(result) == 1
+        assert len(list(result[0].values())[0]) > 0  # Non-empty timestamp
+        
+        # Test NOW() for DATE column
+        db.execute("INSERT INTO datecol_test.events (id, name, event_date, created_at) VALUES (2, 'Event2', NOW(), '2024-12-25 08:00:00')")
+        result = db.query('SELECT event_date FROM datecol_test.events WHERE id = 2')
+        assert len(result) == 1
+        assert len(list(result[0].values())[0]) == 10  # Date format YYYY-MM-DD
+
     def test_create_branch(self, db):
         """Test CREATE BRANCH SQL syntax."""
         db.execute('CREATE DATABASE branch_test1')

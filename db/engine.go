@@ -504,8 +504,160 @@ func evalStringFunction(fn sql.FunctionExpr, row map[string]string) string {
 		if len(args) >= 3 {
 			return strings.ReplaceAll(args[0], args[1], args[2])
 		}
+	// Date functions
+	case "NOW":
+		return time.Now().Format("2006-01-02 15:04:05")
+	case "DATE":
+		if len(args) >= 1 {
+			// Parse and return just the date part
+			t, err := parseDateTime(args[0])
+			if err == nil {
+				return t.Format("2006-01-02")
+			}
+			return args[0]
+		}
+		return time.Now().Format("2006-01-02")
+	case "YEAR":
+		if len(args) >= 1 {
+			t, err := parseDateTime(args[0])
+			if err == nil {
+				return strconv.Itoa(t.Year())
+			}
+		}
+		return strconv.Itoa(time.Now().Year())
+	case "MONTH":
+		if len(args) >= 1 {
+			t, err := parseDateTime(args[0])
+			if err == nil {
+				return strconv.Itoa(int(t.Month()))
+			}
+		}
+		return strconv.Itoa(int(time.Now().Month()))
+	case "DAY":
+		if len(args) >= 1 {
+			t, err := parseDateTime(args[0])
+			if err == nil {
+				return strconv.Itoa(t.Day())
+			}
+		}
+		return strconv.Itoa(time.Now().Day())
+	case "HOUR":
+		if len(args) >= 1 {
+			t, err := parseDateTime(args[0])
+			if err == nil {
+				return strconv.Itoa(t.Hour())
+			}
+		}
+		return strconv.Itoa(time.Now().Hour())
+	case "MINUTE":
+		if len(args) >= 1 {
+			t, err := parseDateTime(args[0])
+			if err == nil {
+				return strconv.Itoa(t.Minute())
+			}
+		}
+		return strconv.Itoa(time.Now().Minute())
+	case "SECOND":
+		if len(args) >= 1 {
+			t, err := parseDateTime(args[0])
+			if err == nil {
+				return strconv.Itoa(t.Second())
+			}
+		}
+		return strconv.Itoa(time.Now().Second())
+	case "DATE_ADD":
+		// DATE_ADD(date, interval, unit) - e.g., DATE_ADD(date, 7, 'DAY')
+		if len(args) >= 3 {
+			t, err := parseDateTime(args[0])
+			if err == nil {
+				interval, _ := strconv.Atoi(args[1])
+				unit := strings.ToUpper(args[2])
+				return addToDate(t, interval, unit).Format("2006-01-02 15:04:05")
+			}
+		}
+	case "DATE_SUB":
+		// DATE_SUB(date, interval, unit)
+		if len(args) >= 3 {
+			t, err := parseDateTime(args[0])
+			if err == nil {
+				interval, _ := strconv.Atoi(args[1])
+				unit := strings.ToUpper(args[2])
+				return addToDate(t, -interval, unit).Format("2006-01-02 15:04:05")
+			}
+		}
+	case "DATEDIFF":
+		// DATEDIFF(date1, date2) - returns days between dates
+		if len(args) >= 2 {
+			t1, err1 := parseDateTime(args[0])
+			t2, err2 := parseDateTime(args[1])
+			if err1 == nil && err2 == nil {
+				diff := t1.Sub(t2)
+				return strconv.Itoa(int(diff.Hours() / 24))
+			}
+		}
+	case "DATE_FORMAT":
+		// DATE_FORMAT(date, format)
+		if len(args) >= 2 {
+			t, err := parseDateTime(args[0])
+			if err == nil {
+				return formatDate(t, args[1])
+			}
+		}
 	}
 	return ""
+}
+
+// parseDateTime parses various date/time formats
+func parseDateTime(s string) (time.Time, error) {
+	formats := []string{
+		"2006-01-02 15:04:05",
+		"2006-01-02",
+		"2006/01/02",
+		"01/02/2006",
+		"Jan 2, 2006",
+		time.RFC3339,
+	}
+	for _, format := range formats {
+		if t, err := time.Parse(format, s); err == nil {
+			return t, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("unable to parse date: %s", s)
+}
+
+// addToDate adds an interval to a date
+func addToDate(t time.Time, interval int, unit string) time.Time {
+	switch unit {
+	case "YEAR", "YEARS":
+		return t.AddDate(interval, 0, 0)
+	case "MONTH", "MONTHS":
+		return t.AddDate(0, interval, 0)
+	case "DAY", "DAYS":
+		return t.AddDate(0, 0, interval)
+	case "HOUR", "HOURS":
+		return t.Add(time.Duration(interval) * time.Hour)
+	case "MINUTE", "MINUTES":
+		return t.Add(time.Duration(interval) * time.Minute)
+	case "SECOND", "SECONDS":
+		return t.Add(time.Duration(interval) * time.Second)
+	}
+	return t
+}
+
+// formatDate formats a date using SQL-style format codes
+func formatDate(t time.Time, format string) string {
+	// Convert SQL format codes to Go format
+	result := format
+	result = strings.ReplaceAll(result, "%Y", "2006")
+	result = strings.ReplaceAll(result, "%m", "01")
+	result = strings.ReplaceAll(result, "%d", "02")
+	result = strings.ReplaceAll(result, "%H", "15")
+	result = strings.ReplaceAll(result, "%i", "04")
+	result = strings.ReplaceAll(result, "%s", "05")
+	result = strings.ReplaceAll(result, "%M", "January")
+	result = strings.ReplaceAll(result, "%D", "2")
+	result = strings.ReplaceAll(result, "%W", "Monday")
+	return t.Format(result)
 }
 
 // executeJoin performs a join between two result sets
@@ -775,10 +927,43 @@ func (engine *Engine) executeInsertStatement(statement sql.InsertStatement) (Com
 		return CommitResult{}, err
 	}
 
+	// Build column type map for validation
+	columnTypes := make(map[string]core.ColumnType)
+	for _, col := range tableOp.Table.Columns {
+		columnTypes[col.Name] = col.Type
+	}
+
 	data := make(map[string]interface{})
 
 	for index, column := range statement.Columns {
-		data[column] = statement.Values[index]
+		value := statement.Values[index]
+
+		// Handle NOW() function - expand to current timestamp
+		if strings.ToUpper(value) == "NOW()" {
+			colType := columnTypes[column]
+			if colType == core.DateType {
+				value = time.Now().Format("2006-01-02")
+			} else {
+				value = time.Now().Format("2006-01-02 15:04:05")
+			}
+		}
+
+		// Validate DATE/TIMESTAMP format
+		colType := columnTypes[column]
+		if colType == core.DateType {
+			if _, err := parseDateTime(value); err != nil {
+				// Try common date formats
+				if !isValidDateFormat(value) {
+					return CommitResult{}, fmt.Errorf("invalid DATE format for column %s: %s (expected YYYY-MM-DD)", column, value)
+				}
+			}
+		} else if colType == core.TimestampType {
+			if _, err := parseDateTime(value); err != nil {
+				return CommitResult{}, fmt.Errorf("invalid TIMESTAMP format for column %s: %s (expected YYYY-MM-DD HH:MM:SS)", column, value)
+			}
+		}
+
+		data[column] = value
 	}
 
 	pkValue := data[*pk].(string)
@@ -801,6 +986,22 @@ func (engine *Engine) executeInsertStatement(statement sql.InsertStatement) (Com
 		ExecutionTimeSec: time.Since(startTime).Seconds(),
 		ExecutionOps:     1, // 1 record inserted
 	}, nil
+}
+
+// isValidDateFormat checks if the string is a valid date format
+func isValidDateFormat(s string) bool {
+	dateFormats := []string{
+		"2006-01-02",
+		"2006/01/02",
+		"01/02/2006",
+		"01-02-2006",
+	}
+	for _, format := range dateFormats {
+		if _, err := time.Parse(format, s); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 func (engine *Engine) executeUpdateStatement(statement sql.UpdateStatement) (CommitResult, error) {
@@ -1210,6 +1411,8 @@ func parseColumnType(typeName string) core.ColumnType {
 		return core.BoolType
 	case "TEXT":
 		return core.TextType
+	case "DATE":
+		return core.DateType
 	case "TIMESTAMP", "DATETIME":
 		return core.TimestampType
 	default:
@@ -1281,6 +1484,8 @@ func (engine *Engine) executeDescribeStatement(statement sql.DescribeStatement) 
 			typeStr = "BOOL"
 		case core.TextType:
 			typeStr = "TEXT"
+		case core.DateType:
+			typeStr = "DATE"
 		case core.TimestampType:
 			typeStr = "TIMESTAMP"
 		}

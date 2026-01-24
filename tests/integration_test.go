@@ -447,6 +447,175 @@ func TestIntegrationStringFunctions(t *testing.T) {
 	})
 }
 
+// TestIntegrationDateFunctions tests date functions
+func TestIntegrationDateFunctions(t *testing.T) {
+	runWithBothPersistence(t, func(t *testing.T, engine *db.Engine) {
+
+		engine.Execute("CREATE DATABASE datefunc_test")
+		engine.Execute("CREATE TABLE datefunc_test.events (id INT PRIMARY KEY, name STRING, created STRING)")
+
+		// Insert test data with dates
+		engine.Execute("INSERT INTO datefunc_test.events (id, name, created) VALUES (1, 'Event1', '2024-06-15 14:30:00')")
+		engine.Execute("INSERT INTO datefunc_test.events (id, name, created) VALUES (2, 'Event2', '2024-12-25 08:00:00')")
+
+		// Test NOW()
+		result, err := engine.Execute("SELECT NOW() FROM datefunc_test.events WHERE id = 1")
+		if err != nil {
+			t.Fatalf("NOW failed: %v", err)
+		}
+		qr := result.(db.QueryResult)
+		if len(qr.Data) != 1 || len(qr.Data[0][0]) == 0 {
+			t.Error("NOW: expected non-empty result")
+		}
+
+		// Test YEAR
+		result, err = engine.Execute("SELECT YEAR(created) FROM datefunc_test.events WHERE id = 1")
+		if err != nil {
+			t.Fatalf("YEAR failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 || qr.Data[0][0] != "2024" {
+			t.Errorf("YEAR: expected '2024', got '%s'", qr.Data[0][0])
+		}
+
+		// Test MONTH
+		result, err = engine.Execute("SELECT MONTH(created) FROM datefunc_test.events WHERE id = 1")
+		if err != nil {
+			t.Fatalf("MONTH failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 || qr.Data[0][0] != "6" {
+			t.Errorf("MONTH: expected '6', got '%s'", qr.Data[0][0])
+		}
+
+		// Test DAY
+		result, err = engine.Execute("SELECT DAY(created) FROM datefunc_test.events WHERE id = 1")
+		if err != nil {
+			t.Fatalf("DAY failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 || qr.Data[0][0] != "15" {
+			t.Errorf("DAY: expected '15', got '%s'", qr.Data[0][0])
+		}
+
+		// Test DATE_ADD
+		result, err = engine.Execute("SELECT DATE_ADD(created, 7, 'DAY') FROM datefunc_test.events WHERE id = 1")
+		if err != nil {
+			t.Fatalf("DATE_ADD failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 || qr.Data[0][0] != "2024-06-22 14:30:00" {
+			t.Errorf("DATE_ADD: expected '2024-06-22 14:30:00', got '%s'", qr.Data[0][0])
+		}
+
+		// Test DATE_SUB
+		result, err = engine.Execute("SELECT DATE_SUB(created, 15, 'DAY') FROM datefunc_test.events WHERE id = 1")
+		if err != nil {
+			t.Fatalf("DATE_SUB failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 || qr.Data[0][0] != "2024-05-31 14:30:00" {
+			t.Errorf("DATE_SUB: expected '2024-05-31 14:30:00', got '%s'", qr.Data[0][0])
+		}
+
+		// Test DATEDIFF
+		result, err = engine.Execute("SELECT DATEDIFF('2024-12-25', '2024-06-15') FROM datefunc_test.events WHERE id = 1")
+		if err != nil {
+			t.Fatalf("DATEDIFF failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 || qr.Data[0][0] != "193" {
+			t.Errorf("DATEDIFF: expected '193', got '%s'", qr.Data[0][0])
+		}
+
+		// Test DATE
+		result, err = engine.Execute("SELECT DATE(created) FROM datefunc_test.events WHERE id = 1")
+		if err != nil {
+			t.Fatalf("DATE failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 || qr.Data[0][0] != "2024-06-15" {
+			t.Errorf("DATE: expected '2024-06-15', got '%s'", qr.Data[0][0])
+		}
+	})
+}
+
+// TestIntegrationDateColumns tests DATE/TIMESTAMP column types and NOW() in INSERT
+func TestIntegrationDateColumns(t *testing.T) {
+	runWithBothPersistence(t, func(t *testing.T, engine *db.Engine) {
+
+		engine.Execute("CREATE DATABASE date_test")
+		engine.Execute("CREATE TABLE date_test.events (id INT PRIMARY KEY, name STRING, event_date DATE, created_at TIMESTAMP)")
+
+		// Verify DATE/TIMESTAMP types in schema
+		result, err := engine.Execute("DESCRIBE date_test.events")
+		if err != nil {
+			t.Fatalf("DESCRIBE failed: %v", err)
+		}
+		qr := result.(db.QueryResult)
+		foundDate := false
+		foundTimestamp := false
+		for _, row := range qr.Data {
+			if row[0] == "event_date" && row[1] == "DATE" {
+				foundDate = true
+			}
+			if row[0] == "created_at" && row[1] == "TIMESTAMP" {
+				foundTimestamp = true
+			}
+		}
+		if !foundDate {
+			t.Error("DATE type not found in schema")
+		}
+		if !foundTimestamp {
+			t.Error("TIMESTAMP type not found in schema")
+		}
+
+		// Test INSERT with NOW()
+		_, err = engine.Execute("INSERT INTO date_test.events (id, name, event_date, created_at) VALUES (1, 'Event1', '2024-06-15', NOW())")
+		if err != nil {
+			t.Fatalf("INSERT with NOW() failed: %v", err)
+		}
+
+		// Verify the inserted data
+		result, err = engine.Execute("SELECT created_at FROM date_test.events WHERE id = 1")
+		if err != nil {
+			t.Fatalf("SELECT failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 || len(qr.Data[0][0]) == 0 {
+			t.Error("Expected non-empty timestamp from NOW()")
+		}
+
+		// Test NOW() for DATE column (should return just the date)
+		_, err = engine.Execute("INSERT INTO date_test.events (id, name, event_date, created_at) VALUES (2, 'Event2', NOW(), '2024-12-25 08:00:00')")
+		if err != nil {
+			t.Fatalf("INSERT with NOW() for DATE failed: %v", err)
+		}
+
+		result, err = engine.Execute("SELECT event_date FROM date_test.events WHERE id = 2")
+		if err != nil {
+			t.Fatalf("SELECT failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		// NOW() for DATE should return just YYYY-MM-DD format (10 chars)
+		if len(qr.Data) != 1 || len(qr.Data[0][0]) != 10 {
+			t.Errorf("Expected date format (10 chars), got '%s' (%d chars)", qr.Data[0][0], len(qr.Data[0][0]))
+		}
+
+		// Test invalid DATE format (should fail)
+		_, err = engine.Execute("INSERT INTO date_test.events (id, name, event_date, created_at) VALUES (3, 'Event3', 'invalid-date', '2024-12-25 08:00:00')")
+		if err == nil {
+			t.Error("Expected error for invalid DATE format")
+		}
+
+		// Test invalid TIMESTAMP format (should fail)
+		_, err = engine.Execute("INSERT INTO date_test.events (id, name, event_date, created_at) VALUES (4, 'Event4', '2024-06-15', 'not-a-timestamp')")
+		if err == nil {
+			t.Error("Expected error for invalid TIMESTAMP format")
+		}
+	})
+}
+
 // TestIntegrationOffsetLimit tests OFFSET and LIMIT
 func TestIntegrationOffsetLimit(t *testing.T) {
 	runWithBothPersistence(t, func(t *testing.T, engine *db.Engine) {

@@ -61,6 +61,10 @@ with CommitDB('localhost', 3306) as db:
     # Use string functions
     result = db.query('SELECT UPPER(name) AS upper_name FROM mydb.users')
     result = db.query("SELECT CONCAT(name, '@example.com') AS email FROM mydb.users")
+
+    # Use date functions
+    result = db.query('SELECT NOW() FROM mydb.users')
+    result = db.query("SELECT YEAR(created_at), MONTH(created_at) FROM mydb.events")
 ```
 
 ### Embedded Mode (no server required)

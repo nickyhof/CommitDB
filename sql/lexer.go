@@ -117,6 +117,18 @@ const (
 	Replace
 	LeftFunc
 	RightFunc
+	Now
+	DateAdd
+	DateSub
+	DateDiff
+	DateFunc
+	Year
+	Month
+	Day
+	Hour
+	Minute
+	Second
+	DateFormat
 	EOF
 	Unknown
 )
@@ -576,6 +588,30 @@ func lookupIdentifier(id string) TokenType {
 		return Length
 	case "REPLACE":
 		return Replace
+	case "NOW":
+		return Now
+	case "DATE_ADD", "DATEADD":
+		return DateAdd
+	case "DATE_SUB", "DATESUB":
+		return DateSub
+	case "DATEDIFF", "DATE_DIFF":
+		return DateDiff
+	case "DATE":
+		return DateFunc
+	case "YEAR":
+		return Year
+	case "MONTH":
+		return Month
+	case "DAY":
+		return Day
+	case "HOUR":
+		return Hour
+	case "MINUTE":
+		return Minute
+	case "SECOND":
+		return Second
+	case "DATE_FORMAT", "DATEFORMAT":
+		return DateFormat
 	default:
 		return Identifier
 	}

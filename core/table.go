@@ -8,6 +8,7 @@ const (
 	FloatType
 	BoolType
 	TextType
+	DateType
 	TimestampType
 )
 

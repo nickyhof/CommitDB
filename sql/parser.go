@@ -671,6 +671,96 @@ func ParseSelect(parser *Parser) (Statement, error) {
 			}
 			break
 		}
+	} else if token.Type == Now || token.Type == DateAdd || token.Type == DateSub ||
+		token.Type == DateDiff || token.Type == DateFunc || token.Type == Year ||
+		token.Type == Month || token.Type == Day || token.Type == Hour ||
+		token.Type == Minute || token.Type == Second || token.Type == DateFormat {
+		// Parse date functions
+		for {
+			funcName := ""
+			switch token.Type {
+			case Now:
+				funcName = "NOW"
+			case DateAdd:
+				funcName = "DATE_ADD"
+			case DateSub:
+				funcName = "DATE_SUB"
+			case DateDiff:
+				funcName = "DATEDIFF"
+			case DateFunc:
+				funcName = "DATE"
+			case Year:
+				funcName = "YEAR"
+			case Month:
+				funcName = "MONTH"
+			case Day:
+				funcName = "DAY"
+			case Hour:
+				funcName = "HOUR"
+			case Minute:
+				funcName = "MINUTE"
+			case Second:
+				funcName = "SECOND"
+			case DateFormat:
+				funcName = "DATE_FORMAT"
+			}
+
+			if funcName == "" {
+				break
+			}
+
+			token = parser.lexer.NextToken()
+			if token.Type != ParenOpen {
+				return nil, errors.New("expected '(' after " + funcName)
+			}
+
+			// Parse function arguments (NOW() can have no args)
+			var args []string
+			token = parser.lexer.NextToken()
+			if token.Type != ParenClose {
+				for {
+					if token.Type == Identifier || token.Type == String || token.Type == Int {
+						args = append(args, token.Value)
+					} else {
+						return nil, errors.New("expected argument in " + funcName + "()")
+					}
+
+					token = parser.lexer.NextToken()
+					if token.Type == ParenClose {
+						break
+					}
+					if token.Type != Comma {
+						return nil, errors.New("expected ',' or ')' in " + funcName + "()")
+					}
+					token = parser.lexer.NextToken()
+				}
+			}
+
+			fn := FunctionExpr{
+				Function: funcName,
+				Args:     args,
+			}
+
+			// Check for AS alias
+			token = parser.lexer.NextToken()
+			if token.Type == As {
+				token = parser.lexer.NextToken()
+				if token.Type != Identifier {
+					return nil, errors.New("expected alias after AS")
+				}
+				fn.Alias = token.Value
+				token = parser.lexer.NextToken()
+			}
+
+			selectStatement.Functions = append(selectStatement.Functions, fn)
+
+			// Check for comma (more functions/columns) or break
+			if token.Type == Comma {
+				token = parser.lexer.NextToken()
+				continue
+			}
+			break
+		}
 	} else if token.Type == Wildcard {
 		// Parse wildcard
 		selectStatement.Columns = []string{}
@@ -1119,10 +1209,28 @@ func ParseInsert(parser *Parser) (Statement, error) {
 
 	for {
 		token = parser.lexer.NextToken()
-		if token.Type != String && token.Type != Int {
-			return nil, errors.New("expected value")
+		var value string
+
+		switch token.Type {
+		case String, Int:
+			value = token.Value
+		case Now:
+			// Handle NOW() function
+			nextToken := parser.lexer.NextToken()
+			if nextToken.Type != ParenOpen {
+				return nil, errors.New("expected '(' after NOW")
+			}
+			nextToken = parser.lexer.NextToken()
+			if nextToken.Type != ParenClose {
+				return nil, errors.New("expected ')' after NOW(")
+			}
+			value = "NOW()"
+		case Null:
+			value = ""
+		default:
+			return nil, errors.New("expected value (string, number, NOW(), or NULL)")
 		}
-		insertStatement.Values = append(insertStatement.Values, token.Value)
+		insertStatement.Values = append(insertStatement.Values, value)
 
 		token = parser.lexer.NextToken()
 		if token.Type == Comma {
@@ -1308,10 +1416,12 @@ func ParseCreateTable(parser *Parser) (Statement, error) {
 			columnType = core.BoolType
 		case "TEXT":
 			columnType = core.TextType
+		case "DATE":
+			columnType = core.DateType
 		case "TIMESTAMP", "DATETIME":
 			columnType = core.TimestampType
 		default:
-			return nil, errors.New("expected column type (STRING, INT, FLOAT, BOOL, TEXT, TIMESTAMP)")
+			return nil, errors.New("expected column type (STRING, INT, FLOAT, BOOL, TEXT, DATE, TIMESTAMP)")
 		}
 
 		// Check for PRIMARY KEY

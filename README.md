@@ -271,7 +271,8 @@ CREATE TABLE mydb.users (
     email STRING,
     age INT,
     active BOOL,
-    created TIMESTAMP
+    birth_date DATE,       -- Date only (YYYY-MM-DD)
+    created TIMESTAMP      -- Date + time (YYYY-MM-DD HH:MM:SS)
 );
 DROP TABLE mydb.users;
 SHOW TABLES IN mydb;
@@ -295,6 +296,7 @@ ALTER TABLE mydb.users RENAME COLUMN name TO username;
 ```sql
 -- Insert
 INSERT INTO mydb.users (id, name, email) VALUES (1, 'Alice', 'alice@example.com');
+INSERT INTO mydb.users (id, name, created) VALUES (2, 'Bob', NOW());  -- Auto timestamp
 
 -- Select
 SELECT * FROM mydb.users;
@@ -354,6 +356,28 @@ SELECT REPLACE(text, 'old', 'new') FROM mydb.documents;
 
 -- With alias
 SELECT UPPER(name) AS uppercase_name FROM mydb.users;
+```
+
+### Date Functions
+
+```sql
+-- Current date/time
+SELECT NOW() FROM mydb.events;
+
+-- Extract date parts
+SELECT YEAR(created_at) FROM mydb.events;
+SELECT MONTH(created_at) FROM mydb.events;
+SELECT DAY(created_at) FROM mydb.events;
+SELECT HOUR(created_at) FROM mydb.events;
+
+-- Date arithmetic
+SELECT DATE_ADD(created_at, 7, 'DAY') FROM mydb.events;    -- Add 7 days
+SELECT DATE_SUB(created_at, 1, 'MONTH') FROM mydb.events;  -- Subtract 1 month
+SELECT DATEDIFF(end_date, start_date) FROM mydb.events;    -- Days between
+
+-- Format and extract
+SELECT DATE(created_at) FROM mydb.events;                   -- Just the date
+SELECT DATE_FORMAT(created_at, '%Y-%m-%d') FROM mydb.events;
 ```
 
 ### Transactions
