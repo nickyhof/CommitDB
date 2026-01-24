@@ -353,6 +353,100 @@ func TestIntegrationInOperator(t *testing.T) {
 	})
 }
 
+// TestIntegrationStringFunctions tests string functions
+func TestIntegrationStringFunctions(t *testing.T) {
+	runWithBothPersistence(t, func(t *testing.T, engine *db.Engine) {
+
+		engine.Execute("CREATE DATABASE strfunc_test")
+		engine.Execute("CREATE TABLE strfunc_test.data (id INT PRIMARY KEY, name STRING, description STRING)")
+
+		// Insert test data
+		engine.Execute("INSERT INTO strfunc_test.data (id, name, description) VALUES (1, 'Alice', '  hello world  ')")
+		engine.Execute("INSERT INTO strfunc_test.data (id, name, description) VALUES (2, 'Bob', 'testing')")
+		engine.Execute("INSERT INTO strfunc_test.data (id, name, description) VALUES (3, 'Charlie', 'replace me')")
+
+		// Test UPPER
+		result, err := engine.Execute("SELECT UPPER(name) FROM strfunc_test.data WHERE id = 1")
+		if err != nil {
+			t.Fatalf("UPPER failed: %v", err)
+		}
+		qr := result.(db.QueryResult)
+		if len(qr.Data) != 1 || qr.Data[0][0] != "ALICE" {
+			t.Errorf("UPPER: expected 'ALICE', got '%s'", qr.Data[0][0])
+		}
+
+		// Test LOWER
+		result, err = engine.Execute("SELECT LOWER(name) FROM strfunc_test.data WHERE id = 1")
+		if err != nil {
+			t.Fatalf("LOWER failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 || qr.Data[0][0] != "alice" {
+			t.Errorf("LOWER: expected 'alice', got '%s'", qr.Data[0][0])
+		}
+
+		// Test CONCAT
+		result, err = engine.Execute("SELECT CONCAT(name, '-test') FROM strfunc_test.data WHERE id = 2")
+		if err != nil {
+			t.Fatalf("CONCAT failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 || qr.Data[0][0] != "Bob-test" {
+			t.Errorf("CONCAT: expected 'Bob-test', got '%s'", qr.Data[0][0])
+		}
+
+		// Test TRIM
+		result, err = engine.Execute("SELECT TRIM(description) FROM strfunc_test.data WHERE id = 1")
+		if err != nil {
+			t.Fatalf("TRIM failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 || qr.Data[0][0] != "hello world" {
+			t.Errorf("TRIM: expected 'hello world', got '%s'", qr.Data[0][0])
+		}
+
+		// Test LENGTH
+		result, err = engine.Execute("SELECT LENGTH(name) FROM strfunc_test.data WHERE id = 2")
+		if err != nil {
+			t.Fatalf("LENGTH failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 || qr.Data[0][0] != "3" {
+			t.Errorf("LENGTH: expected '3', got '%s'", qr.Data[0][0])
+		}
+
+		// Test SUBSTRING
+		result, err = engine.Execute("SELECT SUBSTRING(name, 1, 3) FROM strfunc_test.data WHERE id = 3")
+		if err != nil {
+			t.Fatalf("SUBSTRING failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 || qr.Data[0][0] != "Cha" {
+			t.Errorf("SUBSTRING: expected 'Cha', got '%s'", qr.Data[0][0])
+		}
+
+		// Test REPLACE
+		result, err = engine.Execute("SELECT REPLACE(description, 'me', 'you') FROM strfunc_test.data WHERE id = 3")
+		if err != nil {
+			t.Fatalf("REPLACE failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 || qr.Data[0][0] != "replace you" {
+			t.Errorf("REPLACE: expected 'replace you', got '%s'", qr.Data[0][0])
+		}
+
+		// Test with alias
+		result, err = engine.Execute("SELECT UPPER(name) AS upper_name FROM strfunc_test.data WHERE id = 1")
+		if err != nil {
+			t.Fatalf("UPPER with alias failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if qr.Columns[0] != "upper_name" {
+			t.Errorf("Expected column name 'upper_name', got '%s'", qr.Columns[0])
+		}
+	})
+}
+
 // TestIntegrationOffsetLimit tests OFFSET and LIMIT
 func TestIntegrationOffsetLimit(t *testing.T) {
 	runWithBothPersistence(t, func(t *testing.T, engine *db.Engine) {

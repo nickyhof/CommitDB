@@ -55,6 +55,7 @@ type SelectStatement struct {
 	TableAlias string
 	Columns    []string
 	Aggregates []AggregateExpr
+	Functions  []FunctionExpr // String functions like UPPER, LOWER, etc.
 	Joins      []JoinClause
 	Distinct   bool
 	CountAll   bool
@@ -79,6 +80,13 @@ type AggregateExpr struct {
 	Function string // COUNT, SUM, AVG, MIN, MAX
 	Column   string
 	Alias    string
+}
+
+// FunctionExpr represents a function call like UPPER(column), CONCAT(a, b)
+type FunctionExpr struct {
+	Function string   // UPPER, LOWER, CONCAT, SUBSTRING, TRIM, LENGTH, REPLACE
+	Args     []string // Arguments (column names or literals)
+	Alias    string   // Optional AS alias
 }
 
 type InsertStatement struct {
@@ -567,6 +575,102 @@ func ParseSelect(parser *Parser) (Statement, error) {
 			}
 			break
 		}
+	} else if token.Type == Upper || token.Type == Lower || token.Type == Concat ||
+		token.Type == Substring || token.Type == Trim || token.Type == Length || token.Type == Replace {
+		// Parse string functions: UPPER(col), LOWER(col), CONCAT(a, b), SUBSTRING(col, start, len), etc.
+		for {
+			funcName := ""
+			switch token.Type {
+			case Upper:
+				funcName = "UPPER"
+			case Lower:
+				funcName = "LOWER"
+			case Concat:
+				funcName = "CONCAT"
+			case Substring:
+				funcName = "SUBSTRING"
+			case Trim:
+				funcName = "TRIM"
+			case Length:
+				funcName = "LENGTH"
+			case Replace:
+				funcName = "REPLACE"
+			}
+
+			if funcName == "" {
+				break
+			}
+
+			token = parser.lexer.NextToken()
+			if token.Type != ParenOpen {
+				return nil, errors.New("expected '(' after " + funcName)
+			}
+
+			// Parse function arguments
+			var args []string
+			for {
+				token = parser.lexer.NextToken()
+				if token.Type == Identifier || token.Type == String || token.Type == Int {
+					args = append(args, token.Value)
+				} else {
+					return nil, errors.New("expected argument in " + funcName + "()")
+				}
+
+				token = parser.lexer.NextToken()
+				if token.Type == ParenClose {
+					break
+				}
+				if token.Type != Comma {
+					return nil, errors.New("expected ',' or ')' in " + funcName + "()")
+				}
+			}
+
+			fn := FunctionExpr{
+				Function: funcName,
+				Args:     args,
+			}
+
+			// Check for AS alias
+			token = parser.lexer.NextToken()
+			if token.Type == As {
+				token = parser.lexer.NextToken()
+				if token.Type != Identifier {
+					return nil, errors.New("expected alias after AS")
+				}
+				fn.Alias = token.Value
+				token = parser.lexer.NextToken()
+			}
+
+			selectStatement.Functions = append(selectStatement.Functions, fn)
+
+			// Check for comma (more functions/columns) or break
+			if token.Type == Comma {
+				token = parser.lexer.NextToken()
+				// Check if next is another function
+				if token.Type == Upper || token.Type == Lower || token.Type == Concat ||
+					token.Type == Substring || token.Type == Trim || token.Type == Length || token.Type == Replace {
+					continue
+				}
+				// Otherwise it might be a column
+				if token.Type == Identifier {
+					selectStatement.Columns = append(selectStatement.Columns, token.Value)
+					for {
+						token = parser.lexer.NextToken()
+						if token.Type == Comma {
+							token = parser.lexer.NextToken()
+							if token.Type == Identifier {
+								selectStatement.Columns = append(selectStatement.Columns, token.Value)
+							} else {
+								break // might be an aggregate or function
+							}
+						} else {
+							break
+						}
+					}
+				}
+			}
+			break
+		}
 	} else if token.Type == Wildcard {
 		// Parse wildcard
 		selectStatement.Columns = []string{}
@@ -590,7 +694,7 @@ func ParseSelect(parser *Parser) (Statement, error) {
 			}
 		}
 	} else {
-		return nil, errors.New("expected column name, *, DISTINCT, COUNT, SUM, AVG, MIN, or MAX")
+		return nil, errors.New("expected column name, *, DISTINCT, COUNT, SUM, AVG, MIN, MAX, or string function")
 	}
 
 	if token.Type != From {

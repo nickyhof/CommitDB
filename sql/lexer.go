@@ -108,6 +108,15 @@ const (
 	Ssh
 	To
 	Rename
+	Upper
+	Lower
+	Concat
+	Substring
+	Trim
+	Length
+	Replace
+	LeftFunc
+	RightFunc
 	EOF
 	Unknown
 )
@@ -553,6 +562,20 @@ func lookupIdentifier(id string) TokenType {
 		return To
 	case "RENAME":
 		return Rename
+	case "UPPER":
+		return Upper
+	case "LOWER":
+		return Lower
+	case "CONCAT":
+		return Concat
+	case "SUBSTRING", "SUBSTR":
+		return Substring
+	case "TRIM":
+		return Trim
+	case "LENGTH", "LEN":
+		return Length
+	case "REPLACE":
+		return Replace
 	default:
 		return Identifier
 	}

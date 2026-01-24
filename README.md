@@ -338,6 +338,24 @@ SELECT * FROM mydb.products
 RIGHT JOIN mydb.categories ON category_id = id;
 ```
 
+### String Functions
+
+```sql
+-- Case conversion
+SELECT UPPER(name) FROM mydb.users;
+SELECT LOWER(email) FROM mydb.users;
+
+-- String manipulation
+SELECT CONCAT(first_name, ' ', last_name) AS full_name FROM mydb.users;
+SELECT SUBSTRING(name, 1, 3) FROM mydb.users;  -- First 3 characters
+SELECT TRIM(description) FROM mydb.products;
+SELECT LENGTH(name) FROM mydb.users;
+SELECT REPLACE(text, 'old', 'new') FROM mydb.documents;
+
+-- With alias
+SELECT UPPER(name) AS uppercase_name FROM mydb.users;
+```
+
 ### Transactions
 
 ```sql

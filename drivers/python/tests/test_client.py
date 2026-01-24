@@ -381,6 +381,34 @@ class TestCommitDBLocal:
         result = db.query('DESCRIBE alter_test.users')
         assert len(result) == 2
 
+    def test_string_functions(self, db):
+        """Test string functions like UPPER, LOWER, CONCAT, etc."""
+        db.execute('CREATE DATABASE strfunc_test')
+        db.execute('CREATE TABLE strfunc_test.data (id INT PRIMARY KEY, name STRING)')
+        
+        db.execute("INSERT INTO strfunc_test.data (id, name) VALUES (1, 'Alice')")
+        db.execute("INSERT INTO strfunc_test.data (id, name) VALUES (2, 'Bob')")
+        
+        # Test UPPER
+        result = db.query('SELECT UPPER(name) FROM strfunc_test.data WHERE id = 1')
+        assert len(result) == 1
+        assert list(result[0].values())[0] == 'ALICE'
+        
+        # Test LOWER
+        result = db.query('SELECT LOWER(name) FROM strfunc_test.data WHERE id = 1')
+        assert len(result) == 1
+        assert list(result[0].values())[0] == 'alice'
+        
+        # Test LENGTH
+        result = db.query('SELECT LENGTH(name) FROM strfunc_test.data WHERE id = 2')
+        assert len(result) == 1
+        assert list(result[0].values())[0] == '3'
+        
+        # Test CONCAT
+        result = db.query("SELECT CONCAT(name, '-test') FROM strfunc_test.data WHERE id = 1")
+        assert len(result) == 1
+        assert list(result[0].values())[0] == 'Alice-test'
+
     def test_create_branch(self, db):
         """Test CREATE BRANCH SQL syntax."""
         db.execute('CREATE DATABASE branch_test1')

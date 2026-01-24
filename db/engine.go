@@ -205,6 +205,11 @@ func (engine *Engine) executeSelectStatement(statement sql.SelectStatement) (Que
 		return executeAggregates(results, statement, engine.Persistence.LatestTransaction(), startTime, rowsScanned)
 	}
 
+	// Handle string functions
+	if len(statement.Functions) > 0 {
+		return executeStringFunctions(results, statement, engine.Persistence.LatestTransaction(), startTime, rowsScanned)
+	}
+
 	// Apply OFFSET
 	if statement.Offset > 0 {
 		if statement.Offset >= len(results) {
@@ -381,6 +386,126 @@ func calculateAggregate(rows []map[string]string, function, column string) strin
 	default:
 		return ""
 	}
+}
+
+// executeStringFunctions handles string functions like UPPER, LOWER, CONCAT, SUBSTRING, TRIM, LENGTH, REPLACE
+func executeStringFunctions(results []map[string]string, statement sql.SelectStatement, txn ps.Transaction, startTime time.Time, opCount int) (QueryResult, error) {
+	// Apply OFFSET
+	if statement.Offset > 0 {
+		if statement.Offset >= len(results) {
+			results = []map[string]string{}
+		} else {
+			results = results[statement.Offset:]
+		}
+	}
+
+	// Apply LIMIT
+	if statement.Limit > 0 && len(results) > statement.Limit {
+		results = results[:statement.Limit]
+	}
+
+	// Build output columns (function results + additional columns)
+	var outputColumns []string
+	for _, fn := range statement.Functions {
+		if fn.Alias != "" {
+			outputColumns = append(outputColumns, fn.Alias)
+		} else {
+			outputColumns = append(outputColumns, fn.Function+"("+strings.Join(fn.Args, ", ")+")")
+		}
+	}
+	// Add any regular columns
+	for _, col := range statement.Columns {
+		outputColumns = append(outputColumns, col)
+	}
+
+	// Evaluate functions for each row
+	outputData := make([][]string, len(results))
+	for i, row := range results {
+		rowData := make([]string, len(outputColumns))
+		colIdx := 0
+
+		// Evaluate each function
+		for _, fn := range statement.Functions {
+			rowData[colIdx] = evalStringFunction(fn, row)
+			colIdx++
+		}
+
+		// Add regular column values
+		for _, col := range statement.Columns {
+			rowData[colIdx] = row[col]
+			colIdx++
+		}
+
+		outputData[i] = rowData
+	}
+
+	return QueryResult{
+		Transaction:      txn,
+		Columns:          outputColumns,
+		Data:             outputData,
+		RecordsRead:      len(outputData),
+		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionOps:     opCount,
+	}, nil
+}
+
+// evalStringFunction evaluates a string function on a row
+func evalStringFunction(fn sql.FunctionExpr, row map[string]string) string {
+	// Resolve arguments (column names get value from row, literals stay as-is)
+	args := make([]string, len(fn.Args))
+	for i, arg := range fn.Args {
+		if val, ok := row[arg]; ok {
+			args[i] = val
+		} else {
+			args[i] = arg // literal value
+		}
+	}
+
+	switch fn.Function {
+	case "UPPER":
+		if len(args) >= 1 {
+			return strings.ToUpper(args[0])
+		}
+	case "LOWER":
+		if len(args) >= 1 {
+			return strings.ToLower(args[0])
+		}
+	case "CONCAT":
+		return strings.Join(args, "")
+	case "SUBSTRING":
+		if len(args) >= 2 {
+			start, _ := strconv.Atoi(args[1])
+			if start < 1 {
+				start = 1
+			}
+			str := args[0]
+			if start > len(str) {
+				return ""
+			}
+			if len(args) >= 3 {
+				length, _ := strconv.Atoi(args[2])
+				end := start - 1 + length
+				if end > len(str) {
+					end = len(str)
+				}
+				return str[start-1 : end]
+			}
+			return str[start-1:]
+		}
+	case "TRIM":
+		if len(args) >= 1 {
+			return strings.TrimSpace(args[0])
+		}
+	case "LENGTH":
+		if len(args) >= 1 {
+			return strconv.Itoa(len(args[0]))
+		}
+	case "REPLACE":
+		if len(args) >= 3 {
+			return strings.ReplaceAll(args[0], args[1], args[2])
+		}
+	}
+	return ""
 }
 
 // executeJoin performs a join between two result sets

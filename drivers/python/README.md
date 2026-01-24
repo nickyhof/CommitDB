@@ -57,6 +57,10 @@ with CommitDB('localhost', 3306) as db:
     db.execute('ALTER TABLE mydb.users ADD COLUMN phone STRING')
     db.execute('ALTER TABLE mydb.users RENAME COLUMN phone TO mobile')
     db.execute('ALTER TABLE mydb.users DROP COLUMN mobile')
+
+    # Use string functions
+    result = db.query('SELECT UPPER(name) AS upper_name FROM mydb.users')
+    result = db.query("SELECT CONCAT(name, '@example.com') AS email FROM mydb.users")
 ```
 
 ### Embedded Mode (no server required)
