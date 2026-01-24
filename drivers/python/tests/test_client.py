@@ -518,3 +518,153 @@ class TestCommitDBLocal:
             db.execute('FETCH FROM origin')
         except Exception as e:
             assert 'unknown statement type' not in str(e).lower()
+
+
+# === SSL Tests ===
+
+class TestCommitDBSSLUnit:
+    """Unit tests for CommitDB SSL features (no server required)."""
+
+    def test_init_with_ssl_defaults(self):
+        """Verify SSL defaults are set correctly."""
+        db = CommitDB('localhost', 3306)
+        assert db.use_ssl is False
+        assert db.ssl_verify is True
+        assert db.ssl_ca_cert is None
+
+    def test_init_with_ssl_enabled(self):
+        """Verify SSL parameters are stored correctly."""
+        db = CommitDB('localhost', 3306, use_ssl=True, ssl_verify=False)
+        assert db.use_ssl is True
+        assert db.ssl_verify is False
+        assert db.ssl_ca_cert is None
+
+    def test_init_with_ssl_ca_cert(self):
+        """Verify SSL CA cert path is stored."""
+        db = CommitDB('localhost', 3306, use_ssl=True, ssl_ca_cert='/path/to/cert.pem')
+        assert db.use_ssl is True
+        assert db.ssl_verify is True
+        assert db.ssl_ca_cert == '/path/to/cert.pem'
+
+    def test_init_with_all_options(self):
+        """Verify all SSL and auth options can be combined."""
+        db = CommitDB(
+            'localhost', 3306,
+            jwt_token='test.jwt.token',
+            use_ssl=True,
+            ssl_verify=True,
+            ssl_ca_cert='/path/to/cert.pem'
+        )
+        assert db.jwt_token == 'test.jwt.token'
+        assert db.use_ssl is True
+        assert db.ssl_verify is True
+        assert db.ssl_ca_cert == '/path/to/cert.pem'
+
+
+# Integration tests for SSL require a TLS-enabled server
+# Run with: go run ./cmd/server --tls-cert cert.pem --tls-key key.pem
+# Set environment: COMMITDB_SSL_ENABLED=1 COMMITDB_SSL_CERT=cert.pem
+
+@pytest.fixture
+def ssl_server_running():
+    """Check if SSL server is available."""
+    ssl_enabled = os.environ.get('COMMITDB_SSL_ENABLED')
+    if not ssl_enabled:
+        pytest.skip("SSL server not configured (set COMMITDB_SSL_ENABLED=1)")
+    return True
+
+
+@pytest.fixture
+def ssl_cert_path():
+    """Get SSL certificate path from environment."""
+    cert_path = os.environ.get('COMMITDB_SSL_CERT')
+    if not cert_path:
+        pytest.skip("SSL certificate not configured (set COMMITDB_SSL_CERT=/path/to/cert.pem)")
+    return cert_path
+
+
+@pytest.mark.skipif(not os.environ.get('COMMITDB_SSL_ENABLED'), 
+                    reason="SSL server not configured")
+class TestCommitDBSSLIntegration:
+    """Integration tests for SSL connections (requires TLS-enabled server)."""
+
+    def test_connect_with_ssl_verify(self, ssl_server_running, ssl_cert_path):
+        """Test SSL connection with certificate verification."""
+        host = os.environ.get('COMMITDB_HOST', 'localhost')
+        port = int(os.environ.get('COMMITDB_PORT', '3306'))
+        
+        db = CommitDB(host, port, use_ssl=True, ssl_ca_cert=ssl_cert_path)
+        db.connect()
+        try:
+            result = db.execute('SHOW DATABASES')
+            assert isinstance(result, QueryResult)
+        finally:
+            db.close()
+
+    def test_connect_with_ssl_skip_verify(self, ssl_server_running):
+        """Test SSL connection skipping certificate verification."""
+        host = os.environ.get('COMMITDB_HOST', 'localhost')
+        port = int(os.environ.get('COMMITDB_PORT', '3306'))
+        
+        db = CommitDB(host, port, use_ssl=True, ssl_verify=False)
+        db.connect()
+        try:
+            result = db.execute('SHOW DATABASES')
+            assert isinstance(result, QueryResult)
+        finally:
+            db.close()
+
+    def test_ssl_with_jwt_auth(self, ssl_server_running, ssl_cert_path):
+        """Test SSL connection combined with JWT authentication."""
+        jwt_secret = os.environ.get('COMMITDB_JWT_SECRET')
+        if not jwt_secret:
+            pytest.skip("JWT secret not configured (set COMMITDB_JWT_SECRET)")
+        
+        # Generate a token
+        import jwt
+        token = jwt.encode(
+            {'name': 'SSL Test User', 'email': 'ssltest@example.com'},
+            jwt_secret,
+            algorithm='HS256'
+        )
+        
+        host = os.environ.get('COMMITDB_HOST', 'localhost')
+        port = int(os.environ.get('COMMITDB_PORT', '3306'))
+        
+        db = CommitDB(host, port, 
+                      use_ssl=True, ssl_ca_cert=ssl_cert_path,
+                      jwt_token=token)
+        db.connect()
+        try:
+            assert db.authenticated is True
+            assert 'SSL Test User' in db.identity
+            result = db.execute('SHOW DATABASES')
+            assert isinstance(result, QueryResult)
+        finally:
+            db.close()
+
+    def test_query_over_ssl(self, ssl_server_running, ssl_cert_path):
+        """Test executing queries over SSL connection."""
+        host = os.environ.get('COMMITDB_HOST', 'localhost')
+        port = int(os.environ.get('COMMITDB_PORT', '3306'))
+        
+        db = CommitDB(host, port, use_ssl=True, ssl_ca_cert=ssl_cert_path)
+        db.connect()
+        try:
+            # Create database
+            result = db.execute('CREATE DATABASE ssl_test_db')
+            assert result.databases_created == 1
+            
+            # Create table
+            db.execute('CREATE TABLE ssl_test_db.items (id INT PRIMARY KEY, data STRING)')
+            
+            # Insert data
+            db.execute("INSERT INTO ssl_test_db.items (id, data) VALUES (1, 'encrypted')")
+            
+            # Query data
+            result = db.query('SELECT * FROM ssl_test_db.items')
+            assert len(result) == 1
+            assert result[0]['data'] == 'encrypted'
+        finally:
+            db.close()
+

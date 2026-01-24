@@ -29,6 +29,10 @@ func main() {
 	jwtNameClaim := flag.String("jwt-name-claim", "name", "JWT claim for user name")
 	jwtEmailClaim := flag.String("jwt-email-claim", "email", "JWT claim for user email")
 
+	// TLS flags
+	tlsCert := flag.String("tls-cert", "", "Path to TLS certificate file (enables TLS)")
+	tlsKey := flag.String("tls-key", "", "Path to TLS private key file")
+
 	flag.Parse()
 
 	if *showVersion {
@@ -84,7 +88,17 @@ func main() {
 
 	addr := fmt.Sprintf(":%d", *port)
 
-	if err := server.Start(addr); err != nil {
+	// Start with or without TLS
+	var err error
+	if *tlsCert != "" && *tlsKey != "" {
+		err = server.StartTLS(addr, *tlsCert, *tlsKey)
+	} else if *tlsCert != "" || *tlsKey != "" {
+		log.Fatal("Both --tls-cert and --tls-key must be provided for TLS")
+	} else {
+		err = server.Start(addr)
+	}
+
+	if err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 

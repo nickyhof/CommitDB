@@ -4,6 +4,7 @@ CommitDB Client - Python driver for CommitDB SQL Server.
 
 import json
 import socket
+import ssl
 from dataclasses import dataclass, field
 from typing import Iterator, Optional, Union
 
@@ -57,20 +58,35 @@ class CommitDB:
     CommitDB Python client.
 
     Example:
-        # Basic connection (no auth)
+        # Basic connection (no auth, no SSL)
         db = CommitDB('localhost', 3306)
+        db.connect()
+        
+        # With SSL (verify certificate)
+        db = CommitDB('localhost', 3306, use_ssl=True, ssl_ca_cert='cert.pem')
+        db.connect()
+        
+        # With SSL (skip verification - dev only)
+        db = CommitDB('localhost', 3306, use_ssl=True, ssl_verify=False)
         db.connect()
         
         # With JWT authentication
         db = CommitDB('localhost', 3306, jwt_token='your.jwt.token')
         db.connect()  # Auto-authenticates
         
+        # With both SSL and JWT
+        db = CommitDB('localhost', 3306, use_ssl=True, ssl_ca_cert='cert.pem', 
+                      jwt_token='your.jwt.token')
+        db.connect()
+        
         result = db.query('SELECT * FROM mydb.users')
         db.close()
     """
 
     def __init__(self, host: str = 'localhost', port: int = 3306, 
-                 jwt_token: Optional[str] = None):
+                 jwt_token: Optional[str] = None,
+                 use_ssl: bool = False, ssl_verify: bool = True,
+                 ssl_ca_cert: Optional[str] = None):
         """
         Initialize CommitDB client.
 
@@ -78,10 +94,16 @@ class CommitDB:
             host: Server hostname
             port: Server port (default 3306)
             jwt_token: Optional JWT token for authentication
+            use_ssl: Enable SSL/TLS encryption
+            ssl_verify: Verify server certificate (default True)
+            ssl_ca_cert: Path to CA certificate file for verification
         """
         self.host = host
         self.port = port
         self.jwt_token = jwt_token
+        self.use_ssl = use_ssl
+        self.ssl_verify = ssl_verify
+        self.ssl_ca_cert = ssl_ca_cert
         self._socket: Optional[socket.socket] = None
         self._buffer = b''
         self._authenticated = False
@@ -100,6 +122,16 @@ class CommitDB:
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._socket.settimeout(timeout)
         self._socket.connect((self.host, self.port))
+        
+        # Wrap with SSL if enabled
+        if self.use_ssl:
+            context = ssl.create_default_context()
+            if not self.ssl_verify:
+                context.check_hostname = False
+                context.verify_mode = ssl.CERT_NONE
+            elif self.ssl_ca_cert:
+                context.load_verify_locations(self.ssl_ca_cert)
+            self._socket = context.wrap_socket(self._socket, server_hostname=self.host)
         
         # Auto-authenticate if JWT token provided
         if self.jwt_token:

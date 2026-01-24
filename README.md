@@ -138,6 +138,44 @@ echo 'CREATE DATABASE mydb' | nc localhost 3306
 }
 ```
 
+### Server TLS/SSL Encryption
+
+Enable encrypted connections with TLS:
+
+```bash
+# Generate self-signed certificate (for development)
+openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes \
+    -subj "/CN=localhost"
+
+# Start server with TLS
+./commitdb-server --tls-cert cert.pem --tls-key key.pem
+
+# With TLS and JWT authentication
+./commitdb-server --tls-cert cert.pem --tls-key key.pem --jwt-secret "your-secret"
+
+# Test with openssl
+openssl s_client -connect localhost:3306
+```
+
+**Python client with SSL:**
+```python
+from commitdb import CommitDB
+
+# SSL with certificate verification
+db = CommitDB('localhost', 3306, use_ssl=True, ssl_ca_cert='cert.pem')
+db.connect()
+
+# SSL without verification (dev only)
+db = CommitDB('localhost', 3306, use_ssl=True, ssl_verify=False)
+db.connect()
+
+# SSL + JWT authentication
+db = CommitDB('localhost', 3306, 
+              use_ssl=True, ssl_ca_cert='cert.pem',
+              jwt_token='eyJhbG...')
+db.connect()
+```
+
 ### Python Driver
 
 ```bash

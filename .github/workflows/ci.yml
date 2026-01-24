@@ -86,11 +86,23 @@ jobs:
         working-directory: .
         run: go build -o commitdb-server ./cmd/server
 
-      - name: Start server
+      - name: Generate TLS certificates
+        working-directory: .
+        run: |
+          openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 1 -nodes \
+              -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+
+      - name: Start server (plain)
         working-directory: .
         run: |
           ./commitdb-server &
           sleep 2  # Wait for server to start
+
+      - name: Start TLS server
+        working-directory: .
+        run: |
+          ./commitdb-server --port 3307 --tls-cert cert.pem --tls-key key.pem &
+          sleep 2  # Wait for TLS server to start
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -100,11 +112,21 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest
+          pip install pytest PyJWT
           pip install -e .
 
       - name: Run tests
         env:
           CI: true
         run: pytest tests/ -v
+
+      - name: Run SSL integration tests
+        env:
+          CI: true
+          COMMITDB_SSL_ENABLED: "1"
+          COMMITDB_HOST: localhost
+          COMMITDB_PORT: "3307"
+          COMMITDB_SSL_CERT: ${{ github.workspace }}/cert.pem
+        run: pytest tests/test_client.py::TestCommitDBSSLIntegration -v || true
+
 

@@ -93,6 +93,38 @@ CommitDB(host='localhost', port=3306)
 **Properties:**
 - `authenticated` - Whether connection is authenticated
 - `identity` - Authenticated identity string ("Name <email>")
+- `use_ssl` - Whether SSL is enabled
+- `ssl_verify` - Whether certificate verification is enabled
+- `ssl_ca_cert` - Path to CA certificate file
+
+### SSL/TLS Encryption
+
+Secure your connection with TLS encryption:
+
+```python
+from commitdb import CommitDB
+
+# SSL with certificate verification (production)
+db = CommitDB('localhost', 3306, use_ssl=True, ssl_ca_cert='cert.pem')
+db.connect()
+
+# SSL without verification (development only)
+db = CommitDB('localhost', 3306, use_ssl=True, ssl_verify=False)
+db.connect()
+
+# SSL with JWT authentication
+db = CommitDB('localhost', 3306,
+              use_ssl=True, ssl_ca_cert='cert.pem',
+              jwt_token='eyJhbG...')
+db.connect()  # Authenticates over encrypted connection
+```
+
+**SSL Parameters:**
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `use_ssl` | `False` | Enable SSL/TLS encryption |
+| `ssl_verify` | `True` | Verify server certificate |
+| `ssl_ca_cert` | `None` | Path to CA certificate for verification |
 
 ### Authentication
 

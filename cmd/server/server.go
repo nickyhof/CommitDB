@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -21,6 +22,7 @@ type Server struct {
 	instance        *CommitDB.Instance
 	defaultIdentity core.Identity
 	authConfig      *AuthConfig
+	tlsEnabled      bool
 	done            chan struct{}
 	wg              sync.WaitGroup
 }
@@ -61,6 +63,41 @@ func (s *Server) Start(addr string) error {
 
 	go s.acceptLoop()
 	return nil
+}
+
+// StartTLS begins listening for TLS-encrypted connections on the specified address.
+func (s *Server) StartTLS(addr, certFile, keyFile string) error {
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return fmt.Errorf("failed to load TLS certificate: %w", err)
+	}
+
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12,
+	}
+
+	listener, err := tls.Listen("tcp", addr, tlsConfig)
+	if err != nil {
+		return fmt.Errorf("failed to start TLS server: %w", err)
+	}
+	s.listener = listener
+	s.tlsEnabled = true
+
+	log.Printf("SQL Server listening on %s (TLS enabled)", addr)
+	if s.authConfig != nil && s.authConfig.Enabled {
+		log.Printf("Authentication: enabled (JWT)")
+	} else {
+		log.Printf("Authentication: disabled (using default identity)")
+	}
+
+	go s.acceptLoop()
+	return nil
+}
+
+// TLSEnabled returns whether the server is using TLS.
+func (s *Server) TLSEnabled() bool {
+	return s.tlsEnabled
 }
 
 // Stop gracefully shuts down the server.

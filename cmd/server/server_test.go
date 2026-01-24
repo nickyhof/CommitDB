@@ -2,8 +2,16 @@ package main
 
 import (
 	"bufio"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
+	"encoding/pem"
+	"math/big"
 	"net"
+	"os"
 	"testing"
 	"time"
 
@@ -483,5 +491,201 @@ func TestIdentityInCommitsAuthenticated(t *testing.T) {
 	expectedAuthor := jwtName + " <" + jwtEmail + ">"
 	if txn.Author != expectedAuthor {
 		t.Errorf("Expected commit author '%s', got '%s'", expectedAuthor, txn.Author)
+	}
+}
+
+// === TLS Tests ===
+
+// setupTLSTestServer creates a server with TLS enabled using test certificates
+func setupTLSTestServer(t *testing.T) (*Server, string, string, func()) {
+	t.Helper()
+
+	// Create temporary directory for test certificates
+	tmpDir := t.TempDir()
+	certFile := tmpDir + "/cert.pem"
+	keyFile := tmpDir + "/key.pem"
+
+	// Generate self-signed test certificate
+	generateTestCertificate(t, certFile, keyFile)
+
+	persistence, err := ps.NewMemoryPersistence()
+	if err != nil {
+		t.Fatalf("Failed to create persistence: %v", err)
+	}
+	instance := CommitDB.Open(&persistence)
+	identity := core.Identity{Name: "test", Email: "test@test.com"}
+
+	server := NewServer(instance, identity)
+	if err := server.StartTLS(":0", certFile, keyFile); err != nil {
+		t.Fatalf("Failed to start TLS server: %v", err)
+	}
+
+	return server, certFile, keyFile, func() {
+		server.Stop()
+	}
+}
+
+// generateTestCertificate creates a self-signed certificate for testing
+func generateTestCertificate(t *testing.T, certFile, keyFile string) {
+	t.Helper()
+
+	// Generate a private key
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("Failed to generate private key: %v", err)
+	}
+
+	// Create certificate template
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			CommonName: "localhost",
+		},
+		NotBefore: time.Now(),
+		NotAfter:  time.Now().Add(time.Hour),
+		KeyUsage:  x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage: []x509.ExtKeyUsage{
+			x509.ExtKeyUsageServerAuth,
+		},
+		IPAddresses: []net.IP{net.ParseIP("127.0.0.1"), net.IPv6loopback},
+		DNSNames:    []string{"localhost"},
+	}
+
+	// Create self-signed certificate
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
+	if err != nil {
+		t.Fatalf("Failed to create certificate: %v", err)
+	}
+
+	// Write certificate to file
+	certOut, err := os.Create(certFile)
+	if err != nil {
+		t.Fatalf("Failed to create cert file: %v", err)
+	}
+	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	certOut.Close()
+
+	// Write private key to file
+	keyOut, err := os.Create(keyFile)
+	if err != nil {
+		t.Fatalf("Failed to create key file: %v", err)
+	}
+	pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+	keyOut.Close()
+}
+
+func TestTLSServerStartStop(t *testing.T) {
+	server, _, _, cleanup := setupTLSTestServer(t)
+	defer cleanup()
+
+	if server.Addr() == "" {
+		t.Error("Expected non-empty address")
+	}
+	if !server.TLSEnabled() {
+		t.Error("Expected TLS to be enabled")
+	}
+}
+
+func TestTLSServerConnection(t *testing.T) {
+	server, certFile, _, cleanup := setupTLSTestServer(t)
+	defer cleanup()
+
+	// Load certificate for client
+	certPool := x509.NewCertPool()
+	certData, err := os.ReadFile(certFile)
+	if err != nil {
+		t.Fatalf("Failed to read cert: %v", err)
+	}
+	certPool.AppendCertsFromPEM(certData)
+
+	// Connect with TLS
+	tlsConfig := &tls.Config{
+		RootCAs:    certPool,
+		ServerName: "localhost",
+	}
+
+	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 2 * time.Second}, "tcp", server.Addr(), tlsConfig)
+	if err != nil {
+		t.Fatalf("Failed to connect with TLS: %v", err)
+	}
+	defer conn.Close()
+
+	// Send a query
+	_, err = conn.Write([]byte("CREATE DATABASE tlstest\n"))
+	if err != nil {
+		t.Fatalf("Failed to send query: %v", err)
+	}
+
+	// Read response
+	reader := bufio.NewReader(conn)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("Failed to read response: %v", err)
+	}
+
+	var resp Response
+	if err := json.Unmarshal([]byte(line), &resp); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+
+	if !resp.Success {
+		t.Errorf("Query failed: %s", resp.Error)
+	}
+	if resp.Type != "commit" {
+		t.Errorf("Expected commit type, got: %s", resp.Type)
+	}
+}
+
+func TestTLSServerInvalidCert(t *testing.T) {
+	server, _, _, cleanup := setupTLSTestServer(t)
+	defer cleanup()
+
+	// Try to connect without proper certificate verification
+	// This should fail because we're not providing the right CA
+	tlsConfig := &tls.Config{
+		ServerName: "localhost",
+		// Empty RootCAs - will use system CAs which won't include our self-signed cert
+	}
+
+	_, err := tls.DialWithDialer(&net.Dialer{Timeout: 2 * time.Second}, "tcp", server.Addr(), tlsConfig)
+	if err == nil {
+		t.Error("Expected TLS connection to fail with invalid certificate")
+	}
+}
+
+func TestTLSServerWithInsecureSkipVerify(t *testing.T) {
+	server, _, _, cleanup := setupTLSTestServer(t)
+	defer cleanup()
+
+	// Connect with InsecureSkipVerify (dev mode)
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: true,
+	}
+
+	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 2 * time.Second}, "tcp", server.Addr(), tlsConfig)
+	if err != nil {
+		t.Fatalf("Failed to connect with TLS (insecure): %v", err)
+	}
+	defer conn.Close()
+
+	// Send a simple query
+	_, err = conn.Write([]byte("SHOW DATABASES\n"))
+	if err != nil {
+		t.Fatalf("Failed to send query: %v", err)
+	}
+
+	reader := bufio.NewReader(conn)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("Failed to read response: %v", err)
+	}
+
+	var resp Response
+	if err := json.Unmarshal([]byte(line), &resp); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+
+	if !resp.Success {
+		t.Errorf("Query failed: %s", resp.Error)
 	}
 }
