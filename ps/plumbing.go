@@ -392,6 +392,9 @@ func (p *Persistence) SaveRecordDirect(database, table string, records map[strin
 		return Transaction{}, err
 	}
 
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	// Get current tree
 	currentTree, err := p.getCurrentTree()
 	if err != nil {
@@ -486,11 +489,46 @@ func (p *Persistence) syncWorktree() error {
 	})
 }
 
+// getRecordDirectUnlocked is the internal unlocked version of GetRecordDirect.
+// Must be called with p.mu already held.
+func (p *Persistence) getRecordDirectUnlocked(database, table, key string) ([]byte, bool) {
+	headRef, err := p.repo.Head()
+	if err != nil {
+		return nil, false
+	}
+
+	commit, err := p.repo.CommitObject(headRef.Hash())
+	if err != nil {
+		return nil, false
+	}
+
+	tree, err := commit.Tree()
+	if err != nil {
+		return nil, false
+	}
+
+	filePath := path.Join(database, table, key)
+	file, err := tree.File(filePath)
+	if err != nil {
+		return nil, false
+	}
+
+	content, err := file.Contents()
+	if err != nil {
+		return nil, false
+	}
+
+	return []byte(content), true
+}
+
 // GetRecordDirect reads a record directly from the Git tree (bypasses worktree filesystem)
 func (p *Persistence) GetRecordDirect(database, table, key string) ([]byte, bool) {
 	if !p.IsInitialized() {
 		return nil, false
 	}
+
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 
 	headRef, err := p.repo.Head()
 	if err != nil {
@@ -527,6 +565,9 @@ func (p *Persistence) DeleteRecordDirect(database, table, key string, identity c
 	if err := p.ensureInitialized(); err != nil {
 		return Transaction{}, err
 	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
 	// Get current tree
 	currentTree, err := p.getCurrentTree()
@@ -566,8 +607,23 @@ func (p *Persistence) CopyRecordsDirect(srcDatabase, srcTable, dstDatabase, dstT
 		return Transaction{}, err
 	}
 
-	// Get source keys
-	keys := p.ListRecordKeys(srcDatabase, srcTable)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	// Get source keys using internal unlocked method
+	srcPath := fmt.Sprintf("%s/%s", srcDatabase, srcTable)
+	entries, err := p.listEntriesDirectUnlocked(srcPath)
+	if err != nil {
+		return Transaction{}, nil // Nothing to copy
+	}
+
+	var keys []string
+	for _, entry := range entries {
+		if !entry.IsDir {
+			keys = append(keys, entry.Name)
+		}
+	}
+
 	if len(keys) == 0 {
 		return Transaction{}, nil // Nothing to copy
 	}
@@ -581,7 +637,8 @@ func (p *Persistence) CopyRecordsDirect(srcDatabase, srcTable, dstDatabase, dstT
 	// Build list of changes
 	changes := make([]TreeChange, 0, len(keys))
 	for _, key := range keys {
-		data, exists := p.GetRecord(srcDatabase, srcTable, key)
+		// Use internal unlocked method
+		data, exists := p.getRecordDirectUnlocked(srcDatabase, srcTable, key)
 		if !exists {
 			continue
 		}
@@ -625,6 +682,9 @@ func (p *Persistence) WriteFileDirect(filePath string, data []byte, identity cor
 		return Transaction{}, err
 	}
 
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	// Get current tree
 	currentTree, err := p.getCurrentTree()
 	if err != nil {
@@ -662,6 +722,9 @@ func (p *Persistence) DeletePathDirect(paths []string, identity core.Identity, m
 	if err := p.ensureInitialized(); err != nil {
 		return Transaction{}, err
 	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
 	// Get current tree
 	currentTree, err := p.getCurrentTree()
@@ -702,6 +765,9 @@ func (p *Persistence) ReadFileDirect(filePath string) ([]byte, error) {
 		return nil, fmt.Errorf("not initialized")
 	}
 
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
 	headRef, err := p.repo.Head()
 	if err != nil {
 		return nil, fmt.Errorf("no commits yet")
@@ -736,11 +802,53 @@ type TreeEntry struct {
 	IsDir bool
 }
 
+// listEntriesDirectUnlocked is the internal unlocked version of ListEntriesDirect.
+// Must be called with p.mu already held.
+func (p *Persistence) listEntriesDirectUnlocked(dirPath string) ([]TreeEntry, error) {
+	headRef, err := p.repo.Head()
+	if err != nil {
+		return nil, nil // No commits yet = empty directory
+	}
+
+	commit, err := p.repo.CommitObject(headRef.Hash())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get commit: %w", err)
+	}
+
+	tree, err := commit.Tree()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tree: %w", err)
+	}
+
+	var targetTree *object.Tree
+	if dirPath == "" || dirPath == "." {
+		targetTree = tree
+	} else {
+		targetTree, err = tree.Tree(dirPath)
+		if err != nil {
+			return nil, nil // Directory doesn't exist = empty
+		}
+	}
+
+	var entries []TreeEntry
+	for _, entry := range targetTree.Entries {
+		entries = append(entries, TreeEntry{
+			Name:  entry.Name,
+			IsDir: entry.Mode == filemode.Dir,
+		})
+	}
+
+	return entries, nil
+}
+
 // ListEntriesDirect lists directory entries directly from the Git tree
 func (p *Persistence) ListEntriesDirect(dirPath string) ([]TreeEntry, error) {
 	if !p.IsInitialized() {
 		return nil, fmt.Errorf("not initialized")
 	}
+
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 
 	headRef, err := p.repo.Head()
 	if err != nil {

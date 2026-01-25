@@ -59,6 +59,134 @@ jobs:
           path: lib/
           retention-days: 1
 
+  benchmark:
+    name: Benchmark
+    runs-on: ubuntu-latest
+    needs: test
+    # Only run on main branch pushes (not PRs) to avoid duplicate runs
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run benchmarks
+        run: |
+          chmod +x scripts/benchmark.sh
+          ./scripts/benchmark.sh benchmark_results.json
+
+      - name: Run performance tests
+        run: |
+          COMMITDB_PERF_DURATION_SEC=5 COMMITDB_PERF_P99_MS=1000 \
+            go test -tags=perf -v -run='^TestPerf' ./tests/ -short -timeout=10m 2>&1 | tee perf_results.txt
+
+      - name: Checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+        continue-on-error: true
+
+      - name: Initialize gh-pages if needed
+        run: |
+          if [ ! -d "gh-pages" ]; then
+            mkdir -p gh-pages
+            cd gh-pages
+            git init
+            git checkout -b gh-pages
+          fi
+          mkdir -p gh-pages/benchmarks
+
+      - name: Store benchmark results
+        run: |
+          # Store by short commit hash for CI builds
+          SHORT_SHA=$(echo "${{ github.sha }}" | head -c 7)
+          cp benchmark_results.json "gh-pages/benchmarks/commit_${SHORT_SHA}.json"
+          cp benchmark_results.json "gh-pages/benchmarks/latest.json"
+          
+          # Create index of all benchmark files
+          cd gh-pages/benchmarks
+          echo '{"files":[' > index.json
+          first=true
+          for f in *.json; do
+            [ "$f" = "index.json" ] && continue
+            [ "$f" = "latest.json" ] && continue
+            if [ "$first" = true ]; then first=false; else echo "," >> index.json; fi
+            echo "\"$f\"" >> index.json
+          done
+          echo ']}' >> index.json
+          
+          # Keep only last 50 commit results (releases are kept forever)
+          ls -t commit_*.json 2>/dev/null | tail -n +51 | xargs -r rm
+
+      - name: Copy dashboard HTML
+        run: cp scripts/benchmark_dashboard.html gh-pages/index.html
+
+      - name: Push to gh-pages
+        run: |
+          cd gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Update benchmarks for ${{ github.sha }}" || echo "No changes to commit"
+          git push origin gh-pages --force || git push --set-upstream origin gh-pages
+
+  benchmark-pr:
+    name: Benchmark (PR)
+    runs-on: ubuntu-latest
+    needs: test
+    # Run on PRs to compare against main
+    if: github.event_name == 'pull_request'
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run benchmarks
+        run: |
+          chmod +x scripts/benchmark.sh
+          ./scripts/benchmark.sh benchmark_results.json
+
+      - name: Fetch baseline from gh-pages
+        run: |
+          curl -sL "https://raw.githubusercontent.com/${{ github.repository }}/gh-pages/benchmarks/latest.json" -o baseline.json || echo '{}' > baseline.json
+        continue-on-error: true
+
+      - name: Compare benchmarks
+        id: compare
+        run: |
+          chmod +x scripts/compare_benchmarks.sh
+          ./scripts/compare_benchmarks.sh benchmark_results.json baseline.json 20 > comparison.md
+          echo "comparison<<EOF" >> $GITHUB_OUTPUT
+          cat comparison.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comparison = `${{ steps.compare.outputs.comparison }}`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comparison
+            });
+
   python:
     name: Python Driver
     runs-on: ubuntu-latest

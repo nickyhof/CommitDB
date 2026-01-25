@@ -86,6 +86,10 @@ func (tb *TransactionBuilder) Commit(identity core.Identity) (Transaction, error
 		return Transaction{}, fmt.Errorf("no operations to commit")
 	}
 
+	// Acquire write lock for the entire commit operation
+	tb.persistence.mu.Lock()
+	defer tb.persistence.mu.Unlock()
+
 	// Get current tree
 	currentTree, err := tb.persistence.getCurrentTree()
 	if err != nil {

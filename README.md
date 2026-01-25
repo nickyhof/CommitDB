@@ -771,54 +771,39 @@ go test -run Integration ./...
 
 ## Benchmarks
 
-Performance benchmarks run on Apple M1 Pro (v2.0.0 with Git Plumbing API):
+📊 **[View Live Benchmark Dashboard](https://nickyhof.github.io/CommitDB/)**
 
-### SQL Parsing (no I/O)
+The dashboard shows:
+- Latest benchmark results for all operations
+- Version comparison (compare any release or commit)
+- Historical performance trends
 
-| Benchmark | Time |
-|-----------|------|
-| Simple SELECT | 190 ns |
-| SELECT with WHERE | 292 ns |
-| SELECT with ORDER BY | 314 ns |
-| Complex SELECT | 601 ns |
-| INSERT | 611 ns |
-| UPDATE | 313 ns |
-| DELETE | 237 ns |
+Run benchmarks locally:
+```bash
+make bench          # Run Go benchmarks
+make bench-json     # Run and output JSON
+make perf           # Run performance tests
+```
 
-### Query Execution (1000 rows, in-memory)
+### Performance Highlights
 
-| Benchmark | Time | Throughput | Notes |
-|-----------|------|------------|-------|
-| SELECT * | 164 ms | ~6 ops/sec | |
-| SELECT with WHERE | 164 ms | ~6 ops/sec | |
-| SELECT with ORDER BY | 165 ms | ~6 ops/sec | |
-| SELECT with LIMIT | 164 ms | ~6 ops/sec | |
-| COUNT(*) | 164 ms | ~6 ops/sec | |
-| SUM/AVG/MIN/MAX | 164 ms | ~6 ops/sec | |
-| DISTINCT | 166 ms | ~6 ops/sec | |
-| **INSERT** | **2.67 ms** | **375 ops/sec** | **🚀 9.9x faster with plumbing API** |
-| **UPDATE** | **0.70 ms** | **1,428 ops/sec** | **🚀 7x faster with plumbing API** |
-| GROUP BY | 168 ms | ~6 ops/sec | |
-| JOIN | 179 ms | ~6 ops/sec | |
-| Bulk INSERT (1000 rows) | 271 ms | ~3.7 ops/sec | |
+| Operation | Typical Time | Notes |
+|-----------|-------------|-------|
+| SQL Parsing | 200-600 ns | No I/O |
+| INSERT | ~2.7 ms | 🚀 Fast with plumbing API |
+| UPDATE | ~0.7 ms | 🚀 Fast with plumbing API |
+| SELECT (1000 rows) | ~165 ms | Full table scan |
 
-### Performance Improvements (v1.6.0)
+### Optimizations (v1.6.0+)
 
-In v1.6.0, CommitDB introduced the **Git Plumbing API** which bypasses go-git's high-level worktree operations for direct Git object manipulation. This provides significant performance improvements for write operations:
+CommitDB uses a **Git Plumbing API** that bypasses high-level worktree operations:
 
 | Optimization | Description |
 |--------------|-------------|
-| **Direct blob creation** | Creates Git blob objects directly in object store, bypassing filesystem I/O |
-| **Direct tree manipulation** | Builds tree objects programmatically without staging |
-| **Direct commit creation** | Creates commits without worktree index manipulation |
-| **Memory mode optimization** | Skips worktree sync entirely for in-memory databases |
-| **Direct tree reads** | Reads from Git tree objects, bypassing worktree filesystem |
-
-### Lexer
-
-| Benchmark | Time | Memory |
-|-----------|------|--------|
-| Tokenize complex query | 448 ns | 48 B |
+| Direct blob creation | Bypasses filesystem I/O |
+| Direct tree manipulation | Builds trees programmatically |
+| Direct commit creation | Skips worktree index |
+| Memory mode | No worktree sync overhead |
 
 ## Architecture
 
