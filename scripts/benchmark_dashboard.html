@@ -76,6 +76,19 @@
             color: #333;
         }
 
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error {
+            color: #ef4444;
+            padding: 20px;
+            background: #fef2f2;
+            border-radius: 8px;
+        }
+
         table {
             border-collapse: collapse;
             width: 100%;
@@ -118,16 +131,8 @@
             border-radius: 4px;
             font-size: 12px;
             font-weight: 600;
-        }
-
-        .version-tag.release {
             background: #dbeafe;
             color: #1d4ed8;
-        }
-
-        .version-tag.commit {
-            background: #f3e8ff;
-            color: #7c3aed;
         }
 
         .bar-container {
@@ -148,18 +153,28 @@
             color: #666;
             white-space: nowrap;
         }
+
+        .perf-section {
+            margin-top: 30px;
+        }
+
+        .perf-section h3 {
+            color: #1a1a2e;
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 8px;
+        }
     </style>
 </head>
 
 <body>
     <h1>📊 CommitDB Benchmark Dashboard</h1>
-    <p class="subtitle">Track performance across releases and commits</p>
+    <p class="subtitle">Track performance across releases</p>
 
     <div class="controls">
         <div>
             <label for="version1">Compare:</label>
             <select id="version1" onchange="loadComparison()">
-                <option value="latest.json">Latest</option>
+                <option value="">Loading...</option>
             </select>
         </div>
         <div>
@@ -172,22 +187,18 @@
 
     <div class="card">
         <h2>Benchmark Results</h2>
-        <div id="comparison"></div>
+        <div id="comparison">
+            <div class="loading">Loading benchmark data from releases...</div>
+        </div>
     </div>
 
     <script>
-        let allData = {};
+        // Configuration
+        const REPO = 'nickyhof/CommitDB';
+        const API_URL = `https://api.github.com/repos/${REPO}/releases`;
 
-        function formatVersion(filename) {
-            if (filename === 'latest.json') return 'Latest';
-            if (filename.startsWith('v')) return filename.replace('.json', '');
-            if (filename.startsWith('commit_')) return filename.replace('commit_', '').replace('.json', '').substring(0, 7);
-            return filename.replace('.json', '');
-        }
-
-        function isRelease(filename) {
-            return filename.startsWith('v');
-        }
+        let allReleases = [];
+        let benchmarkCache = {};
 
         function formatNs(ns) {
             if (ns >= 1e9) return (ns / 1e9).toFixed(2) + 's';
@@ -197,94 +208,150 @@
         }
 
         async function init() {
-            const indexRes = await fetch('benchmarks/index.json');
-            const index = await indexRes.json();
+            try {
+                // Fetch all releases from GitHub API
+                const response = await fetch(API_URL);
+                if (!response.ok) throw new Error('Failed to fetch releases');
 
-            const select1 = document.getElementById('version1');
-            const select2 = document.getElementById('version2');
+                allReleases = await response.json();
 
-            const releases = index.files.filter(f => f.startsWith('v')).sort().reverse();
-            const commits = index.files.filter(f => f.startsWith('commit_')).sort().reverse();
+                // Filter releases that have benchmark_results.json
+                const releasesWithBenchmarks = allReleases.filter(r =>
+                    r.assets.some(a => a.name === 'benchmark_results.json')
+                );
 
-            if (releases.length > 0) {
-                const optgroup1 = document.createElement('optgroup');
-                optgroup1.label = 'Releases';
-                releases.forEach(f => {
-                    const opt = document.createElement('option');
-                    opt.value = f; opt.textContent = formatVersion(f);
-                    optgroup1.appendChild(opt);
+                if (releasesWithBenchmarks.length === 0) {
+                    document.getElementById('comparison').innerHTML =
+                        '<div class="error">No releases with benchmark data found. Benchmark data will appear after the first release with v2.0.0+.</div>';
+                    return;
+                }
+
+                const select1 = document.getElementById('version1');
+                const select2 = document.getElementById('version2');
+
+                // Clear and populate selects
+                select1.innerHTML = '';
+                select2.innerHTML = '<option value="">-- Select baseline --</option>';
+
+                releasesWithBenchmarks.forEach((release, idx) => {
+                    const opt1 = document.createElement('option');
+                    opt1.value = release.tag_name;
+                    opt1.textContent = release.tag_name;
+                    if (idx === 0) opt1.selected = true;
+                    select1.appendChild(opt1);
+
+                    const opt2 = document.createElement('option');
+                    opt2.value = release.tag_name;
+                    opt2.textContent = release.tag_name;
+                    select2.appendChild(opt2);
                 });
-                select1.appendChild(optgroup1.cloneNode(true));
-                select2.appendChild(optgroup1);
-            }
 
-            if (commits.length > 0) {
-                const optgroup2 = document.createElement('optgroup');
-                optgroup2.label = 'Commits';
-                commits.slice(0, 20).forEach(f => {
-                    const opt = document.createElement('option');
-                    opt.value = f; opt.textContent = formatVersion(f);
-                    optgroup2.appendChild(opt);
-                });
-                select1.appendChild(optgroup2.cloneNode(true));
-                select2.appendChild(optgroup2);
-            }
+                // Auto-select second version for comparison if available
+                if (releasesWithBenchmarks.length > 1) {
+                    select2.value = releasesWithBenchmarks[1].tag_name;
+                }
 
-            loadComparison();
+                loadComparison();
+            } catch (error) {
+                document.getElementById('comparison').innerHTML =
+                    `<div class="error">Error loading releases: ${error.message}</div>`;
+            }
         }
 
-        async function loadBenchmark(filename) {
-            if (allData[filename]) return allData[filename];
-            const res = await fetch('benchmarks/' + filename);
-            allData[filename] = await res.json();
-            return allData[filename];
+        async function loadBenchmark(tagName) {
+            if (benchmarkCache[tagName]) return benchmarkCache[tagName];
+
+            const release = allReleases.find(r => r.tag_name === tagName);
+            if (!release) throw new Error(`Release ${tagName} not found`);
+
+            const asset = release.assets.find(a => a.name === 'benchmark_results.json');
+            if (!asset) throw new Error(`No benchmark data for ${tagName}`);
+
+            // Fetch the asset (need to use browser_download_url)
+            const response = await fetch(asset.browser_download_url);
+            if (!response.ok) throw new Error(`Failed to fetch benchmark data for ${tagName}`);
+
+            const data = await response.json();
+            benchmarkCache[tagName] = data;
+            return data;
         }
 
         async function loadComparison() {
             const v1 = document.getElementById('version1').value;
             const v2 = document.getElementById('version2').value;
 
-            const data1 = await loadBenchmark(v1);
-            const data2 = v2 ? await loadBenchmark(v2) : null;
+            if (!v1) return;
 
-            // Find max ns_per_op for bar scaling
-            const maxNs = Math.max(...data1.benchmarks.map(b => b.ns_per_op));
+            try {
+                document.getElementById('comparison').innerHTML = '<div class="loading">Loading...</div>';
 
-            let html = '<div class="meta">';
-            html += '<strong>Version:</strong> ' + formatVersion(v1);
-            html += ' <span class="version-tag ' + (isRelease(v1) ? 'release' : 'commit') + '">' + (isRelease(v1) ? 'Release' : 'Commit') + '</span>';
-            html += ' | <strong>Date:</strong> ' + data1.timestamp;
-            html += ' | <strong>Commit:</strong> ' + data1.commit.substring(0, 7);
-            html += '</div>';
+                const data1 = await loadBenchmark(v1);
+                const data2 = v2 ? await loadBenchmark(v2) : null;
 
-            html += '<table><tr><th>Benchmark</th><th style="min-width:200px">Time</th>';
-            if (data2) html += '<th>vs ' + formatVersion(v2) + '</th>';
-            html += '<th>B/op</th><th>allocs/op</th></tr>';
+                // Find max ns_per_op for bar scaling
+                const maxNs = Math.max(...data1.benchmarks.map(b => b.ns_per_op));
 
-            data1.benchmarks.forEach(b => {
-                const barWidth = Math.max(2, (b.ns_per_op / maxNs) * 150);
+                let html = '<div class="meta">';
+                html += '<strong>Version:</strong> ' + v1;
+                html += ' <span class="version-tag">Release</span>';
+                html += ' | <strong>Date:</strong> ' + data1.timestamp;
+                html += ' | <strong>Commit:</strong> ' + (data1.commit || 'N/A').substring(0, 7);
+                html += '</div>';
 
-                html += '<tr><td>' + b.name + '</td>';
-                html += '<td><div class="bar-container"><div class="bar" style="width:' + barWidth + 'px"></div><span class="bar-label">' + formatNs(b.ns_per_op) + '</span></div></td>';
+                // Micro-benchmarks table
+                html += '<table><tr><th>Benchmark</th><th style="min-width:200px">Time</th>';
+                if (data2) html += '<th>vs ' + v2 + '</th>';
+                html += '<th>B/op</th><th>allocs/op</th></tr>';
 
-                if (data2) {
-                    const baseline = data2.benchmarks.find(x => x.name === b.name);
-                    if (baseline) {
-                        const pct = ((b.ns_per_op - baseline.ns_per_op) / baseline.ns_per_op * 100).toFixed(1);
-                        const cls = pct < -5 ? 'faster' : pct > 5 ? 'slower' : 'neutral';
-                        const sign = pct > 0 ? '+' : '';
-                        html += '<td class="' + cls + '">' + sign + pct + '%</td>';
-                    } else {
-                        html += '<td class="neutral">new</td>';
+                data1.benchmarks.forEach(b => {
+                    const barWidth = Math.max(2, (b.ns_per_op / maxNs) * 150);
+
+                    html += '<tr><td>' + b.name + '</td>';
+                    html += '<td><div class="bar-container"><div class="bar" style="width:' + barWidth + 'px"></div><span class="bar-label">' + formatNs(b.ns_per_op) + '</span></div></td>';
+
+                    if (data2) {
+                        const baseline = data2.benchmarks.find(x => x.name === b.name);
+                        if (baseline) {
+                            const pct = ((b.ns_per_op - baseline.ns_per_op) / baseline.ns_per_op * 100).toFixed(1);
+                            const cls = pct < -5 ? 'faster' : pct > 5 ? 'slower' : 'neutral';
+                            const sign = pct > 0 ? '+' : '';
+                            html += '<td class="' + cls + '">' + sign + pct + '%</td>';
+                        } else {
+                            html += '<td class="neutral">new</td>';
+                        }
                     }
+
+                    html += '<td>' + Number(b.bytes_per_op).toLocaleString() + '</td>';
+                    html += '<td>' + b.allocs_per_op + '</td></tr>';
+                });
+                html += '</table>';
+
+                // Performance tests section (if available)
+                if (data1.performance_tests && data1.performance_tests.length > 0) {
+                    html += '<div class="perf-section">';
+                    html += '<h3>🚀 Performance Tests</h3>';
+                    html += '<table><tr><th>Test</th><th>Status</th><th>Throughput</th><th>P99 Latency</th><th>Errors</th></tr>';
+
+                    data1.performance_tests.forEach(t => {
+                        const statusClass = t.status === 'PASS' ? 'faster' : 'slower';
+                        const statusIcon = t.status === 'PASS' ? '✅' : '❌';
+                        html += '<tr>';
+                        html += '<td>' + t.name + '</td>';
+                        html += '<td class="' + statusClass + '">' + statusIcon + ' ' + t.status + '</td>';
+                        html += '<td>' + (t.throughput || '-') + '</td>';
+                        html += '<td>' + (t.p99 || '-') + '</td>';
+                        html += '<td>' + (t.errors || '-') + '</td>';
+                        html += '</tr>';
+                    });
+
+                    html += '</table></div>';
                 }
 
-                html += '<td>' + Number(b.bytes_per_op).toLocaleString() + '</td>';
-                html += '<td>' + b.allocs_per_op + '</td></tr>';
-            });
-            html += '</table>';
-
-            document.getElementById('comparison').innerHTML = html;
+                document.getElementById('comparison').innerHTML = html;
+            } catch (error) {
+                document.getElementById('comparison').innerHTML =
+                    `<div class="error">Error loading comparison: ${error.message}</div>`;
+            }
         }
 
         init();

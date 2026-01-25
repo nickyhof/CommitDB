@@ -1,4 +1,4 @@
-.PHONY: all build test test-race test-cover bench bench-json perf soak lib lib-all clean run-server run-cli fmt lint vet deps help
+.PHONY: all build test test-race test-cover bench bench-json bench-report perf perf-report soak lib lib-all clean run-server run-cli fmt lint vet deps help
 
 # Go parameters
 GOCMD=go
@@ -43,7 +43,9 @@ help:
 	@echo "  test-cover     Run tests with coverage report"
 	@echo "  bench          Run benchmarks"
 	@echo "  bench-json     Run benchmarks and output JSON"
+	@echo "  bench-report   Generate BENCHMARKS.md report"
 	@echo "  perf           Run performance tests"
+	@echo "  perf-report    Generate PERFORMANCE.md report"
 	@echo "  soak           Run soak test (long-running)"
 	@echo ""
 	@echo "Development:"
@@ -89,11 +91,29 @@ bench:
 
 # Run benchmarks and output JSON
 bench-json:
+	chmod +x scripts/benchmark.sh
 	./scripts/benchmark.sh benchmark_results.json
+
+# Generate benchmark report (BENCHMARKS.md)
+bench-report:
+	@echo "# CommitDB Benchmarks" > BENCHMARKS.md
+	@echo "" >> BENCHMARKS.md
+	@echo "Generated: $$(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> BENCHMARKS.md
+	@echo "" >> BENCHMARKS.md
+	@echo "## Go Micro-benchmarks" >> BENCHMARKS.md
+	@echo '```' >> BENCHMARKS.md
+	$(GOTEST) -bench=. -benchmem ./tests -run=^$$ >> BENCHMARKS.md
+	@echo '```' >> BENCHMARKS.md
+	@echo "Benchmark report saved to BENCHMARKS.md"
 
 # Run performance tests only
 perf:
 	$(GOTEST) -v -timeout=15m -tags=perf -run=^TestPerf ./tests
+
+# Generate performance report
+perf-report:
+	chmod +x scripts/generate_performance_report.sh
+	./scripts/generate_performance_report.sh PERFORMANCE.md
 
 # Run soak test (long-running)
 soak:
