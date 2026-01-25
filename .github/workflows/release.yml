@@ -73,8 +73,11 @@ jobs:
           done
           echo ']}' >> index.json
           
-          # Commit and push
+          # Copy dashboard HTML
           cd ..
+          cp ../scripts/benchmark_dashboard.html index.html
+          
+          # Commit and push
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
