@@ -719,6 +719,48 @@ func TestIntegrationJsonType(t *testing.T) {
 	})
 }
 
+// TestIntegrationBulkInsert tests bulk INSERT with multiple value rows
+func TestIntegrationBulkInsert(t *testing.T) {
+	runWithBothPersistence(t, func(t *testing.T, engine *db.Engine) {
+
+		engine.Execute("CREATE DATABASE bulk_test")
+		engine.Execute("CREATE TABLE bulk_test.items (id INT PRIMARY KEY, name STRING, value INT)")
+
+		// Test bulk insert with multiple rows
+		result, err := engine.Execute("INSERT INTO bulk_test.items (id, name, value) VALUES (1, 'Item1', 100), (2, 'Item2', 200), (3, 'Item3', 300)")
+		if err != nil {
+			t.Fatalf("Bulk INSERT failed: %v", err)
+		}
+		cr := result.(db.CommitResult)
+		if cr.RecordsWritten != 3 {
+			t.Errorf("Expected 3 records written, got %d", cr.RecordsWritten)
+		}
+
+		// Verify all rows were inserted
+		result, err = engine.Execute("SELECT * FROM bulk_test.items ORDER BY id ASC")
+		if err != nil {
+			t.Fatalf("SELECT after bulk INSERT failed: %v", err)
+		}
+		qr := result.(db.QueryResult)
+		if len(qr.Data) != 3 {
+			t.Errorf("Expected 3 rows, got %d", len(qr.Data))
+		}
+		if qr.Data[0][1] != "Item1" || qr.Data[1][1] != "Item2" || qr.Data[2][1] != "Item3" {
+			t.Errorf("Unexpected data: %v", qr.Data)
+		}
+
+		// Test bulk insert with single row (backward compatibility)
+		result, err = engine.Execute("INSERT INTO bulk_test.items (id, name, value) VALUES (4, 'Item4', 400)")
+		if err != nil {
+			t.Fatalf("Single row INSERT failed: %v", err)
+		}
+		cr = result.(db.CommitResult)
+		if cr.RecordsWritten != 1 {
+			t.Errorf("Expected 1 record written, got %d", cr.RecordsWritten)
+		}
+	})
+}
+
 // TestIntegrationOffsetLimit tests OFFSET and LIMIT
 func TestIntegrationOffsetLimit(t *testing.T) {
 	runWithBothPersistence(t, func(t *testing.T, engine *db.Engine) {

@@ -1071,10 +1071,6 @@ func (engine *Engine) executeInsertStatement(statement sql.InsertStatement) (Com
 		return CommitResult{}, fmt.Errorf("statement column length does not match table column count")
 	}
 
-	if len(statement.Columns) != len(statement.Values) {
-		return CommitResult{}, fmt.Errorf("statement value length does not match statement column length")
-	}
-
 	pk, err := tableOp.PrimaryKey()
 	if err != nil {
 		return CommitResult{}, err
@@ -1086,52 +1082,65 @@ func (engine *Engine) executeInsertStatement(statement sql.InsertStatement) (Com
 		columnTypes[col.Name] = col.Type
 	}
 
-	data := make(map[string]interface{})
+	var txn ps.Transaction
+	recordsWritten := 0
 
-	for index, column := range statement.Columns {
-		value := statement.Values[index]
-
-		// Handle NOW() function - expand to current timestamp
-		if strings.ToUpper(value) == "NOW()" {
-			colType := columnTypes[column]
-			if colType == core.DateType {
-				value = time.Now().Format("2006-01-02")
-			} else {
-				value = time.Now().Format("2006-01-02 15:04:05")
-			}
+	// Process each row in the bulk insert
+	for _, valueRow := range statement.ValueRows {
+		if len(statement.Columns) != len(valueRow) {
+			return CommitResult{}, fmt.Errorf("value count does not match column count")
 		}
 
-		// Validate DATE/TIMESTAMP format
-		colType := columnTypes[column]
-		if colType == core.DateType {
-			if _, err := parseDateTime(value); err != nil {
-				// Try common date formats
-				if !isValidDateFormat(value) {
-					return CommitResult{}, fmt.Errorf("invalid DATE format for column %s: %s (expected YYYY-MM-DD)", column, value)
+		data := make(map[string]interface{})
+
+		for index, column := range statement.Columns {
+			value := valueRow[index]
+
+			// Handle NOW() function - expand to current timestamp
+			if strings.ToUpper(value) == "NOW()" {
+				colType := columnTypes[column]
+				if colType == core.DateType {
+					value = time.Now().Format("2006-01-02")
+				} else {
+					value = time.Now().Format("2006-01-02 15:04:05")
 				}
 			}
-		} else if colType == core.TimestampType {
-			if _, err := parseDateTime(value); err != nil {
-				return CommitResult{}, fmt.Errorf("invalid TIMESTAMP format for column %s: %s (expected YYYY-MM-DD HH:MM:SS)", column, value)
+
+			// Validate DATE/TIMESTAMP format
+			colType := columnTypes[column]
+			if colType == core.DateType {
+				if _, err := parseDateTime(value); err != nil {
+					// Try common date formats
+					if !isValidDateFormat(value) {
+						return CommitResult{}, fmt.Errorf("invalid DATE format for column %s: %s (expected YYYY-MM-DD)", column, value)
+					}
+				}
+			} else if colType == core.TimestampType {
+				if _, err := parseDateTime(value); err != nil {
+					return CommitResult{}, fmt.Errorf("invalid TIMESTAMP format for column %s: %s (expected YYYY-MM-DD HH:MM:SS)", column, value)
+				}
+			} else if colType == core.JsonType {
+				// Validate JSON format
+				var js interface{}
+				if err := json.Unmarshal([]byte(value), &js); err != nil {
+					return CommitResult{}, fmt.Errorf("invalid JSON format for column %s: %s", column, err.Error())
+				}
 			}
-		} else if colType == core.JsonType {
-			// Validate JSON format
-			var js interface{}
-			if err := json.Unmarshal([]byte(value), &js); err != nil {
-				return CommitResult{}, fmt.Errorf("invalid JSON format for column %s: %s", column, err.Error())
-			}
+
+			data[column] = value
 		}
 
-		data[column] = value
-	}
+		pkValue := data[*pk].(string)
+		jsonData, err := json.Marshal(data)
+		if err != nil {
+			return CommitResult{}, err
+		}
 
-	pkValue := data[*pk].(string)
-
-	jsonData, err := json.Marshal(data)
-
-	txn, err := tableOp.Put(pkValue, jsonData, engine.Identity)
-	if err != nil {
-		return CommitResult{}, err
+		txn, err = tableOp.Put(pkValue, jsonData, engine.Identity)
+		if err != nil {
+			return CommitResult{}, err
+		}
+		recordsWritten++
 	}
 
 	return CommitResult{
@@ -1140,10 +1149,10 @@ func (engine *Engine) executeInsertStatement(statement sql.InsertStatement) (Com
 		DatabasesDeleted: 0,
 		TablesCreated:    0,
 		TablesDeleted:    0,
-		RecordsWritten:   1,
+		RecordsWritten:   recordsWritten,
 		RecordsDeleted:   0,
 		ExecutionTimeSec: time.Since(startTime).Seconds(),
-		ExecutionOps:     1, // 1 record inserted
+		ExecutionOps:     recordsWritten,
 	}, nil
 }
 

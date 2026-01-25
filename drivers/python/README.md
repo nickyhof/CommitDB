@@ -40,6 +40,9 @@ with CommitDB('localhost', 3306) as db:
     # Insert data
     db.execute("INSERT INTO mydb.users (id, name, email) VALUES (1, 'Alice', 'alice@example.com')")
     db.execute("INSERT INTO mydb.users (id, name, email) VALUES (2, 'Bob', 'bob@example.com')")
+    
+    # Bulk insert (multiple rows in one statement)
+    db.execute("INSERT INTO mydb.users (id, name, email) VALUES (3, 'Charlie', 'c@example.com'), (4, 'Diana', 'd@example.com')")
 
     # Query data - returns iterable of dictionaries
     result = db.query('SELECT * FROM mydb.users')
@@ -48,7 +51,7 @@ with CommitDB('localhost', 3306) as db:
         print(f"  {row['id']}: {row['name']} ({row['email']})")
 
     # Use convenience methods
-    db.insert('mydb', 'users', ['id', 'name', 'email'], [3, 'Charlie', 'charlie@example.com'])
+    db.insert('mydb', 'users', ['id', 'name', 'email'], [5, 'Eve', 'eve@example.com'])
 
     # Use IN operator for multiple values
     result = db.query("SELECT * FROM mydb.users WHERE id IN (1, 3)")

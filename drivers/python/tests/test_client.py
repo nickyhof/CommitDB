@@ -498,6 +498,22 @@ class TestCommitDBLocal:
         db.execute('CHECKOUT master')
         result = db.query('SELECT * FROM branch_test2.data')
         assert len(result) == 1
+
+    def test_bulk_insert(self, db):
+        """Test bulk INSERT with multiple value rows."""
+        db.execute('CREATE DATABASE bulk_test')
+        db.execute('CREATE TABLE bulk_test.items (id INT PRIMARY KEY, name STRING, value INT)')
+        
+        # Bulk insert multiple rows
+        result = db.execute("INSERT INTO bulk_test.items (id, name, value) VALUES (1, 'Item1', 100), (2, 'Item2', 200), (3, 'Item3', 300)")
+        assert result.records_written == 3
+        
+        # Verify all rows were inserted
+        result = db.query('SELECT * FROM bulk_test.items ORDER BY id ASC')
+        assert len(result) == 3
+        assert result[0]['name'] == 'Item1'
+        assert result[1]['name'] == 'Item2'
+        assert result[2]['name'] == 'Item3'
         
     def test_merge(self, db):
         """Test MERGE SQL syntax."""

@@ -11,3 +11,7 @@ build/
 
 # Shared libraries
 lib/
+drivers/python/commitdb/*.so
+drivers/python/commitdb/*.dylib
+drivers/python/commitdb/*.h
+drivers/python/.venv/

@@ -308,9 +308,15 @@ ALTER TABLE mydb.users RENAME COLUMN name TO username;
 ### Data Manipulation
 
 ```sql
--- Insert
+-- Insert (single row)
 INSERT INTO mydb.users (id, name, email) VALUES (1, 'Alice', 'alice@example.com');
 INSERT INTO mydb.users (id, name, created) VALUES (2, 'Bob', NOW());  -- Auto timestamp
+
+-- Bulk Insert (multiple rows in one statement)
+INSERT INTO mydb.users (id, name, email) VALUES 
+    (3, 'Charlie', 'charlie@example.com'),
+    (4, 'Diana', 'diana@example.com'),
+    (5, 'Eve', 'eve@example.com');
 
 -- Select
 SELECT * FROM mydb.users;

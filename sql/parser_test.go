@@ -108,10 +108,10 @@ func TestParser(t *testing.T) {
 			"insert table",
 			"INSERT INTO db.test (col_1, col_2) VALUES ('value', 1)",
 			InsertStatement{
-				Database: "db",
-				Table:    "test",
-				Columns:  []string{"col_1", "col_2"},
-				Values:   []string{"value", "1"},
+				Database:  "db",
+				Table:     "test",
+				Columns:   []string{"col_1", "col_2"},
+				ValueRows: [][]string{{"value", "1"}},
 			},
 		},
 		{

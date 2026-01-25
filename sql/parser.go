@@ -90,10 +90,10 @@ type FunctionExpr struct {
 }
 
 type InsertStatement struct {
-	Database string
-	Table    string
-	Columns  []string
-	Values   []string
+	Database  string
+	Table     string
+	Columns   []string
+	ValueRows [][]string // Multiple rows for bulk insert: VALUES (v1), (v2), ...
 }
 
 type UpdateStatement struct {
@@ -1265,45 +1265,58 @@ func ParseInsert(parser *Parser) (Statement, error) {
 		return nil, errors.New("expected VALUES")
 	}
 
-	// Parse values
-	token = parser.lexer.NextToken()
-	if token.Type != ParenOpen {
-		return nil, errors.New("expected '(' after VALUES")
-	}
-
+	// Parse value rows (one or more): VALUES (v1, v2), (v3, v4), ...
 	for {
 		token = parser.lexer.NextToken()
-		var value string
-
-		switch token.Type {
-		case String, Int:
-			value = token.Value
-		case Now:
-			// Handle NOW() function
-			nextToken := parser.lexer.NextToken()
-			if nextToken.Type != ParenOpen {
-				return nil, errors.New("expected '(' after NOW")
-			}
-			nextToken = parser.lexer.NextToken()
-			if nextToken.Type != ParenClose {
-				return nil, errors.New("expected ')' after NOW(")
-			}
-			value = "NOW()"
-		case Null:
-			value = ""
-		default:
-			return nil, errors.New("expected value (string, number, NOW(), or NULL)")
+		if token.Type != ParenOpen {
+			return nil, errors.New("expected '(' after VALUES or ','")
 		}
-		insertStatement.Values = append(insertStatement.Values, value)
 
-		token = parser.lexer.NextToken()
+		var currentRow []string
+		for {
+			token = parser.lexer.NextToken()
+			var value string
+
+			switch token.Type {
+			case String, Int:
+				value = token.Value
+			case Now:
+				// Handle NOW() function
+				nextToken := parser.lexer.NextToken()
+				if nextToken.Type != ParenOpen {
+					return nil, errors.New("expected '(' after NOW")
+				}
+				nextToken = parser.lexer.NextToken()
+				if nextToken.Type != ParenClose {
+					return nil, errors.New("expected ')' after NOW(")
+				}
+				value = "NOW()"
+			case Null:
+				value = ""
+			default:
+				return nil, errors.New("expected value (string, number, NOW(), or NULL)")
+			}
+			currentRow = append(currentRow, value)
+
+			token = parser.lexer.NextToken()
+			if token.Type == Comma {
+				continue
+			} else if token.Type == ParenClose {
+				break
+			} else {
+				return nil, errors.New("expected ',' or ')' in values list")
+			}
+		}
+
+		insertStatement.ValueRows = append(insertStatement.ValueRows, currentRow)
+
+		// Check for more value rows
+		token = parser.lexer.PeekToken()
 		if token.Type == Comma {
+			parser.lexer.NextToken() // consume the comma
 			continue
-		} else if token.Type == ParenClose {
-			break
-		} else {
-			return nil, errors.New("expected ',' or ')' in values list")
 		}
+		break
 	}
 
 	return insertStatement, nil
