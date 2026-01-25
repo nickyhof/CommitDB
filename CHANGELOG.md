@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-01-24
+
+### Added
+
+#### COPY INTO Command (Bulk CSV Import/Export)
+- `COPY INTO 'file.csv' FROM database.table` - Export table to CSV file
+- `COPY INTO database.table FROM 'file.csv'` - Import CSV file into table
+- `WITH (HEADER = TRUE, DELIMITER = ',')` - Options for header and delimiter
+- Streaming CSV parsing for memory-efficient large file imports
+- Atomic transactions using staging table approach
+- Zero-memory copy via `CopyRecords` persistence method
+
+#### Bulk INSERT
+- Multi-row INSERT with VALUES list: `INSERT INTO ... VALUES (...), (...), (...)`
+
+#### JSON Data Type
+- `JSON` column type with validation on insert
+- `JSON_EXTRACT(column, '$.path')` - Extract values using JSONPath
+- `JSON_SET(column, '$.path', value)` - Set values in JSON
+- `JSON_REMOVE(column, '$.path')` - Remove keys from JSON
+- `JSON_CONTAINS(column, value)` - Check if value exists
+- `JSON_KEYS(column)`, `JSON_LENGTH(column)`, `JSON_TYPE(column)`
+
+#### Date Functions
+- `NOW()` - Current timestamp
+- `YEAR()`, `MONTH()`, `DAY()`, `HOUR()` - Extract date parts
+- `DATE_ADD()`, `DATE_SUB()` - Date arithmetic
+- `DATEDIFF()` - Days between dates
+- `DATE()`, `DATE_FORMAT()` - Date formatting
+
+#### String Functions
+- `UPPER()`, `LOWER()` - Case conversion
+- `CONCAT()` - String concatenation
+- `SUBSTRING()`, `TRIM()`, `LENGTH()`, `REPLACE()`
+
+#### SQL Enhancements
+- `IN` operator: `WHERE column IN (1, 2, 3)`
+- `ALTER TABLE ... RENAME COLUMN old TO new`
+- Mixed column + aggregate SELECT: `SELECT city, COUNT(*) FROM ... GROUP BY city`
+
+#### Benchmarks
+- `BenchmarkBulkInsert` - Multi-value INSERT performance
+- `BenchmarkCopyIntoExport` - CSV export performance
+- `BenchmarkCopyIntoImport` - CSV import performance
+- `BenchmarkGroupBy` - GROUP BY with aggregates
+- `BenchmarkJoin` - JOIN operation performance
+- `BenchmarkStringFunctions` - String function performance
+
+#### Documentation
+- COPY INTO usage in README
+- Bulk I/O section in Features table
+
+### Changed
+- Parser now supports mixed column + aggregate in SELECT list
+
 ## [1.6.0] - 2026-01-24
 
 ### Added
@@ -260,6 +315,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests run with both memory and file persistence modes
 - Persistence reopen tests for data durability verification
 
+[1.7.0]: https://github.com/nickyhof/CommitDB/releases/tag/v1.7.0
 [1.6.0]: https://github.com/nickyhof/CommitDB/releases/tag/v1.6.0
 [1.5.0]: https://github.com/nickyhof/CommitDB/releases/tag/v1.5.0
 [1.4.0]: https://github.com/nickyhof/CommitDB/releases/tag/v1.4.0
