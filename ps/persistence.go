@@ -22,6 +22,7 @@ type Persistence struct {
 	repo         *git.Repository
 	mu           sync.RWMutex
 	pendingMerge *PendingMerge // For manual conflict resolution
+	isMemoryMode bool          // True for memory-only persistence (skip worktree sync)
 }
 
 // IsInitialized returns true if the persistence layer has a valid repository
@@ -67,7 +68,8 @@ func NewMemoryPersistence() (Persistence, error) {
 	}
 
 	return Persistence{
-		repo: repo,
+		repo:         repo,
+		isMemoryMode: true, // Skip worktree sync for better performance
 	}, nil
 }
 
