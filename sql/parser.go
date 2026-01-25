@@ -847,7 +847,7 @@ func ParseSelect(parser *Parser) (Statement, error) {
 		selectStatement.Columns = []string{}
 		token = parser.lexer.NextToken()
 	} else if token.Type == Identifier {
-		// Parse columns
+		// Parse columns (may be mixed with aggregates like: SELECT city, COUNT(*) ...)
 		selectStatement.Columns = append(selectStatement.Columns, token.Value)
 		for {
 			token = parser.lexer.NextToken()
@@ -855,8 +855,54 @@ func ParseSelect(parser *Parser) (Statement, error) {
 				token = parser.lexer.NextToken()
 				if token.Type == Identifier {
 					selectStatement.Columns = append(selectStatement.Columns, token.Value)
+				} else if token.Type == Count {
+					// Parse COUNT(*) or COUNT(col)
+					token = parser.lexer.NextToken()
+					if token.Type != ParenOpen {
+						return nil, errors.New("expected '(' after COUNT")
+					}
+					token = parser.lexer.NextToken()
+					if token.Type == Wildcard {
+						selectStatement.Aggregates = append(selectStatement.Aggregates, AggregateExpr{Function: "COUNT", Column: "*"})
+						token = parser.lexer.NextToken()
+					} else if token.Type == Identifier {
+						selectStatement.Aggregates = append(selectStatement.Aggregates, AggregateExpr{Function: "COUNT", Column: token.Value})
+						token = parser.lexer.NextToken()
+					} else {
+						return nil, errors.New("expected '*' or column name in COUNT()")
+					}
+					if token.Type != ParenClose {
+						return nil, errors.New("expected ')' after COUNT argument")
+					}
+				} else if token.Type == Sum || token.Type == Avg || token.Type == Min || token.Type == Max {
+					// Parse SUM/AVG/MIN/MAX(col)
+					funcName := ""
+					switch token.Type {
+					case Sum:
+						funcName = "SUM"
+					case Avg:
+						funcName = "AVG"
+					case Min:
+						funcName = "MIN"
+					case Max:
+						funcName = "MAX"
+					}
+					token = parser.lexer.NextToken()
+					if token.Type != ParenOpen {
+						return nil, errors.New("expected '(' after " + funcName)
+					}
+					token = parser.lexer.NextToken()
+					if token.Type != Identifier {
+						return nil, errors.New("expected column name in " + funcName + "()")
+					}
+					col := token.Value
+					token = parser.lexer.NextToken()
+					if token.Type != ParenClose {
+						return nil, errors.New("expected ')' after column name")
+					}
+					selectStatement.Aggregates = append(selectStatement.Aggregates, AggregateExpr{Function: funcName, Column: col})
 				} else {
-					return nil, errors.New("expected identifier after comma")
+					return nil, errors.New("expected identifier or aggregate function after comma")
 				}
 			} else if token.Type == From {
 				break

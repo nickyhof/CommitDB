@@ -312,7 +312,7 @@ func BenchmarkGroupBy(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := engine.Execute("SELECT COUNT(*) FROM bench.users GROUP BY city")
+		_, err := engine.Execute("SELECT city, COUNT(*), AVG(age) FROM bench.users GROUP BY city")
 		if err != nil {
 			b.Fatalf("Execute error: %v", err)
 		}

@@ -335,6 +335,37 @@ func TestParser(t *testing.T) {
 				Offset:   20,
 			},
 		},
+		{
+			"select column and count star",
+			"SELECT city, COUNT(*) FROM db.test",
+			SelectStatement{
+				Database:   "db",
+				Table:      "test",
+				Columns:    []string{"city"},
+				Aggregates: []AggregateExpr{{Function: "COUNT", Column: "*"}},
+			},
+		},
+		{
+			"select column and multiple aggregates",
+			"SELECT name, SUM(amount), AVG(price) FROM db.test",
+			SelectStatement{
+				Database:   "db",
+				Table:      "test",
+				Columns:    []string{"name"},
+				Aggregates: []AggregateExpr{{Function: "SUM", Column: "amount"}, {Function: "AVG", Column: "price"}},
+			},
+		},
+		{
+			"select columns and aggregates with group by",
+			"SELECT city, COUNT(*) FROM db.test GROUP BY city",
+			SelectStatement{
+				Database:   "db",
+				Table:      "test",
+				Columns:    []string{"city"},
+				Aggregates: []AggregateExpr{{Function: "COUNT", Column: "*"}},
+				GroupBy:    []string{"city"},
+			},
+		},
 	}
 
 	for _, test := range tests {

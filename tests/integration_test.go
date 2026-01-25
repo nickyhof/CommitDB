@@ -229,6 +229,40 @@ func TestIntegrationAggregates(t *testing.T) {
 		if qr.Data[0][0] != "3000" {
 			t.Errorf("Expected MAX of 3000, got %s", qr.Data[0][0])
 		}
+
+		// Test GROUP BY with column and COUNT(*)
+		result, err = engine.Execute("SELECT region, COUNT(*) FROM sales.orders GROUP BY region")
+		if err != nil {
+			t.Fatalf("Failed to execute GROUP BY with column + COUNT: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 2 {
+			t.Errorf("Expected 2 groups (East, West), got %d", len(qr.Data))
+		}
+
+		// Test GROUP BY with column and SUM aggregate
+		result, err = engine.Execute("SELECT region, SUM(amount) FROM sales.orders GROUP BY region")
+		if err != nil {
+			t.Fatalf("Failed to execute GROUP BY with column + SUM: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 2 {
+			t.Errorf("Expected 2 groups, got %d", len(qr.Data))
+		}
+
+		// Test GROUP BY with column and multiple aggregates
+		result, err = engine.Execute("SELECT region, COUNT(*), AVG(amount) FROM sales.orders GROUP BY region")
+		if err != nil {
+			t.Fatalf("Failed to execute GROUP BY with column + multiple aggregates: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 2 {
+			t.Errorf("Expected 2 groups, got %d", len(qr.Data))
+		}
+		// Verify columns include region and aggregates
+		if len(qr.Columns) < 2 {
+			t.Errorf("Expected at least 2 columns (region + aggregates), got %d", len(qr.Columns))
+		}
 	})
 }
 
