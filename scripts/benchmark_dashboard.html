@@ -188,17 +188,16 @@
     <div class="card">
         <h2>Benchmark Results</h2>
         <div id="comparison">
-            <div class="loading">Loading benchmark data from releases...</div>
+            <div class="loading">Loading benchmark data...</div>
         </div>
     </div>
 
     <script>
-        // Configuration
-        const REPO = 'nickyhof/CommitDB';
-        const API_URL = `https://api.github.com/repos/${REPO}/releases`;
-
-        let allReleases = [];
         let benchmarkCache = {};
+
+        function formatVersion(filename) {
+            return filename.replace('.json', '');
+        }
 
         function formatNs(ns) {
             if (ns >= 1e9) return (ns / 1e9).toFixed(2) + 's';
@@ -209,20 +208,16 @@
 
         async function init() {
             try {
-                // Fetch all releases from GitHub API
-                const response = await fetch(API_URL);
-                if (!response.ok) throw new Error('Failed to fetch releases');
+                // Fetch index of available benchmark files
+                const indexRes = await fetch('benchmarks/index.json');
+                if (!indexRes.ok) throw new Error('No benchmark data available yet');
 
-                allReleases = await response.json();
+                const index = await indexRes.json();
+                const versions = index.files.sort().reverse();
 
-                // Filter releases that have benchmark_results.json
-                const releasesWithBenchmarks = allReleases.filter(r =>
-                    r.assets.some(a => a.name === 'benchmark_results.json')
-                );
-
-                if (releasesWithBenchmarks.length === 0) {
+                if (versions.length === 0) {
                     document.getElementById('comparison').innerHTML =
-                        '<div class="error">No releases with benchmark data found. Benchmark data will appear after the first release with v2.0.0+.</div>';
+                        '<div class="error">No benchmark data available. Benchmark data will appear after the first release.</div>';
                     return;
                 }
 
@@ -233,46 +228,41 @@
                 select1.innerHTML = '';
                 select2.innerHTML = '<option value="">-- Select baseline --</option>';
 
-                releasesWithBenchmarks.forEach((release, idx) => {
+                versions.forEach((file, idx) => {
+                    const version = formatVersion(file);
+
                     const opt1 = document.createElement('option');
-                    opt1.value = release.tag_name;
-                    opt1.textContent = release.tag_name;
+                    opt1.value = file;
+                    opt1.textContent = version;
                     if (idx === 0) opt1.selected = true;
                     select1.appendChild(opt1);
 
                     const opt2 = document.createElement('option');
-                    opt2.value = release.tag_name;
-                    opt2.textContent = release.tag_name;
+                    opt2.value = file;
+                    opt2.textContent = version;
                     select2.appendChild(opt2);
                 });
 
                 // Auto-select second version for comparison if available
-                if (releasesWithBenchmarks.length > 1) {
-                    select2.value = releasesWithBenchmarks[1].tag_name;
+                if (versions.length > 1) {
+                    select2.value = versions[1];
                 }
 
                 loadComparison();
             } catch (error) {
                 document.getElementById('comparison').innerHTML =
-                    `<div class="error">Error loading releases: ${error.message}</div>`;
+                    `<div class="error">Error loading benchmarks: ${error.message}</div>`;
             }
         }
 
-        async function loadBenchmark(tagName) {
-            if (benchmarkCache[tagName]) return benchmarkCache[tagName];
+        async function loadBenchmark(filename) {
+            if (benchmarkCache[filename]) return benchmarkCache[filename];
 
-            const release = allReleases.find(r => r.tag_name === tagName);
-            if (!release) throw new Error(`Release ${tagName} not found`);
-
-            const asset = release.assets.find(a => a.name === 'benchmark_results.json');
-            if (!asset) throw new Error(`No benchmark data for ${tagName}`);
-
-            // Fetch the asset (need to use browser_download_url)
-            const response = await fetch(asset.browser_download_url);
-            if (!response.ok) throw new Error(`Failed to fetch benchmark data for ${tagName}`);
+            const response = await fetch('benchmarks/' + filename);
+            if (!response.ok) throw new Error(`Failed to load ${filename}`);
 
             const data = await response.json();
-            benchmarkCache[tagName] = data;
+            benchmarkCache[filename] = data;
             return data;
         }
 
@@ -292,7 +282,7 @@
                 const maxNs = Math.max(...data1.benchmarks.map(b => b.ns_per_op));
 
                 let html = '<div class="meta">';
-                html += '<strong>Version:</strong> ' + v1;
+                html += '<strong>Version:</strong> ' + formatVersion(v1);
                 html += ' <span class="version-tag">Release</span>';
                 html += ' | <strong>Date:</strong> ' + data1.timestamp;
                 html += ' | <strong>Commit:</strong> ' + (data1.commit || 'N/A').substring(0, 7);
@@ -300,7 +290,7 @@
 
                 // Micro-benchmarks table
                 html += '<table><tr><th>Benchmark</th><th style="min-width:200px">Time</th>';
-                if (data2) html += '<th>vs ' + v2 + '</th>';
+                if (data2) html += '<th>vs ' + formatVersion(v2) + '</th>';
                 html += '<th>B/op</th><th>allocs/op</th></tr>';
 
                 data1.benchmarks.forEach(b => {
