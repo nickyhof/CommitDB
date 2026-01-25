@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-01-25
+
+### Added
+
+#### Git Plumbing API (Major Performance Improvement)
+- Low-level Git object manipulation bypassing worktree operations (`ps/plumbing.go`)
+- `createBlob()` - Direct blob creation in object store
+- `updateTreePath()` - Direct tree building without filesystem I/O
+- `batchUpdateTree()` - Efficient multi-record updates in single tree operation
+- `createCommitDirect()` - Creates commits without worktree index manipulation
+- `ReadFileDirect()` / `WriteFileDirect()` - Direct Git tree reads/writes
+- `ListEntriesDirect()` - Directory listing from Git tree
+- Memory mode optimization: skips worktree sync entirely
+- **Result: ~10x faster writes for INSERT/UPDATE operations**
+
+#### Performance Testing Suite
+- Comprehensive performance test framework (`tests/performance_test.go`)
+- Configurable test parameters via environment variables
+- Metrics collection: p50/p95/p99 latencies, throughput, error rates
+- Test scenarios:
+  - `TestPerfConcurrentReads` - Concurrent SELECT performance
+  - `TestPerfConcurrentWrites` - Concurrent INSERT/UPDATE performance
+  - `TestPerfMixedWorkload` - Realistic 70/30 read/write mix
+  - `TestPerfConnectionChurn` - Rapid connect/disconnect cycles
+  - `TestPerfTLSOverhead` - TLS vs non-TLS latency comparison
+  - `TestPerfSustainedLoad` - Long-running soak test with memory monitoring
+
+#### Benchmark Dashboard
+- Live benchmark dashboard on GitHub Pages
+- Version comparison across releases and commits
+- `scripts/benchmark.sh` - Benchmark runner with JSON output
+- `scripts/compare_benchmarks.sh` - Baseline comparison with regression warnings
+- `scripts/benchmark_dashboard.html` - Interactive web dashboard
+
+#### Makefile Improvements
+- `make bench-json` - Run benchmarks with JSON output
+- `make test-race` - Run tests with race detector
+- `make test-cover` - Run tests with coverage report
+- `make run-server` / `make run-cli` - Run server/CLI
+- `make fmt` / `make vet` / `make lint` - Code quality tools
+- `make deps` - Download and tidy dependencies
+- `make help` - Show all available commands
+
+### Changed
+- CRUD operations now use Git Plumbing API for ~10x faster writes
+
 ## [1.7.0] - 2026-01-24
 
 ### Added
@@ -315,6 +361,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests run with both memory and file persistence modes
 - Persistence reopen tests for data durability verification
 
+[2.0.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.0.0
 [1.7.0]: https://github.com/nickyhof/CommitDB/releases/tag/v1.7.0
 [1.6.0]: https://github.com/nickyhof/CommitDB/releases/tag/v1.6.0
 [1.5.0]: https://github.com/nickyhof/CommitDB/releases/tag/v1.5.0

@@ -794,7 +794,7 @@ make perf           # Run performance tests
 | UPDATE | ~0.7 ms | 🚀 Fast with plumbing API |
 | SELECT (1000 rows) | ~165 ms | Full table scan |
 
-### Optimizations (v1.6.0+)
+### Optimizations (v2.0.0)
 
 CommitDB uses a **Git Plumbing API** that bypasses high-level worktree operations:
 
