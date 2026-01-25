@@ -10,7 +10,7 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            max-width: 1400px;
+            max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
             background: #f8f9fa;
@@ -24,31 +24,6 @@
         .subtitle {
             color: #666;
             margin-bottom: 30px;
-        }
-
-        .controls {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-            display: flex;
-            gap: 20px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-
-        .controls label {
-            font-weight: 600;
-            color: #333;
-        }
-
-        .controls select {
-            padding: 8px 12px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-            min-width: 200px;
         }
 
         .card {
@@ -111,30 +86,6 @@
             background: #f8f9fa;
         }
 
-        .faster {
-            color: #10b981;
-            font-weight: 600;
-        }
-
-        .slower {
-            color: #ef4444;
-            font-weight: 600;
-        }
-
-        .neutral {
-            color: #666;
-        }
-
-        .version-tag {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 600;
-            background: #dbeafe;
-            color: #1d4ed8;
-        }
-
         .bar-container {
             display: flex;
             align-items: center;
@@ -154,6 +105,16 @@
             white-space: nowrap;
         }
 
+        .faster {
+            color: #10b981;
+            font-weight: 600;
+        }
+
+        .slower {
+            color: #ef4444;
+            font-weight: 600;
+        }
+
         .perf-section {
             margin-top: 30px;
         }
@@ -168,37 +129,16 @@
 
 <body>
     <h1>📊 CommitDB Benchmark Dashboard</h1>
-    <p class="subtitle">Track performance across releases</p>
-
-    <div class="controls">
-        <div>
-            <label for="version1">Compare:</label>
-            <select id="version1" onchange="loadComparison()">
-                <option value="">Loading...</option>
-            </select>
-        </div>
-        <div>
-            <label for="version2">Against:</label>
-            <select id="version2" onchange="loadComparison()">
-                <option value="">-- Select baseline --</option>
-            </select>
-        </div>
-    </div>
+    <p class="subtitle">Latest benchmark results</p>
 
     <div class="card">
         <h2>Benchmark Results</h2>
-        <div id="comparison">
+        <div id="results">
             <div class="loading">Loading benchmark data...</div>
         </div>
     </div>
 
     <script>
-        let benchmarkCache = {};
-
-        function formatVersion(filename) {
-            return filename.replace('.json', '');
-        }
-
         function formatNs(ns) {
             if (ns >= 1e9) return (ns / 1e9).toFixed(2) + 's';
             if (ns >= 1e6) return (ns / 1e6).toFixed(2) + 'ms';
@@ -208,121 +148,41 @@
 
         async function init() {
             try {
-                // Fetch index of available benchmark files
-                const indexRes = await fetch('benchmarks/index.json');
-                if (!indexRes.ok) throw new Error('No benchmark data available yet');
+                const response = await fetch('benchmarks/latest.json');
+                if (!response.ok) throw new Error('No benchmark data available yet');
 
-                const index = await indexRes.json();
-                const versions = index.files.sort().reverse();
-
-                if (versions.length === 0) {
-                    document.getElementById('comparison').innerHTML =
-                        '<div class="error">No benchmark data available. Benchmark data will appear after the first release.</div>';
-                    return;
-                }
-
-                const select1 = document.getElementById('version1');
-                const select2 = document.getElementById('version2');
-
-                // Clear and populate selects
-                select1.innerHTML = '';
-                select2.innerHTML = '<option value="">-- Select baseline --</option>';
-
-                versions.forEach((file, idx) => {
-                    const version = formatVersion(file);
-
-                    const opt1 = document.createElement('option');
-                    opt1.value = file;
-                    opt1.textContent = version;
-                    if (idx === 0) opt1.selected = true;
-                    select1.appendChild(opt1);
-
-                    const opt2 = document.createElement('option');
-                    opt2.value = file;
-                    opt2.textContent = version;
-                    select2.appendChild(opt2);
-                });
-
-                // Auto-select second version for comparison if available
-                if (versions.length > 1) {
-                    select2.value = versions[1];
-                }
-
-                loadComparison();
-            } catch (error) {
-                document.getElementById('comparison').innerHTML =
-                    `<div class="error">Error loading benchmarks: ${error.message}</div>`;
-            }
-        }
-
-        async function loadBenchmark(filename) {
-            if (benchmarkCache[filename]) return benchmarkCache[filename];
-
-            const response = await fetch('benchmarks/' + filename);
-            if (!response.ok) throw new Error(`Failed to load ${filename}`);
-
-            const data = await response.json();
-            benchmarkCache[filename] = data;
-            return data;
-        }
-
-        async function loadComparison() {
-            const v1 = document.getElementById('version1').value;
-            const v2 = document.getElementById('version2').value;
-
-            if (!v1) return;
-
-            try {
-                document.getElementById('comparison').innerHTML = '<div class="loading">Loading...</div>';
-
-                const data1 = await loadBenchmark(v1);
-                const data2 = v2 ? await loadBenchmark(v2) : null;
+                const data = await response.json();
 
                 // Find max ns_per_op for bar scaling
-                const maxNs = Math.max(...data1.benchmarks.map(b => b.ns_per_op));
+                const maxNs = Math.max(...data.benchmarks.map(b => b.ns_per_op));
 
                 let html = '<div class="meta">';
-                html += '<strong>Version:</strong> ' + formatVersion(v1);
-                html += ' <span class="version-tag">Release</span>';
-                html += ' | <strong>Date:</strong> ' + data1.timestamp;
-                html += ' | <strong>Commit:</strong> ' + (data1.commit || 'N/A').substring(0, 7);
+                html += '<strong>Date:</strong> ' + data.timestamp;
+                html += ' | <strong>Commit:</strong> ' + (data.commit || 'N/A').substring(0, 7);
+                html += ' | <strong>Ref:</strong> ' + (data.ref || 'N/A');
                 html += '</div>';
 
                 // Micro-benchmarks table
                 html += '<table><tr><th>Benchmark</th><th style="min-width:200px">Time</th>';
-                if (data2) html += '<th>vs ' + formatVersion(v2) + '</th>';
                 html += '<th>B/op</th><th>allocs/op</th></tr>';
 
-                data1.benchmarks.forEach(b => {
+                data.benchmarks.forEach(b => {
                     const barWidth = Math.max(2, (b.ns_per_op / maxNs) * 150);
 
                     html += '<tr><td>' + b.name + '</td>';
                     html += '<td><div class="bar-container"><div class="bar" style="width:' + barWidth + 'px"></div><span class="bar-label">' + formatNs(b.ns_per_op) + '</span></div></td>';
-
-                    if (data2) {
-                        const baseline = data2.benchmarks.find(x => x.name === b.name);
-                        if (baseline) {
-                            const pct = ((b.ns_per_op - baseline.ns_per_op) / baseline.ns_per_op * 100).toFixed(1);
-                            const cls = pct < -5 ? 'faster' : pct > 5 ? 'slower' : 'neutral';
-                            const sign = pct > 0 ? '+' : '';
-                            html += '<td class="' + cls + '">' + sign + pct + '%</td>';
-                        } else {
-                            html += '<td class="neutral">new</td>';
-                        }
-                    }
-
                     html += '<td>' + Number(b.bytes_per_op).toLocaleString() + '</td>';
                     html += '<td>' + b.allocs_per_op + '</td></tr>';
                 });
                 html += '</table>';
 
                 // Performance tests section (if available)
-                if (data1.performance_tests && data1.performance_tests.length > 0) {
+                if (data.performance_tests && data.performance_tests.length > 0) {
                     html += '<div class="perf-section">';
                     html += '<h3>🚀 Performance Tests</h3>';
                     html += '<table><tr><th>Test</th><th>Status</th><th>Throughput</th><th>P99 Latency</th><th>Errors</th></tr>';
 
-                    data1.performance_tests.forEach(t => {
+                    data.performance_tests.forEach(t => {
                         const statusClass = t.status === 'PASS' ? 'faster' : 'slower';
                         const statusIcon = t.status === 'PASS' ? '✅' : '❌';
                         html += '<tr>';
@@ -337,10 +197,10 @@
                     html += '</table></div>';
                 }
 
-                document.getElementById('comparison').innerHTML = html;
+                document.getElementById('results').innerHTML = html;
             } catch (error) {
-                document.getElementById('comparison').innerHTML =
-                    `<div class="error">Error loading comparison: ${error.message}</div>`;
+                document.getElementById('results').innerHTML =
+                    `<div class="error">Error loading benchmarks: ${error.message}</div>`;
             }
         }
 
