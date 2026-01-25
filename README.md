@@ -35,7 +35,7 @@ A Git-backed SQL database engine written in Go. Every transaction is a Git commi
 | **Bulk I/O** | COPY INTO for CSV import/export with custom delimiters |
 | **Version Control** | Branching, merging, snapshots, time-travel restore |
 | **Remote** | Push, pull, fetch with token/SSH/basic authentication |
-| **Performance** | Indexing, in-memory or file-based storage |
+| **Performance** | Low-level Git plumbing API, indexing, in-memory or file-based storage |
 | **Concurrency** | Thread-safe with RWMutex |
 | **Drivers** | Python, Go, TCP/JSON protocol |
 
@@ -771,39 +771,39 @@ go test -run Integration ./...
 
 ## Benchmarks
 
-Performance benchmarks run on Apple M1 Pro (v1.5.0):
+📊 **[View Live Benchmark Dashboard](https://nickyhof.github.io/CommitDB/)**
 
-### SQL Parsing (no I/O)
+The dashboard shows:
+- Latest benchmark results for all operations
+- Version comparison (compare any release or commit)
+- Historical performance trends
 
-| Benchmark | Time | Memory |
-|-----------|------|--------|
-| Simple SELECT | 184 ns | 336 B |
-| SELECT with WHERE | 282 ns | 389 B |
-| SELECT with ORDER BY | 310 ns | 365 B |
-| Complex SELECT | 587 ns | 528 B |
-| INSERT | 573 ns | 405 B |
-| UPDATE | 308 ns | 240 B |
-| DELETE | 219 ns | 176 B |
+Run benchmarks locally:
+```bash
+make bench          # Run Go benchmarks
+make bench-json     # Run and output JSON
+make perf           # Run performance tests
+```
 
-### Query Execution (1000 rows, in-memory)
+### Performance Highlights
 
-| Benchmark | Time | Throughput |
-|-----------|------|------------|
-| SELECT * | 2.5 ms | ~400 ops/sec |
-| SELECT with WHERE | 2.6 ms | ~385 ops/sec |
-| SELECT with ORDER BY | 3.3 ms | ~305 ops/sec |
-| SELECT with LIMIT | 2.4 ms | ~415 ops/sec |
-| COUNT(*) | 2.4 ms | ~415 ops/sec |
-| SUM/AVG/MIN/MAX | 2.5 ms | ~400 ops/sec |
-| DISTINCT | 2.5 ms | ~400 ops/sec |
-| INSERT | 11.2 ms | ~89 ops/sec |
-| UPDATE | 4.9 ms | ~205 ops/sec |
+| Operation | Typical Time | Notes |
+|-----------|-------------|-------|
+| SQL Parsing | 200-600 ns | No I/O |
+| INSERT | ~2.7 ms | 🚀 Fast with plumbing API |
+| UPDATE | ~0.7 ms | 🚀 Fast with plumbing API |
+| SELECT (1000 rows) | ~165 ms | Full table scan |
 
-### Lexer
+### Optimizations (v1.6.0+)
 
-| Benchmark | Time | Memory |
-|-----------|------|--------|
-| Tokenize complex query | 447 ns | 48 B |
+CommitDB uses a **Git Plumbing API** that bypasses high-level worktree operations:
+
+| Optimization | Description |
+|--------------|-------------|
+| Direct blob creation | Bypasses filesystem I/O |
+| Direct tree manipulation | Builds trees programmatically |
+| Direct commit creation | Skips worktree index |
+| Memory mode | No worktree sync overhead |
 
 ## Architecture
 
@@ -836,6 +836,13 @@ Performance benchmarks run on Apple M1 Pro (v1.5.0):
 ┌───────────────────────────▼─────────────────────────────────┐
 │                    ps/   Persistence Layer                  │
 │   Git-backed storage with go-git library                   │
+│   ┌─────────────────────────────────────────────────────┐  │
+│   │ plumbing.go - Low-level Git Object Manipulation     │  │
+│   │  • createBlob()      - Direct blob creation         │  │
+│   │  • updateTreePath()  - Direct tree building         │  │
+│   │  • createCommitDirect() - Bypasses worktree         │  │
+│   │  • ReadFileDirect()  - Read from Git tree           │  │
+│   └─────────────────────────────────────────────────────┘  │
 │   CRUD, branching, merging, snapshots, transactions        │
 └───────────────────────────┬─────────────────────────────────┘
                             │
@@ -843,6 +850,7 @@ Performance benchmarks run on Apple M1 Pro (v1.5.0):
 │                    Git Repository                           │
 │   Every transaction = Git commit                           │
 │   Tables stored as JSON files in directories               │
+│   Memory mode: git object store only (no worktree sync)    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -855,7 +863,32 @@ Performance benchmarks run on Apple M1 Pro (v1.5.0):
 | `db/` | Query execution engine, result types |
 | `op/` | Database/table operations wrapper (convenience methods) |
 | `ps/` | Git-backed persistence, branching, merging, remotes |
+| `ps/plumbing.go` | Low-level Git object manipulation (blobs, trees, commits) |
 | `cmd/cli/` | Interactive command-line interface |
 | `cmd/server/` | TCP server with JSON protocol |
 | `bindings/` | CGO bindings for embedded use |
 | `drivers/python/` | Python client library |
+
+### Git Plumbing API
+
+CommitDB uses a custom **plumbing layer** (`ps/plumbing.go`) that bypasses go-git's high-level worktree operations:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Traditional go-git Workflow (High-Level)                   │
+│                                                             │
+│  Write File → Stage File → Update Index → Create Commit    │
+│       ↓            ↓            ↓              ↓           │
+│   [I/O]       [I/O]       [I/O]          [I/O]             │
+└─────────────────────────────────────────────────────────────┘
+                            vs.
+┌─────────────────────────────────────────────────────────────┐
+│  CommitDB Plumbing API (Low-Level)                          │
+│                                                             │
+│  Create Blob → Update Tree → Create Commit                  │
+│       ↓            ↓              ↓                        │
+│   [Memory]     [Memory]      [Memory]                       │
+│                                                             │
+│  Result: ~10x faster writes for memory persistence          │
+└─────────────────────────────────────────────────────────────┘
+```

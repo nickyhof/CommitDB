@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>CommitDB Benchmarks</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+
+        h1 {
+            color: #1a1a2e;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .controls label {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .controls select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            min-width: 200px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .card h2 {
+            margin-top: 0;
+            color: #1a1a2e;
+            border-bottom: 2px solid #4361ee;
+            padding-bottom: 10px;
+        }
+
+        .meta {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+
+        .meta strong {
+            color: #333;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th,
+        td {
+            border: 1px solid #e0e0e0;
+            padding: 10px 12px;
+            text-align: left;
+        }
+
+        th {
+            background: #f5f7fa;
+            font-weight: 600;
+            color: #333;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .faster {
+            color: #10b981;
+            font-weight: 600;
+        }
+
+        .slower {
+            color: #ef4444;
+            font-weight: 600;
+        }
+
+        .neutral {
+            color: #666;
+        }
+
+        .version-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .version-tag.release {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .version-tag.commit {
+            background: #f3e8ff;
+            color: #7c3aed;
+        }
+
+        .bar-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .bar {
+            height: 16px;
+            background: linear-gradient(90deg, #4361ee, #7c3aed);
+            border-radius: 3px;
+            min-width: 2px;
+        }
+
+        .bar-label {
+            font-size: 12px;
+            color: #666;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>📊 CommitDB Benchmark Dashboard</h1>
+    <p class="subtitle">Track performance across releases and commits</p>
+
+    <div class="controls">
+        <div>
+            <label for="version1">Compare:</label>
+            <select id="version1" onchange="loadComparison()">
+                <option value="latest.json">Latest</option>
+            </select>
+        </div>
+        <div>
+            <label for="version2">Against:</label>
+            <select id="version2" onchange="loadComparison()">
+                <option value="">-- Select baseline --</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Benchmark Results</h2>
+        <div id="comparison"></div>
+    </div>
+
+    <script>
+        let allData = {};
+
+        function formatVersion(filename) {
+            if (filename === 'latest.json') return 'Latest';
+            if (filename.startsWith('v')) return filename.replace('.json', '');
+            if (filename.startsWith('commit_')) return filename.replace('commit_', '').replace('.json', '').substring(0, 7);
+            return filename.replace('.json', '');
+        }
+
+        function isRelease(filename) {
+            return filename.startsWith('v');
+        }
+
+        function formatNs(ns) {
+            if (ns >= 1e9) return (ns / 1e9).toFixed(2) + 's';
+            if (ns >= 1e6) return (ns / 1e6).toFixed(2) + 'ms';
+            if (ns >= 1e3) return (ns / 1e3).toFixed(2) + 'µs';
+            return ns.toFixed(0) + 'ns';
+        }
+
+        async function init() {
+            const indexRes = await fetch('benchmarks/index.json');
+            const index = await indexRes.json();
+
+            const select1 = document.getElementById('version1');
+            const select2 = document.getElementById('version2');
+
+            const releases = index.files.filter(f => f.startsWith('v')).sort().reverse();
+            const commits = index.files.filter(f => f.startsWith('commit_')).sort().reverse();
+
+            if (releases.length > 0) {
+                const optgroup1 = document.createElement('optgroup');
+                optgroup1.label = 'Releases';
+                releases.forEach(f => {
+                    const opt = document.createElement('option');
+                    opt.value = f; opt.textContent = formatVersion(f);
+                    optgroup1.appendChild(opt);
+                });
+                select1.appendChild(optgroup1.cloneNode(true));
+                select2.appendChild(optgroup1);
+            }
+
+            if (commits.length > 0) {
+                const optgroup2 = document.createElement('optgroup');
+                optgroup2.label = 'Commits';
+                commits.slice(0, 20).forEach(f => {
+                    const opt = document.createElement('option');
+                    opt.value = f; opt.textContent = formatVersion(f);
+                    optgroup2.appendChild(opt);
+                });
+                select1.appendChild(optgroup2.cloneNode(true));
+                select2.appendChild(optgroup2);
+            }
+
+            loadComparison();
+        }
+
+        async function loadBenchmark(filename) {
+            if (allData[filename]) return allData[filename];
+            const res = await fetch('benchmarks/' + filename);
+            allData[filename] = await res.json();
+            return allData[filename];
+        }
+
+        async function loadComparison() {
+            const v1 = document.getElementById('version1').value;
+            const v2 = document.getElementById('version2').value;
+
+            const data1 = await loadBenchmark(v1);
+            const data2 = v2 ? await loadBenchmark(v2) : null;
+
+            // Find max ns_per_op for bar scaling
+            const maxNs = Math.max(...data1.benchmarks.map(b => b.ns_per_op));
+
+            let html = '<div class="meta">';
+            html += '<strong>Version:</strong> ' + formatVersion(v1);
+            html += ' <span class="version-tag ' + (isRelease(v1) ? 'release' : 'commit') + '">' + (isRelease(v1) ? 'Release' : 'Commit') + '</span>';
+            html += ' | <strong>Date:</strong> ' + data1.timestamp;
+            html += ' | <strong>Commit:</strong> ' + data1.commit.substring(0, 7);
+            html += '</div>';
+
+            html += '<table><tr><th>Benchmark</th><th style="min-width:200px">Time</th>';
+            if (data2) html += '<th>vs ' + formatVersion(v2) + '</th>';
+            html += '<th>B/op</th><th>allocs/op</th></tr>';
+
+            data1.benchmarks.forEach(b => {
+                const barWidth = Math.max(2, (b.ns_per_op / maxNs) * 150);
+
+                html += '<tr><td>' + b.name + '</td>';
+                html += '<td><div class="bar-container"><div class="bar" style="width:' + barWidth + 'px"></div><span class="bar-label">' + formatNs(b.ns_per_op) + '</span></div></td>';
+
+                if (data2) {
+                    const baseline = data2.benchmarks.find(x => x.name === b.name);
+                    if (baseline) {
+                        const pct = ((b.ns_per_op - baseline.ns_per_op) / baseline.ns_per_op * 100).toFixed(1);
+                        const cls = pct < -5 ? 'faster' : pct > 5 ? 'slower' : 'neutral';
+                        const sign = pct > 0 ? '+' : '';
+                        html += '<td class="' + cls + '">' + sign + pct + '%</td>';
+                    } else {
+                        html += '<td class="neutral">new</td>';
+                    }
+                }
+
+                html += '<td>' + Number(b.bytes_per_op).toLocaleString() + '</td>';
+                html += '<td>' + b.allocs_per_op + '</td></tr>';
+            });
+            html += '</table>';
+
+            document.getElementById('comparison').innerHTML = html;
+        }
+
+        init();
+    </script>
+</body>
+
+</html>

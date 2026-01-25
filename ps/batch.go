@@ -2,11 +2,7 @@ package ps
 
 import (
 	"fmt"
-	"time"
 
-	"github.com/go-git/go-billy/v6/util"
-	"github.com/go-git/go-git/v6"
-	"github.com/go-git/go-git/v6/plumbing/object"
 	"github.com/nickyhof/CommitDB/core"
 )
 
@@ -79,7 +75,8 @@ func (tb *TransactionBuilder) AddDelete(database, table, key string) error {
 	return nil
 }
 
-// Commit applies all batched operations in a single git commit
+// Commit applies all batched operations in a single git commit using plumbing API
+// Uses batch tree update for efficient multi-operation commits
 func (tb *TransactionBuilder) Commit(identity core.Identity) (Transaction, error) {
 	if !tb.started {
 		return Transaction{}, fmt.Errorf("transaction not started")
@@ -89,54 +86,63 @@ func (tb *TransactionBuilder) Commit(identity core.Identity) (Transaction, error
 		return Transaction{}, fmt.Errorf("no operations to commit")
 	}
 
-	wt, err := tb.persistence.repo.Worktree()
+	// Acquire write lock for the entire commit operation
+	tb.persistence.mu.Lock()
+	defer tb.persistence.mu.Unlock()
+
+	// Get current tree
+	currentTree, err := tb.persistence.getCurrentTree()
 	if err != nil {
-		return Transaction{}, fmt.Errorf("failed to get worktree: %w", err)
+		return Transaction{}, err
 	}
 
-	// Apply all operations
+	// Build list of changes
+	changes := make([]TreeChange, 0, len(tb.operations))
 	for _, op := range tb.operations {
-		path := fmt.Sprintf("%s/%s/%s", op.Database, op.Table, op.Key)
+		opPath := fmt.Sprintf("%s/%s/%s", op.Database, op.Table, op.Key)
 
 		switch op.Type {
 		case WriteOp:
-			if err := util.WriteFile(wt.Filesystem, path, op.Data, 0o644); err != nil {
-				return Transaction{}, fmt.Errorf("failed to write %s: %w", path, err)
+			blobHash, err := tb.persistence.createBlob(op.Data)
+			if err != nil {
+				return Transaction{}, fmt.Errorf("failed to create blob for %s: %w", opPath, err)
 			}
-			if _, err := wt.Add(path); err != nil {
-				return Transaction{}, fmt.Errorf("failed to stage %s: %w", path, err)
-			}
+			changes = append(changes, TreeChange{
+				Path:     opPath,
+				BlobHash: blobHash,
+				IsDelete: false,
+			})
 		case DeleteOp:
-			wt.Remove(path)
+			changes = append(changes, TreeChange{
+				Path:     opPath,
+				IsDelete: true,
+			})
 		}
+	}
+
+	// Apply all changes in single tree operation
+	newTree, err := tb.persistence.batchUpdateTree(currentTree, changes)
+	if err != nil {
+		return Transaction{}, fmt.Errorf("failed to update tree: %w", err)
 	}
 
 	// Create single commit for all operations
 	message := fmt.Sprintf("Batch transaction: %d operation(s)", len(tb.operations))
-	commit, err := wt.Commit(message, &git.CommitOptions{
-		Author: &object.Signature{
-			Name:  identity.Name,
-			Email: identity.Email,
-			When:  time.Now(),
-		},
-	})
+	txn, err := tb.persistence.createCommitDirect(newTree, identity, message)
 	if err != nil {
 		return Transaction{}, fmt.Errorf("failed to commit: %w", err)
 	}
 
-	obj, err := tb.persistence.repo.CommitObject(commit)
-	if err != nil {
-		return Transaction{}, fmt.Errorf("failed to get commit object: %w", err)
+	// Sync worktree
+	if err := tb.persistence.syncWorktree(); err != nil {
+		return Transaction{}, fmt.Errorf("failed to sync worktree: %w", err)
 	}
 
 	// Mark transaction as completed
 	tb.started = false
 	tb.operations = nil
 
-	return Transaction{
-		Id:   obj.Hash.String(),
-		When: obj.Committer.When,
-	}, nil
+	return txn, nil
 }
 
 // Rollback discards all batched operations without committing

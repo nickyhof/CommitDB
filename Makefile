@@ -1,9 +1,12 @@
-.PHONY: build test lib lib-all clean
+.PHONY: all build test test-race test-cover bench bench-json perf soak lib lib-all clean run-server run-cli fmt lint vet deps help
 
 # Go parameters
 GOCMD=go
 GOBUILD=$(GOCMD) build
 GOTEST=$(GOCMD) test
+GORUN=$(GOCMD) run
+GOFMT=gofmt
+GOVET=$(GOCMD) vet
 
 # Output directories
 DIST=dist
@@ -20,21 +23,106 @@ ifeq ($(UNAME_S),Darwin)
 	LIB_NAME=libcommitdb.dylib
 endif
 
+# Default target
+all: build
+
+# Show help
+help:
+	@echo "CommitDB Makefile"
+	@echo ""
+	@echo "Usage: make [target]"
+	@echo ""
+	@echo "Build:"
+	@echo "  build          Build CLI and server binaries"
+	@echo "  lib            Build shared library for current platform"
+	@echo "  clean          Remove build artifacts"
+	@echo ""
+	@echo "Test:"
+	@echo "  test           Run all tests"
+	@echo "  test-race      Run tests with race detector"
+	@echo "  test-cover     Run tests with coverage report"
+	@echo "  bench          Run benchmarks"
+	@echo "  bench-json     Run benchmarks and output JSON"
+	@echo "  perf           Run performance tests"
+	@echo "  soak           Run soak test (long-running)"
+	@echo ""
+	@echo "Development:"
+	@echo "  run-server     Run the server (default port 3306)"
+	@echo "  run-cli        Run the CLI"
+	@echo "  fmt            Format code"
+	@echo "  vet            Run go vet"
+	@echo "  lint           Run all checks (fmt, vet)"
+	@echo "  deps           Download dependencies"
+	@echo ""
+
 # Build CLI and Server
 build:
+	@mkdir -p $(DIST)
 	$(GOBUILD) -o $(DIST)/commitdb-cli ./cmd/cli
 	$(GOBUILD) -o $(DIST)/commitdb-server ./cmd/server
+
+# Run server
+run-server:
+	$(GORUN) ./cmd/server
+
+# Run CLI
+run-cli:
+	$(GORUN) ./cmd/cli
 
 # Run tests
 test:
 	$(GOTEST) -v ./...
+
+# Run tests with race detector
+test-race:
+	$(GOTEST) -v -race ./...
+
+# Run tests with coverage
+test-cover:
+	$(GOTEST) -v -coverprofile=coverage.out ./...
+	$(GOCMD) tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report: coverage.html"
+
+# Run benchmarks only
+bench:
+	$(GOTEST) -bench=. -benchmem ./tests -run=^$$
+
+# Run benchmarks and output JSON
+bench-json:
+	./scripts/benchmark.sh benchmark_results.json
+
+# Run performance tests only
+perf:
+	$(GOTEST) -v -timeout=15m -tags=perf -run=^TestPerf ./tests
+
+# Run soak test (long-running)
+soak:
+	$(GOTEST) -v -timeout=30m -tags=perf -run=^TestPerfSustainedLoad ./tests
+
+# Format code
+fmt:
+	$(GOFMT) -s -w .
+
+# Run go vet
+vet:
+	$(GOVET) ./...
+
+# Run all checks
+lint: fmt vet
+
+# Download dependencies
+deps:
+	$(GOCMD) mod download
+	$(GOCMD) mod tidy
 
 # Build shared library for current platform
 lib:
 	@mkdir -p $(LIB)
 	CGO_ENABLED=1 $(GOBUILD) -buildmode=c-shared -o $(LIB)/$(LIB_NAME) ./bindings
 
-# Build shared libraries for multiple platforms
+# Build shared libraries for all platforms
+lib-all: lib-linux-amd64 lib-linux-arm64 lib-darwin-amd64 lib-darwin-arm64
+
 lib-linux-amd64:
 	@mkdir -p $(LIB)
 	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 $(GOBUILD) -buildmode=c-shared -o $(LIB)/libcommitdb-linux-amd64.so ./bindings
@@ -55,3 +143,5 @@ lib-darwin-arm64:
 clean:
 	rm -rf $(DIST) $(LIB)
 	rm -f commitdb-cli commitdb-server
+	rm -f coverage.out coverage.html
+	rm -f benchmark_results.json

@@ -6,7 +6,6 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/go-git/go-billy/v6/util"
 	"github.com/nickyhof/CommitDB/core"
 )
 
@@ -159,64 +158,75 @@ func (idx *Index) LookupRange(minValue, maxValue string) []string {
 	return results
 }
 
-// saveIndex persists an index to storage
+// saveIndex persists an index to storage using plumbing API
 func (im *IndexManager) saveIndex(idx *Index) error {
-	if err := im.persistence.ensureInitialized(); err != nil {
-		return err
-	}
-
-	wt, err := im.persistence.repo.Worktree()
-	if err != nil {
-		return fmt.Errorf("failed to get worktree: %w", err)
-	}
-
 	path := fmt.Sprintf("%s/%s.index.%s", idx.Database, idx.Table, idx.Column)
+
 	data, err := json.Marshal(idx)
 	if err != nil {
 		return fmt.Errorf("failed to marshal index: %w", err)
 	}
 
-	if err := util.WriteFile(wt.Filesystem, path, data, 0o644); err != nil {
-		return fmt.Errorf("failed to write index file: %w", err)
-	}
-
-	return nil
-}
-
-// deleteIndex removes an index from storage
-func (im *IndexManager) deleteIndex(idx *Index) error {
-	if err := im.persistence.ensureInitialized(); err != nil {
+	// Get current tree
+	currentTree, err := im.persistence.getCurrentTree()
+	if err != nil {
 		return err
 	}
 
-	wt, err := im.persistence.repo.Worktree()
+	// Create blob
+	blobHash, err := im.persistence.createBlob(data)
 	if err != nil {
-		return fmt.Errorf("failed to get worktree: %w", err)
+		return fmt.Errorf("failed to create blob: %w", err)
 	}
 
-	path := fmt.Sprintf("%s/%s.index.%s", idx.Database, idx.Table, idx.Column)
-	wt.Remove(path)
+	// Update tree
+	newTree, err := im.persistence.updateTreePath(currentTree, path, blobHash)
+	if err != nil {
+		return fmt.Errorf("failed to update tree: %w", err)
+	}
 
-	return nil
+	// Create commit (without worktree sync since this is internal)
+	_, err = im.persistence.createCommitDirect(newTree, core.Identity{Name: "system", Email: "system@commitdb"}, "Saving index")
+	if err != nil {
+		return err
+	}
+
+	return im.persistence.syncWorktree()
 }
 
-// LoadIndexes loads all indexes from storage for a table
+// deleteIndex removes an index from storage using plumbing API
+func (im *IndexManager) deleteIndex(idx *Index) error {
+	path := fmt.Sprintf("%s/%s.index.%s", idx.Database, idx.Table, idx.Column)
+
+	// Get current tree
+	currentTree, err := im.persistence.getCurrentTree()
+	if err != nil {
+		return err
+	}
+
+	// Delete from tree
+	newTree, err := im.persistence.deleteTreePath(currentTree, path)
+	if err != nil {
+		return fmt.Errorf("failed to delete from tree: %w", err)
+	}
+
+	// Create commit
+	_, err = im.persistence.createCommitDirect(newTree, core.Identity{Name: "system", Email: "system@commitdb"}, "Deleting index")
+	if err != nil {
+		return err
+	}
+
+	return im.persistence.syncWorktree()
+}
+
+// LoadIndexes loads all indexes from storage for a table using plumbing API
 func (im *IndexManager) LoadIndexes(database, table string, columns []core.Column) error {
 	im.mu.Lock()
 	defer im.mu.Unlock()
 
-	if err := im.persistence.ensureInitialized(); err != nil {
-		return err
-	}
-
-	wt, err := im.persistence.repo.Worktree()
-	if err != nil {
-		return fmt.Errorf("failed to get worktree: %w", err)
-	}
-
 	for _, col := range columns {
 		path := fmt.Sprintf("%s/%s.index.%s", database, table, col.Name)
-		data, err := util.ReadFile(wt.Filesystem, path)
+		data, err := im.persistence.ReadFileDirect(path)
 		if err != nil {
 			continue // Index doesn't exist
 		}

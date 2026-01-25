@@ -29,6 +29,58 @@ jobs:
       - name: Run tests
         run: go test -v ./...
 
+      - name: Run benchmarks
+        run: |
+          # Generate BENCHMARKS.md for release artifact
+          echo "# CommitDB Benchmarks - ${{ github.ref_name }}" > BENCHMARKS.md
+          echo "" >> BENCHMARKS.md
+          echo "Generated: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> BENCHMARKS.md
+          echo "" >> BENCHMARKS.md
+          echo "## Go Micro-benchmarks" >> BENCHMARKS.md
+          echo '```' >> BENCHMARKS.md
+          go test -bench=. -benchmem -run=^$ ./tests/ | tee -a BENCHMARKS.md
+          echo '```' >> BENCHMARKS.md
+          echo "" >> BENCHMARKS.md
+          echo "## Performance Tests" >> BENCHMARKS.md
+          echo '```' >> BENCHMARKS.md
+          COMMITDB_PERF_DURATION_SEC=5 COMMITDB_PERF_P99_MS=1000 go test -tags=perf -v -run='^TestPerf' ./tests/ -short -timeout=10m 2>&1 | grep -E '(RUN|PASS|FAIL|Performance|Clients|Duration|Requests|Throughput|Latency|Errors|─|├|└)' | tee -a BENCHMARKS.md
+          echo '```' >> BENCHMARKS.md
+          
+          # Also generate JSON for dashboard
+          chmod +x scripts/benchmark.sh
+          ./scripts/benchmark.sh benchmark_results.json
+
+      - name: Store benchmark results in gh-pages
+        run: |
+          # Checkout gh-pages branch
+          git fetch origin gh-pages:gh-pages || true
+          git worktree add gh-pages-wt gh-pages || mkdir -p gh-pages-wt/benchmarks
+          
+          # Store by release version (e.g., v1.0.0.json)
+          VERSION=${{ github.ref_name }}
+          cp benchmark_results.json "gh-pages-wt/benchmarks/${VERSION}.json"
+          cp benchmark_results.json "gh-pages-wt/benchmarks/latest.json"
+          
+          # Update index
+          cd gh-pages-wt/benchmarks
+          echo '{"files":[' > index.json
+          first=true
+          for f in *.json; do
+            [ "$f" = "index.json" ] && continue
+            [ "$f" = "latest.json" ] && continue
+            if [ "$first" = true ]; then first=false; else echo "," >> index.json; fi
+            echo "\"$f\"" >> index.json
+          done
+          echo ']}' >> index.json
+          
+          # Commit and push
+          cd ..
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Add benchmarks for release ${VERSION}" || echo "No changes to commit"
+          git push origin gh-pages || true
+
       - name: Build binaries
         run: |
           VERSION=${GITHUB_REF_NAME#v}
@@ -61,6 +113,7 @@ jobs:
           gh release create "${{ github.ref_name }}" \
             --title "${{ github.ref_name }}" \
             --notes-file release_notes.txt \
+            BENCHMARKS.md \
             dist/commitdb-cli-linux-amd64 \
             dist/commitdb-cli-linux-arm64 \
             dist/commitdb-cli-darwin-amd64 \
