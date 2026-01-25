@@ -514,6 +514,43 @@ class TestCommitDBLocal:
         assert result[0]['name'] == 'Item1'
         assert result[1]['name'] == 'Item2'
         assert result[2]['name'] == 'Item3'
+
+    def test_copy_into(self, db):
+        """Test COPY INTO for bulk CSV import/export."""
+        import tempfile
+        import os
+        
+        db.execute('CREATE DATABASE copy_test')
+        db.execute('CREATE TABLE copy_test.users (id INT PRIMARY KEY, name STRING, email STRING)')
+        
+        # Insert data
+        db.execute("INSERT INTO copy_test.users (id, name, email) VALUES (1, 'Alice', 'alice@test.com')")
+        db.execute("INSERT INTO copy_test.users (id, name, email) VALUES (2, 'Bob', 'bob@test.com')")
+        
+        # Export to CSV
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+            export_path = f.name
+        
+        try:
+            result = db.execute(f"COPY INTO '{export_path}' FROM copy_test.users")
+            assert result.records_written == 2
+            
+            # Verify file exists and has content
+            with open(export_path, 'r') as f:
+                content = f.read()
+            assert 'Alice' in content
+            assert 'id,name,email' in content
+            
+            # Create new table and import
+            db.execute('CREATE TABLE copy_test.imported (id INT PRIMARY KEY, name STRING, email STRING)')
+            result = db.execute(f"COPY INTO copy_test.imported FROM '{export_path}'")
+            assert result.records_written == 2
+            
+            # Verify imported data
+            result = db.query('SELECT * FROM copy_test.imported')
+            assert len(result) == 2
+        finally:
+            os.unlink(export_path)
         
     def test_merge(self, db):
         """Test MERGE SQL syntax."""

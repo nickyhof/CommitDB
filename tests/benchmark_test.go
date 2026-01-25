@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"fmt"
 	"strconv"
 	"testing"
 
@@ -240,6 +241,111 @@ func BenchmarkLexer(b *testing.B) {
 			if token.Type == sql.EOF {
 				break
 			}
+		}
+	}
+}
+
+// BenchmarkBulkInsert benchmarks bulk INSERT with VALUES list
+func BenchmarkBulkInsert(b *testing.B) {
+	engine := setupBenchmarkDB(b)
+	engine.Execute("CREATE TABLE bench.bulk_test (id INT PRIMARY KEY, name STRING, value INT)")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// Build a bulk insert with 100 values
+		values := ""
+		for j := 0; j < 100; j++ {
+			if j > 0 {
+				values += ", "
+			}
+			id := i*100 + j
+			values += fmt.Sprintf("(%d, 'Name%d', %d)", id, id, id*10)
+		}
+		_, err := engine.Execute("INSERT INTO bench.bulk_test (id, name, value) VALUES " + values)
+		if err != nil {
+			b.Fatalf("Bulk insert error: %v", err)
+		}
+	}
+}
+
+// BenchmarkCopyIntoExport benchmarks COPY INTO for CSV export
+func BenchmarkCopyIntoExport(b *testing.B) {
+	engine := setupBenchmarkDB(b)
+	exportPath := b.TempDir() + "/export_bench.csv"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := engine.Execute("COPY INTO '" + exportPath + "' FROM bench.users")
+		if err != nil {
+			b.Fatalf("Copy export error: %v", err)
+		}
+	}
+}
+
+// BenchmarkCopyIntoImport benchmarks COPY INTO for CSV import
+func BenchmarkCopyIntoImport(b *testing.B) {
+	engine := setupBenchmarkDB(b)
+
+	// Create export file first
+	exportPath := b.TempDir() + "/import_bench.csv"
+	_, err := engine.Execute("COPY INTO '" + exportPath + "' FROM bench.users")
+	if err != nil {
+		b.Fatalf("Setup export error: %v", err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// Create fresh table for each import
+		tableName := fmt.Sprintf("import_test_%d", i)
+		engine.Execute("CREATE TABLE bench." + tableName + " (id INT PRIMARY KEY, name STRING, age INT, city STRING)")
+
+		_, err := engine.Execute("COPY INTO bench." + tableName + " FROM '" + exportPath + "'")
+		if err != nil {
+			b.Fatalf("Copy import error: %v", err)
+		}
+	}
+}
+
+// BenchmarkGroupBy benchmarks GROUP BY with aggregates
+func BenchmarkGroupBy(b *testing.B) {
+	engine := setupBenchmarkDB(b)
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, err := engine.Execute("SELECT COUNT(*) FROM bench.users GROUP BY city")
+		if err != nil {
+			b.Fatalf("Execute error: %v", err)
+		}
+	}
+}
+
+// BenchmarkJoin benchmarks JOIN operations
+func BenchmarkJoin(b *testing.B) {
+	engine := setupBenchmarkDB(b)
+	// Create second table for join
+	engine.Execute("CREATE TABLE bench.orders (id INT PRIMARY KEY, user_id INT, amount INT)")
+	for i := 0; i < 100; i++ {
+		engine.Execute(fmt.Sprintf("INSERT INTO bench.orders (id, user_id, amount) VALUES (%d, %d, %d)", i, i%50, (i+1)*10))
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := engine.Execute("SELECT u.name, o.amount FROM bench.users u INNER JOIN bench.orders o ON u.id = o.user_id")
+		if err != nil {
+			b.Fatalf("Execute error: %v", err)
+		}
+	}
+}
+
+// BenchmarkStringFunctions benchmarks string function execution
+func BenchmarkStringFunctions(b *testing.B) {
+	engine := setupBenchmarkDB(b)
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, err := engine.Execute("SELECT UPPER(name), LOWER(city), LENGTH(name) FROM bench.users")
+		if err != nil {
+			b.Fatalf("Execute error: %v", err)
 		}
 	}
 }

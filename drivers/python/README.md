@@ -73,6 +73,10 @@ with CommitDB('localhost', 3306) as db:
     db.execute("CREATE TABLE mydb.docs (id INT PRIMARY KEY, data JSON)")
     db.execute("INSERT INTO mydb.docs (id, data) VALUES (1, '{\"name\":\"Alice\"}')")
     result = db.query("SELECT JSON_EXTRACT(data, '$.name') FROM mydb.docs")
+
+    # Bulk CSV import/export with COPY INTO
+    db.execute("COPY INTO '/tmp/users.csv' FROM mydb.users")              # Export
+    db.execute("COPY INTO mydb.users FROM '/tmp/users.csv'")              # Import
 ```
 
 ### Embedded Mode (no server required)

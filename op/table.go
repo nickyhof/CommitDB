@@ -110,3 +110,13 @@ func (op *TableOp) ScanWithFilter(filterExpr func(key string, value []byte) bool
 func (op *TableOp) Restore(asof ps.Transaction) error {
 	return op.Persistence.Restore(asof, &op.Table.Database, &op.Table.Name)
 }
+
+// CopyFrom copies all records from source table into this table in a single atomic transaction.
+// Memory-efficient: records are streamed row-by-row without loading all into Go memory.
+func (op *TableOp) CopyFrom(source *TableOp, identity core.Identity) (txn ps.Transaction, err error) {
+	return op.Persistence.CopyRecords(
+		source.Table.Database, source.Table.Name,
+		op.Table.Database, op.Table.Name,
+		identity,
+	)
+}

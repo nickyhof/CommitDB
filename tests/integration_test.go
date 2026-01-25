@@ -3,6 +3,7 @@ package tests
 import (
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/nickyhof/CommitDB"
@@ -757,6 +758,66 @@ func TestIntegrationBulkInsert(t *testing.T) {
 		cr = result.(db.CommitResult)
 		if cr.RecordsWritten != 1 {
 			t.Errorf("Expected 1 record written, got %d", cr.RecordsWritten)
+		}
+	})
+}
+
+// TestIntegrationCopyInto tests COPY INTO for bulk CSV import/export
+func TestIntegrationCopyInto(t *testing.T) {
+	runWithBothPersistence(t, func(t *testing.T, engine *db.Engine) {
+
+		engine.Execute("CREATE DATABASE copy_test")
+		engine.Execute("CREATE TABLE copy_test.users (id INT PRIMARY KEY, name STRING, email STRING)")
+
+		// Insert some data
+		engine.Execute("INSERT INTO copy_test.users (id, name, email) VALUES (1, 'Alice', 'alice@test.com')")
+		engine.Execute("INSERT INTO copy_test.users (id, name, email) VALUES (2, 'Bob', 'bob@test.com')")
+		engine.Execute("INSERT INTO copy_test.users (id, name, email) VALUES (3, 'Charlie', 'charlie@test.com')")
+
+		// Test export to CSV file
+		exportPath := t.TempDir() + "/export.csv"
+		result, err := engine.Execute("COPY INTO '" + exportPath + "' FROM copy_test.users")
+		if err != nil {
+			t.Fatalf("COPY INTO file failed: %v", err)
+		}
+		cr := result.(db.CommitResult)
+		if cr.RecordsWritten != 3 {
+			t.Errorf("Expected 3 records exported, got %d", cr.RecordsWritten)
+		}
+
+		// Verify CSV file exists and has content
+		content, err := os.ReadFile(exportPath)
+		if err != nil {
+			t.Fatalf("Failed to read exported file: %v", err)
+		}
+		if !strings.Contains(string(content), "Alice") {
+			t.Error("Exported CSV should contain 'Alice'")
+		}
+		if !strings.Contains(string(content), "id,name,email") {
+			t.Error("Exported CSV should contain header")
+		}
+
+		// Create a new table for import test
+		engine.Execute("CREATE TABLE copy_test.imported (id INT PRIMARY KEY, name STRING, email STRING)")
+
+		// Test import from CSV file
+		result, err = engine.Execute("COPY INTO copy_test.imported FROM '" + exportPath + "'")
+		if err != nil {
+			t.Fatalf("COPY INTO table failed: %v", err)
+		}
+		cr = result.(db.CommitResult)
+		if cr.RecordsWritten != 3 {
+			t.Errorf("Expected 3 records imported, got %d", cr.RecordsWritten)
+		}
+
+		// Verify imported data
+		result, err = engine.Execute("SELECT * FROM copy_test.imported")
+		if err != nil {
+			t.Fatalf("SELECT after import failed: %v", err)
+		}
+		qr := result.(db.QueryResult)
+		if len(qr.Data) != 3 {
+			t.Errorf("Expected 3 rows after import, got %d", len(qr.Data))
 		}
 	})
 }

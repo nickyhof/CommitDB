@@ -32,6 +32,7 @@ A Git-backed SQL database engine written in Go. Every transaction is a Git commi
 | **Queries** | WHERE, ORDER BY, LIMIT, OFFSET, DISTINCT, GROUP BY, HAVING |
 | **Aggregates** | SUM, AVG, MIN, MAX, COUNT |
 | **JOINs** | INNER, LEFT, RIGHT |
+| **Bulk I/O** | COPY INTO for CSV import/export with custom delimiters |
 | **Version Control** | Branching, merging, snapshots, time-travel restore |
 | **Remote** | Push, pull, fetch with token/SSH/basic authentication |
 | **Performance** | Indexing, in-memory or file-based storage |
@@ -424,6 +425,22 @@ SELECT JSON_KEYS(data) FROM mydb.documents;                        -- Returns 'a
 SELECT JSON_LENGTH(data) FROM mydb.documents;                      -- Returns '3'
 SELECT JSON_TYPE(data) FROM mydb.documents;                        -- Returns 'object'
 SELECT JSON_CONTAINS(data, 'Alice') FROM mydb.documents;           -- Returns '1' if found
+```
+
+### Bulk Import/Export (COPY INTO)
+
+```sql
+-- Export table to CSV file (with header)
+COPY INTO '/path/to/users.csv' FROM mydb.users;
+
+-- Export with options
+COPY INTO '/path/to/data.csv' FROM mydb.users WITH (HEADER = TRUE, DELIMITER = ',');
+
+-- Import CSV file into table (expects header by default)
+COPY INTO mydb.users FROM '/path/to/users.csv';
+
+-- Import with custom options
+COPY INTO mydb.users FROM '/path/to/data.tsv' WITH (HEADER = TRUE, DELIMITER = '\t');
 ```
 
 ### Functions Reference

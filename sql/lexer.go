@@ -134,6 +134,9 @@ const (
 	JsonKeys
 	JsonLength
 	JsonType
+	Copy
+	Header
+	Delimiter
 	EOF
 	Unknown
 )
@@ -631,6 +634,12 @@ func lookupIdentifier(id string) TokenType {
 		return JsonLength
 	case "JSON_TYPE":
 		return JsonType
+	case "COPY":
+		return Copy
+	case "HEADER":
+		return Header
+	case "DELIMITER":
+		return Delimiter
 	default:
 		return Identifier
 	}

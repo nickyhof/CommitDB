@@ -43,6 +43,7 @@ const (
 	PushStatementType
 	PullStatementType
 	FetchStatementType
+	CopyStatementType
 )
 
 type Statement interface {
@@ -215,6 +216,16 @@ type DescribeStatement struct {
 type ShowIndexesStatement struct {
 	Database string
 	Table    string
+}
+
+// CopyStatement for bulk data import/export
+type CopyStatement struct {
+	Direction string // "INTO_TABLE" or "INTO_FILE"
+	Database  string
+	Table     string
+	FilePath  string
+	Header    bool   // Include/expect header row
+	Delimiter string // Column delimiter (default ",")
 }
 
 // Branch statements
@@ -412,6 +423,10 @@ func (s FetchStatement) Type() StatementType {
 	return FetchStatementType
 }
 
+func (s CopyStatement) Type() StatementType {
+	return CopyStatementType
+}
+
 type Parser struct {
 	lexer *Lexer
 }
@@ -468,6 +483,8 @@ func (parser *Parser) Parse() (Statement, error) {
 		return ParsePull(parser)
 	case Fetch:
 		return ParseFetch(parser)
+	case Copy:
+		return ParseCopy(parser)
 	default:
 		return nil, errors.New("unknown statement type")
 	}
@@ -2163,4 +2180,132 @@ func parseAuth(parser *Parser) (*AuthConfig, error) {
 	default:
 		return nil, errors.New("expected TOKEN, SSH, or USER after WITH")
 	}
+}
+
+// ParseCopy parses COPY INTO commands for bulk data import/export
+// COPY INTO table FROM 'file.csv' [WITH (HEADER = TRUE, DELIMITER = ',')]
+// COPY INTO 'file.csv' FROM table [WITH (HEADER = TRUE)]
+func ParseCopy(parser *Parser) (Statement, error) {
+	stmt := CopyStatement{
+		Delimiter: ",",  // default delimiter
+		Header:    true, // default to having headers
+	}
+
+	// Expect INTO
+	token := parser.lexer.NextToken()
+	if token.Type != Into {
+		return nil, errors.New("expected INTO after COPY")
+	}
+
+	// Next token determines direction: identifier = INTO_TABLE, string = INTO_FILE
+	token = parser.lexer.NextToken()
+	if token.Type == String {
+		// COPY INTO 'file.csv' FROM table (export)
+		stmt.Direction = "INTO_FILE"
+		stmt.FilePath = token.Value
+
+		// Expect FROM
+		token = parser.lexer.NextToken()
+		if token.Type != From {
+			return nil, errors.New("expected FROM after file path")
+		}
+
+		// Expect table name (database.table)
+		token = parser.lexer.NextToken()
+		if token.Type == DatabaseIdentifier {
+			parts := strings.Split(token.Value, ".")
+			stmt.Database = parts[0]
+			stmt.Table = parts[1]
+		} else if token.Type == Identifier && strings.Contains(token.Value, ".") {
+			parts := strings.Split(token.Value, ".")
+			stmt.Database = parts[0]
+			stmt.Table = parts[1]
+		} else {
+			return nil, errors.New("expected database.table after FROM")
+		}
+
+	} else if token.Type == Identifier || token.Type == DatabaseIdentifier {
+		// COPY INTO table FROM 'file.csv' (import)
+		stmt.Direction = "INTO_TABLE"
+		if token.Type == DatabaseIdentifier {
+			parts := strings.Split(token.Value, ".")
+			stmt.Database = parts[0]
+			stmt.Table = parts[1]
+		} else if token.Type == Identifier && strings.Contains(token.Value, ".") {
+			parts := strings.Split(token.Value, ".")
+			stmt.Database = parts[0]
+			stmt.Table = parts[1]
+		} else {
+			return nil, errors.New("expected database.table after INTO")
+		}
+
+		// Expect FROM
+		token = parser.lexer.NextToken()
+		if token.Type != From {
+			return nil, errors.New("expected FROM after table name")
+		}
+
+		// Expect file path
+		token = parser.lexer.NextToken()
+		if token.Type != String {
+			return nil, errors.New("expected file path (string) after FROM")
+		}
+		stmt.FilePath = token.Value
+	} else {
+		return nil, errors.New("expected table name or file path after INTO")
+	}
+
+	// Optional: WITH (HEADER = TRUE, DELIMITER = ',')
+	token = parser.lexer.PeekToken()
+	if token.Type == With {
+		parser.lexer.NextToken() // consume WITH
+
+		// Expect opening paren
+		token = parser.lexer.NextToken()
+		if token.Type != ParenOpen {
+			return nil, errors.New("expected '(' after WITH")
+		}
+
+		// Parse options
+		for {
+			token = parser.lexer.NextToken()
+			switch token.Type {
+			case Header:
+				// HEADER = TRUE/FALSE
+				token = parser.lexer.NextToken()
+				if token.Type != Equals {
+					return nil, errors.New("expected '=' after HEADER")
+				}
+				token = parser.lexer.NextToken()
+				if token.Type == Identifier {
+					stmt.Header = (toUpper(token.Value) == "TRUE")
+				} else {
+					return nil, errors.New("expected TRUE or FALSE after HEADER =")
+				}
+			case Delimiter:
+				// DELIMITER = ','
+				token = parser.lexer.NextToken()
+				if token.Type != Equals {
+					return nil, errors.New("expected '=' after DELIMITER")
+				}
+				token = parser.lexer.NextToken()
+				if token.Type != String {
+					return nil, errors.New("expected string after DELIMITER =")
+				}
+				stmt.Delimiter = token.Value
+			default:
+				return nil, errors.New("expected HEADER or DELIMITER in WITH clause")
+			}
+
+			// Check for comma or closing paren
+			token = parser.lexer.NextToken()
+			if token.Type == ParenClose {
+				break
+			} else if token.Type != Comma {
+				return nil, errors.New("expected ',' or ')' in WITH clause")
+			}
+		}
+	}
+
+	return stmt, nil
 }

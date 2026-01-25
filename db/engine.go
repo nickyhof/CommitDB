@@ -1,9 +1,12 @@
 package db
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -99,6 +102,8 @@ func (engine *Engine) Execute(query string) (Result, error) {
 		return engine.executePullStatement(statement.(sql.PullStatement))
 	case sql.FetchStatementType:
 		return engine.executeFetchStatement(statement.(sql.FetchStatement))
+	case sql.CopyStatementType:
+		return engine.executeCopyStatement(statement.(sql.CopyStatement))
 	default:
 		return nil, fmt.Errorf("unsupported statement type: %v", statement.Type())
 	}
@@ -2066,4 +2071,214 @@ func convertAuthConfig(auth *sql.AuthConfig) *ps.RemoteAuth {
 	}
 
 	return nil
+}
+
+// executeCopyStatement handles COPY INTO for bulk CSV import/export
+func (engine *Engine) executeCopyStatement(statement sql.CopyStatement) (Result, error) {
+	startTime := time.Now()
+
+	if statement.Direction == "INTO_TABLE" {
+		// Import: Read CSV file into table
+		return engine.executeCopyIntoTable(statement, startTime)
+	} else if statement.Direction == "INTO_FILE" {
+		// Export: Write table to CSV file
+		return engine.executeCopyIntoFile(statement, startTime)
+	}
+
+	return nil, errors.New("invalid COPY direction")
+}
+
+// executeCopyIntoTable imports CSV data into a table
+func (engine *Engine) executeCopyIntoTable(statement sql.CopyStatement, startTime time.Time) (Result, error) {
+	// Open CSV file
+	file, err := os.Open(statement.FilePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %v", err)
+	}
+	defer file.Close()
+
+	// Create CSV reader
+	reader := csv.NewReader(file)
+	if len(statement.Delimiter) == 1 {
+		reader.Comma = rune(statement.Delimiter[0])
+	}
+
+	// Get table info
+	tableOp, err := op.GetTable(statement.Database, statement.Table, engine.Persistence)
+	if err != nil {
+		return nil, err
+	}
+
+	pk, err := tableOp.PrimaryKey()
+	if err != nil {
+		return nil, err
+	}
+
+	// Get column names from table
+	tableColumns := make([]string, len(tableOp.Table.Columns))
+	for i, col := range tableOp.Table.Columns {
+		tableColumns[i] = col.Name
+	}
+
+	// Determine columns from header or use table columns
+	var columnNames []string
+	if statement.Header {
+		// Read header row first
+		headerRow, err := reader.Read()
+		if err != nil {
+			if err == io.EOF {
+				return CommitResult{
+					RecordsWritten:   0,
+					ExecutionTimeSec: time.Since(startTime).Seconds(),
+				}, nil
+			}
+			return nil, fmt.Errorf("failed to read CSV header: %v", err)
+		}
+		columnNames = headerRow
+	} else {
+		columnNames = tableColumns
+	}
+
+	// Validate column count
+	if len(columnNames) != len(tableColumns) {
+		return nil, fmt.Errorf("CSV columns (%d) don't match table columns (%d)", len(columnNames), len(tableColumns))
+	}
+
+	// Create a staging table with unique name for disk-backed staging
+	stagingTableName := fmt.Sprintf("_staging_%s_%d", statement.Table, time.Now().UnixNano())
+	stagingTable := tableOp.Table
+	stagingTable.Name = stagingTableName
+
+	_, stagingOp, err := op.CreateTable(stagingTable, engine.Persistence, engine.Identity)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create staging table: %v", err)
+	}
+
+	// Ensure cleanup of staging table on exit
+	defer func() {
+		stagingOp.DropTable(engine.Identity)
+	}()
+
+	// Stream rows into staging table (disk-backed)
+	rowNum := 1
+	recordCount := 0
+	if statement.Header {
+		rowNum = 2 // Account for header row in error messages
+	}
+
+	for {
+		row, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to read row %d: %v", rowNum, err)
+		}
+
+		if len(row) != len(columnNames) {
+			return nil, fmt.Errorf("row %d has %d values, expected %d", rowNum, len(row), len(columnNames))
+		}
+
+		data := make(map[string]interface{})
+		for j, colName := range columnNames {
+			data[colName] = row[j]
+		}
+
+		pkValue := data[*pk].(string)
+		jsonData, err := json.Marshal(data)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal row %d: %v", rowNum, err)
+		}
+
+		// Insert into staging table (writes to disk)
+		_, err = stagingOp.Put(pkValue, jsonData, engine.Identity)
+		if err != nil {
+			return nil, fmt.Errorf("failed to stage row %d: %v", rowNum, err)
+		}
+
+		recordCount++
+		rowNum++
+	}
+
+	if recordCount == 0 {
+		return CommitResult{
+			RecordsWritten:   0,
+			ExecutionTimeSec: time.Since(startTime).Seconds(),
+		}, nil
+	}
+
+	// Copy from staging to final table in single atomic transaction (zero-memory)
+	txn, err := tableOp.CopyFrom(stagingOp, engine.Identity)
+	if err != nil {
+		return nil, fmt.Errorf("failed to copy records: %v", err)
+	}
+
+	return CommitResult{
+		Transaction:      txn,
+		RecordsWritten:   recordCount,
+		ExecutionTimeSec: time.Since(startTime).Seconds(),
+	}, nil
+}
+
+// executeCopyIntoFile exports table data to a CSV file
+func (engine *Engine) executeCopyIntoFile(statement sql.CopyStatement, startTime time.Time) (Result, error) {
+	// Create/open file for writing
+	file, err := os.Create(statement.FilePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create file: %v", err)
+	}
+	defer file.Close()
+
+	// Create CSV writer
+	writer := csv.NewWriter(file)
+	if len(statement.Delimiter) == 1 {
+		writer.Comma = rune(statement.Delimiter[0])
+	}
+	defer writer.Flush()
+
+	// Get table data
+	tableOp, err := op.GetTable(statement.Database, statement.Table, engine.Persistence)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get column names
+	columnNames := make([]string, len(tableOp.Table.Columns))
+	for i, col := range tableOp.Table.Columns {
+		columnNames[i] = col.Name
+	}
+
+	// Write header if requested
+	if statement.Header {
+		if err := writer.Write(columnNames); err != nil {
+			return nil, fmt.Errorf("failed to write header: %v", err)
+		}
+	}
+
+	// Scan all rows
+	recordsWritten := 0
+	for _, payload := range tableOp.Scan() {
+		var data map[string]interface{}
+		if err := json.Unmarshal(payload, &data); err != nil {
+			return nil, fmt.Errorf("failed to parse row: %v", err)
+		}
+
+		// Build row in column order
+		csvRow := make([]string, len(columnNames))
+		for i, colName := range columnNames {
+			if val, ok := data[colName]; ok {
+				csvRow[i] = fmt.Sprintf("%v", val)
+			}
+		}
+
+		if err := writer.Write(csvRow); err != nil {
+			return nil, fmt.Errorf("failed to write row: %v", err)
+		}
+		recordsWritten++
+	}
+
+	return CommitResult{
+		RecordsWritten:   recordsWritten,
+		ExecutionTimeSec: time.Since(startTime).Seconds(),
+	}, nil
 }

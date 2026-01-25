@@ -469,3 +469,60 @@ func (persistence *Persistence) Scan(database string, table string, filterExpr *
 		}
 	}
 }
+
+// CopyRecords copies all records from source table to destination table in a single atomic transaction.
+// This is memory-efficient: records are streamed row-by-row from source and written to dest without loading all into memory.
+func (persistence *Persistence) CopyRecords(srcDatabase, srcTable, dstDatabase, dstTable string, identity core.Identity) (txn Transaction, err error) {
+	if err := persistence.ensureInitialized(); err != nil {
+		return Transaction{}, err
+	}
+
+	wt, err := persistence.repo.Worktree()
+	if err != nil {
+		return Transaction{}, fmt.Errorf("failed to get worktree: %w", err)
+	}
+
+	// Iterate through source records and write each to destination
+	keys := persistence.ListRecordKeys(srcDatabase, srcTable)
+	if len(keys) == 0 {
+		return Transaction{}, nil // Nothing to copy
+	}
+
+	for _, key := range keys {
+		data, exists := persistence.GetRecord(srcDatabase, srcTable, key)
+		if !exists {
+			continue
+		}
+
+		// Write to destination table
+		dstPath := fmt.Sprintf("%s/%s/%s", dstDatabase, dstTable, key)
+		if err := util.WriteFile(wt.Filesystem, dstPath, data, 0o644); err != nil {
+			return Transaction{}, fmt.Errorf("failed to write record %s: %w", key, err)
+		}
+		if _, err := wt.Add(dstPath); err != nil {
+			return Transaction{}, fmt.Errorf("failed to stage record %s: %w", key, err)
+		}
+	}
+
+	// Commit all records in a single atomic transaction
+	commit, err := wt.Commit("Copying records", &git.CommitOptions{
+		Author: &object.Signature{
+			Name:  identity.Name,
+			Email: identity.Email,
+			When:  time.Now(),
+		},
+	})
+	if err != nil {
+		return Transaction{}, fmt.Errorf("failed to commit: %w", err)
+	}
+
+	obj, err := persistence.repo.CommitObject(commit)
+	if err != nil {
+		return Transaction{}, fmt.Errorf("failed to get commit object: %w", err)
+	}
+
+	return Transaction{
+		Id:   obj.Hash.String(),
+		When: obj.Committer.When,
+	}, nil
+}
