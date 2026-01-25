@@ -167,19 +167,16 @@ jobs:
         continue-on-error: true
 
       - name: Compare benchmarks
-        id: compare
         run: |
           chmod +x scripts/compare_benchmarks.sh
           ./scripts/compare_benchmarks.sh benchmark_results.json baseline.json 20 > comparison.md
-          echo "comparison<<EOF" >> $GITHUB_OUTPUT
-          cat comparison.md >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Comment on PR
         uses: actions/github-script@v7
         with:
           script: |
-            const comparison = `${{ steps.compare.outputs.comparison }}`;
+            const fs = require('fs');
+            const comparison = fs.readFileSync('comparison.md', 'utf8');
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
