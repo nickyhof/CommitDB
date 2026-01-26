@@ -226,6 +226,10 @@ type CopyStatement struct {
 	FilePath  string
 	Header    bool   // Include/expect header row
 	Delimiter string // Column delimiter (default ",")
+	// S3 configuration (optional)
+	S3AccessKey string
+	S3SecretKey string
+	S3Region    string
 }
 
 // Branch statements
@@ -2301,7 +2305,7 @@ func ParseCopy(parser *Parser) (Statement, error) {
 		return nil, errors.New("expected table name or file path after INTO")
 	}
 
-	// Optional: WITH (HEADER = TRUE, DELIMITER = ',')
+	// Optional: WITH (HEADER = TRUE, DELIMITER = ',', AWS_KEY = '...', ...)
 	token = parser.lexer.PeekToken()
 	if token.Type == With {
 		parser.lexer.NextToken() // consume WITH
@@ -2339,8 +2343,41 @@ func ParseCopy(parser *Parser) (Statement, error) {
 					return nil, errors.New("expected string after DELIMITER =")
 				}
 				stmt.Delimiter = token.Value
+			case AwsKey:
+				// AWS_KEY = '...'
+				token = parser.lexer.NextToken()
+				if token.Type != Equals {
+					return nil, errors.New("expected '=' after AWS_KEY")
+				}
+				token = parser.lexer.NextToken()
+				if token.Type != String {
+					return nil, errors.New("expected string after AWS_KEY =")
+				}
+				stmt.S3AccessKey = token.Value
+			case AwsSecret:
+				// AWS_SECRET = '...'
+				token = parser.lexer.NextToken()
+				if token.Type != Equals {
+					return nil, errors.New("expected '=' after AWS_SECRET")
+				}
+				token = parser.lexer.NextToken()
+				if token.Type != String {
+					return nil, errors.New("expected string after AWS_SECRET =")
+				}
+				stmt.S3SecretKey = token.Value
+			case AwsRegion:
+				// AWS_REGION = '...'
+				token = parser.lexer.NextToken()
+				if token.Type != Equals {
+					return nil, errors.New("expected '=' after AWS_REGION")
+				}
+				token = parser.lexer.NextToken()
+				if token.Type != String {
+					return nil, errors.New("expected string after AWS_REGION =")
+				}
+				stmt.S3Region = token.Value
 			default:
-				return nil, errors.New("expected HEADER or DELIMITER in WITH clause")
+				return nil, errors.New("expected HEADER, DELIMITER, AWS_KEY, AWS_SECRET, or AWS_REGION in WITH clause")
 			}
 
 			// Check for comma or closing paren

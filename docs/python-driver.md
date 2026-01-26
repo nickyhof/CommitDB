@@ -209,6 +209,31 @@ db.execute("PUSH WITH SSH KEY '/path/to/id_rsa'")
 db.execute("PULL FROM origin")
 ```
 
+## Bulk Import/Export (S3 & HTTPS)
+
+```python
+from commitdb import CommitDB
+
+with CommitDB('localhost', 3306) as db:
+    # Import from HTTPS URL
+    db.execute("COPY INTO mydb.users FROM 'https://example.com/data.csv'")
+    
+    # Import from S3 (uses AWS env vars)
+    db.execute("COPY INTO mydb.users FROM 's3://bucket/users.csv'")
+    
+    # Import from S3 with explicit credentials
+    db.execute("""
+        COPY INTO mydb.users FROM 's3://bucket/users.csv' WITH (
+            AWS_KEY = 'AKIAIOSFODNN7EXAMPLE',
+            AWS_SECRET = 'your-secret-key',
+            AWS_REGION = 'us-east-1'
+        )
+    """)
+    
+    # Export to S3
+    db.execute("COPY INTO 's3://bucket/export.csv' FROM mydb.users WITH (HEADER = TRUE)")
+```
+
 ## Error Handling
 
 ```python

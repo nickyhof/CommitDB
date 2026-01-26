@@ -190,14 +190,34 @@ SELECT JSON_KEYS(data) FROM mydb.documents;
 ## Bulk Import/Export
 
 ```sql
--- Export table to CSV
+-- Export table to CSV (local file)
 COPY INTO '/path/to/users.csv' FROM mydb.users;
 COPY INTO '/path/to/data.csv' FROM mydb.users WITH (HEADER = TRUE, DELIMITER = ',');
 
--- Import CSV into table
+-- Import CSV into table (local file)
 COPY INTO mydb.users FROM '/path/to/users.csv';
 COPY INTO mydb.users FROM '/path/to/data.tsv' WITH (HEADER = TRUE, DELIMITER = '\t');
+
+-- Import from HTTPS URL
+COPY INTO mydb.users FROM 'https://example.com/data.csv';
+
+-- Export to S3
+COPY INTO 's3://bucket/path/file.csv' FROM mydb.users;
+COPY INTO 's3://bucket/file.csv' FROM mydb.users WITH (AWS_REGION = 'us-east-1');
+
+-- Import from S3
+COPY INTO mydb.users FROM 's3://bucket/path/file.csv';
+COPY INTO mydb.users FROM 's3://bucket/file.csv' WITH (
+    AWS_KEY = 'AKIAIOSFODNN7EXAMPLE',
+    AWS_SECRET = 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+    AWS_REGION = 'us-east-1'
+);
 ```
+
+**S3 Authentication:**
+- Uses AWS environment variables by default (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`)
+- Or specify credentials via `WITH` clause (AWS_KEY, AWS_SECRET, AWS_REGION)
+- IAM roles work automatically on EC2/ECS/Lambda
 
 ## Transactions
 

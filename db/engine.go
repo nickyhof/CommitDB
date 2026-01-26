@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -2090,17 +2089,27 @@ func (engine *Engine) executeCopyStatement(statement sql.CopyStatement) (Result,
 
 // executeCopyIntoTable imports CSV data into a table
 func (engine *Engine) executeCopyIntoTable(statement sql.CopyStatement, startTime time.Time) (Result, error) {
-	// Open CSV file
-	file, err := os.Open(statement.FilePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open file: %v", err)
+	// Build S3 config if credentials provided
+	var cfg *s3Config
+	if statement.S3AccessKey != "" || statement.S3SecretKey != "" || statement.S3Region != "" {
+		cfg = &s3Config{
+			accessKey: statement.S3AccessKey,
+			secretKey: statement.S3SecretKey,
+			region:    statement.S3Region,
+		}
 	}
-	defer file.Close()
+
+	// Open file/URL using remote I/O
+	reader, err := openRemoteReader(statement.FilePath, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open source: %v", err)
+	}
+	defer reader.Close()
 
 	// Create CSV reader
-	reader := csv.NewReader(file)
+	csvReader := csv.NewReader(reader)
 	if len(statement.Delimiter) == 1 {
-		reader.Comma = rune(statement.Delimiter[0])
+		csvReader.Comma = rune(statement.Delimiter[0])
 	}
 
 	// Get table info
@@ -2124,7 +2133,7 @@ func (engine *Engine) executeCopyIntoTable(statement sql.CopyStatement, startTim
 	var columnNames []string
 	if statement.Header {
 		// Read header row first
-		headerRow, err := reader.Read()
+		headerRow, err := csvReader.Read()
 		if err != nil {
 			if err == io.EOF {
 				return CommitResult{
@@ -2167,7 +2176,7 @@ func (engine *Engine) executeCopyIntoTable(statement sql.CopyStatement, startTim
 	}
 
 	for {
-		row, err := reader.Read()
+		row, err := csvReader.Read()
 		if err == io.EOF {
 			break
 		}
@@ -2222,19 +2231,29 @@ func (engine *Engine) executeCopyIntoTable(statement sql.CopyStatement, startTim
 
 // executeCopyIntoFile exports table data to a CSV file
 func (engine *Engine) executeCopyIntoFile(statement sql.CopyStatement, startTime time.Time) (Result, error) {
-	// Create/open file for writing
-	file, err := os.Create(statement.FilePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create file: %v", err)
+	// Build S3 config if credentials provided
+	var cfg *s3Config
+	if statement.S3AccessKey != "" || statement.S3SecretKey != "" || statement.S3Region != "" {
+		cfg = &s3Config{
+			accessKey: statement.S3AccessKey,
+			secretKey: statement.S3SecretKey,
+			region:    statement.S3Region,
+		}
 	}
-	defer file.Close()
+
+	// Open file/URL for writing using remote I/O
+	writer, err := openRemoteWriter(statement.FilePath, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open destination: %v", err)
+	}
+	defer writer.Close()
 
 	// Create CSV writer
-	writer := csv.NewWriter(file)
+	csvWriter := csv.NewWriter(writer)
 	if len(statement.Delimiter) == 1 {
-		writer.Comma = rune(statement.Delimiter[0])
+		csvWriter.Comma = rune(statement.Delimiter[0])
 	}
-	defer writer.Flush()
+	defer csvWriter.Flush()
 
 	// Get table data
 	tableOp, err := op.GetTable(statement.Database, statement.Table, engine.Persistence)
@@ -2250,7 +2269,7 @@ func (engine *Engine) executeCopyIntoFile(statement sql.CopyStatement, startTime
 
 	// Write header if requested
 	if statement.Header {
-		if err := writer.Write(columnNames); err != nil {
+		if err := csvWriter.Write(columnNames); err != nil {
 			return nil, fmt.Errorf("failed to write header: %v", err)
 		}
 	}
@@ -2271,7 +2290,7 @@ func (engine *Engine) executeCopyIntoFile(statement sql.CopyStatement, startTime
 			}
 		}
 
-		if err := writer.Write(csvRow); err != nil {
+		if err := csvWriter.Write(csvRow); err != nil {
 			return nil, fmt.Errorf("failed to write row: %v", err)
 		}
 		recordsWritten++

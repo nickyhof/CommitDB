@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-01-25
+
+### Added
+
+#### S3 and HTTPS Support for COPY INTO
+- Import CSV files from HTTPS URLs: `COPY INTO table FROM 'https://...'`
+- Import/export CSV files from/to S3: `COPY INTO table FROM 's3://bucket/file.csv'`
+- S3 authentication via AWS environment variables or explicit credentials:
+  ```sql
+  COPY INTO mydb.users FROM 's3://bucket/file.csv' WITH (
+      AWS_KEY = '...', AWS_SECRET = '...', AWS_REGION = 'us-east-1'
+  )
+  ```
+
 ## [2.0.0] - 2026-01-25
 
 ### Added

@@ -137,6 +137,9 @@ const (
 	Copy
 	Header
 	Delimiter
+	AwsKey
+	AwsSecret
+	AwsRegion
 	EOF
 	Unknown
 )
@@ -640,6 +643,12 @@ func lookupIdentifier(id string) TokenType {
 		return Header
 	case "DELIMITER":
 		return Delimiter
+	case "AWS_KEY":
+		return AwsKey
+	case "AWS_SECRET":
+		return AwsSecret
+	case "AWS_REGION":
+		return AwsRegion
 	default:
 		return Identifier
 	}
