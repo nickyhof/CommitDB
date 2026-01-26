@@ -79,6 +79,9 @@ jobs:
           # Copy generated benchmark and performance reports
           cp benchmarks.md _site/benchmarks.md
           cp performance.md _site/performance.md
+          # Copy JSON for PR benchmark comparison
+          mkdir -p _site/benchmarks
+          cp benchmark_results.json _site/benchmarks/latest.json
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -131,7 +134,7 @@ jobs:
             dist/commitdb-server-windows-amd64.exe
 
   deploy-pages:
-    name: Deploy Dashboard
+    name: Deploy Docs
     runs-on: ubuntu-latest
     needs: release
     permissions:

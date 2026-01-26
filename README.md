@@ -51,4 +51,4 @@ print(result.rows)
 
 ## License
 
-MIT
+Apache 2.0

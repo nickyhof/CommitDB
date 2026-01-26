@@ -5,6 +5,8 @@
 
 Python client for CommitDB - a Git-backed SQL database engine. Use CommitDB from Python applications with full support for branching, merging, and remote sync.
 
+**[📚 Full Documentation](https://nickyhof.github.io/CommitDB/python-driver/)**
+
 **Two modes:**
 - **Remote mode** (`CommitDB`) - Connect to a CommitDB server over TCP
 - **Embedded mode** (`CommitDBLocal`) - Run the database directly in-process

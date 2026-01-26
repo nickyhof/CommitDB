@@ -2,15 +2,11 @@
 
 A Git-backed SQL database engine written in Go. Every transaction is a Git commit, providing built-in version control, complete history, branching, and the ability to restore to any point in time.
 
-<div class="grid cards" markdown>
-
-- :material-source-branch: **Version Control** – Every change is tracked, nothing is lost
-- :material-merge: **Git Branching** – Experiment in branches, merge when ready
-- :material-history: **Time Travel** – Restore any table to any previous state
-- :material-cloud-sync: **Remote Sync** – Push/pull to GitHub, GitLab, or any Git remote
-- :fontawesome-brands-python: **Python Support** – Native driver for Python applications
-
-</div>
+- 🔄 **Version Control** – Every change is tracked, nothing is lost
+- 🌿 **Git Branching** – Experiment in branches, merge when ready  
+- ⏪ **Time Travel** – Restore any table to any previous state
+- 🔗 **Remote Sync** – Push/pull to GitHub, GitLab, or any Git remote
+- 🐍 **Python Support** – Native driver for Python applications
 
 ## Quick Start
 
