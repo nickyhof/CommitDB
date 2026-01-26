@@ -45,35 +45,40 @@ jobs:
           VERSION=${{ github.ref_name }}
           
           # Generate JSON for dashboard
-          chmod +x scripts/benchmark.sh
+          chmod +x scripts/run_benchmarks.sh
           # Pass 'cached' to use already-captured output
-          ./scripts/benchmark.sh benchmark_results.json cached
+          ./scripts/run_benchmarks.sh benchmark_results.json cached
           
-          # Generate BENCHMARKS.md (summary)
-          echo "# CommitDB Benchmarks - ${VERSION}" > BENCHMARKS.md
-          echo "" >> BENCHMARKS.md
-          echo "Generated: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> BENCHMARKS.md
-          echo "" >> BENCHMARKS.md
-          echo "## Go Micro-benchmarks" >> BENCHMARKS.md
-          echo '```' >> BENCHMARKS.md
-          cat /tmp/bench_raw.txt >> BENCHMARKS.md
-          echo '```' >> BENCHMARKS.md
+          # Generate benchmarks.md (summary)
+          echo "# CommitDB Benchmarks - ${VERSION}" > benchmarks.md
+          echo "" >> benchmarks.md
+          echo "Generated: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> benchmarks.md
+          echo "" >> benchmarks.md
+          echo "## Go Micro-benchmarks" >> benchmarks.md
+          echo '```' >> benchmarks.md
+          cat /tmp/bench_raw.txt >> benchmarks.md
+          echo '```' >> benchmarks.md
           
-          # Generate PERFORMANCE.md (detailed)
+          # Generate performance.md (detailed)
           chmod +x scripts/generate_performance_report.sh
-          ./scripts/generate_performance_report.sh PERFORMANCE.md ${VERSION} cached
+          ./scripts/generate_performance_report.sh performance.md ${VERSION} cached
 
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
+      - name: Set up Python for MkDocs
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-      - name: Prepare Pages artifact
+      - name: Install MkDocs
+        run: pip install mkdocs-material
+
+      - name: Build documentation
+        run: mkdocs build --site-dir _site
+
+      - name: Add generated reports to site
         run: |
-          mkdir -p _site/benchmarks
-          cp scripts/benchmark_dashboard.html _site/index.html
-          
-          # Add current release benchmark
-          VERSION=${{ github.ref_name }}
-          cp benchmark_results.json "_site/benchmarks/latest.json"
+          # Copy generated benchmark and performance reports
+          cp benchmarks.md _site/benchmarks.md
+          cp performance.md _site/performance.md
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -112,8 +117,8 @@ jobs:
           gh release create "${{ github.ref_name }}" \
             --title "${{ github.ref_name }}" \
             --notes-file release_notes.txt \
-            BENCHMARKS.md \
-            PERFORMANCE.md \
+            benchmarks.md \
+            performance.md \
             dist/commitdb-cli-linux-amd64 \
             dist/commitdb-cli-linux-arm64 \
             dist/commitdb-cli-darwin-amd64 \

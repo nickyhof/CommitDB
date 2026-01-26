@@ -1,0 +1,67 @@
+site_name: CommitDB
+site_description: A Git-backed SQL database engine
+site_url: https://nickyhof.github.io/CommitDB
+repo_url: https://github.com/nickyhof/CommitDB
+repo_name: nickyhof/CommitDB
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+  icon:
+    repo: fontawesome/brands/github
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: installation.md
+    - Quick Start: quickstart.md
+  - SQL Reference: sql-reference.md
+  - Version Control:
+    - Branching & Merging: branching.md
+    - Remote Operations: remote-operations.md
+  - Drivers:
+    - Python Driver: python-driver.md
+    - Go API: go-api.md
+  - Performance:
+    - Benchmarks: benchmarks.md
+  - Architecture: architecture.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - tables
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/nickyhof/CommitDB

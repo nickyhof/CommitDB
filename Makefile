@@ -43,9 +43,9 @@ help:
 	@echo "  test-cover     Run tests with coverage report"
 	@echo "  bench          Run benchmarks"
 	@echo "  bench-json     Run benchmarks and output JSON"
-	@echo "  bench-report   Generate BENCHMARKS.md report"
+	@echo "  bench-report   Generate benchmarks.md report"
 	@echo "  perf           Run performance tests"
-	@echo "  perf-report    Generate PERFORMANCE.md report"
+	@echo "  perf-report    Generate performance.md report"
 	@echo "  soak           Run soak test (long-running)"
 	@echo ""
 	@echo "Development:"
@@ -91,20 +91,20 @@ bench:
 
 # Run benchmarks and output JSON
 bench-json:
-	chmod +x scripts/benchmark.sh
-	./scripts/benchmark.sh benchmark_results.json
+	chmod +x scripts/run_benchmarks.sh
+	./scripts/run_benchmarks.sh benchmark_results.json
 
-# Generate benchmark report (BENCHMARKS.md)
+# Generate benchmark report (benchmarks.md)
 bench-report:
-	@echo "# CommitDB Benchmarks" > BENCHMARKS.md
-	@echo "" >> BENCHMARKS.md
-	@echo "Generated: $$(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> BENCHMARKS.md
-	@echo "" >> BENCHMARKS.md
-	@echo "## Go Micro-benchmarks" >> BENCHMARKS.md
-	@echo '```' >> BENCHMARKS.md
-	$(GOTEST) -bench=. -benchmem ./tests -run=^$$ >> BENCHMARKS.md
-	@echo '```' >> BENCHMARKS.md
-	@echo "Benchmark report saved to BENCHMARKS.md"
+	@echo "# CommitDB Benchmarks" > benchmarks.md
+	@echo "" >> benchmarks.md
+	@echo "Generated: $$(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> benchmarks.md
+	@echo "" >> benchmarks.md
+	@echo "## Go Micro-benchmarks" >> benchmarks.md
+	@echo '```' >> benchmarks.md
+	$(GOTEST) -bench=. -benchmem ./tests -run=^$$ >> benchmarks.md
+	@echo '```' >> benchmarks.md
+	@echo "Benchmark report saved to benchmarks.md"
 
 # Run performance tests only
 perf:
@@ -113,7 +113,7 @@ perf:
 # Generate performance report
 perf-report:
 	chmod +x scripts/generate_performance_report.sh
-	./scripts/generate_performance_report.sh PERFORMANCE.md
+	./scripts/generate_performance_report.sh performance.md
 
 # Run soak test (long-running)
 soak:

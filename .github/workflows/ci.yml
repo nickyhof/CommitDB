@@ -80,12 +80,12 @@ jobs:
 
       - name: Run benchmarks
         run: |
-          chmod +x scripts/benchmark.sh
-          ./scripts/benchmark.sh benchmark_results.json
+          chmod +x scripts/run_benchmarks.sh
+          ./scripts/run_benchmarks.sh benchmark_results.json
 
       - name: Fetch baseline from gh-pages
         run: |
-          curl -sL "https://raw.githubusercontent.com/${{ github.repository }}/gh-pages/benchmarks/latest.json" -o baseline.json || echo '{}' > baseline.json
+          curl -sL "https://nickyhof.github.io/CommitDB/benchmarks/latest.json" -o baseline.json || echo '{}' > baseline.json
         continue-on-error: true
 
       - name: Compare benchmarks

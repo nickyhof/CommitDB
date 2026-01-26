@@ -2,7 +2,7 @@
 # scripts/generate_performance_report.sh - Generate PERFORMANCE.md from test results
 set -e
 
-OUTPUT_FILE="${1:-PERFORMANCE.md}"
+OUTPUT_FILE="${1:-performance.md}"
 VERSION="${2:-$(git describe --tags --always)}"
 MODE="${3:-run}"  # 'run' = run tests, 'cached' = use /tmp/perf_raw.txt
 

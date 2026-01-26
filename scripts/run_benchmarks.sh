@@ -1,5 +1,5 @@
 #!/bin/bash
-# scripts/benchmark.sh - Run benchmarks and output JSON results
+# scripts/run_benchmarks.sh - Run benchmarks and output JSON results
 set -e
 
 OUTPUT_FILE="${1:-benchmark_results.json}"
