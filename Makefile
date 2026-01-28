@@ -89,6 +89,10 @@ test-cover:
 bench:
 	$(GOTEST) -bench=. -benchmem ./tests -run=^$$
 
+# Run comparative benchmarks (CommitDB vs DuckDB)
+bench-compare:
+	$(GOTEST) -v -tags=comparative -bench=. -benchmem ./tests -run=^$$
+
 # Run benchmarks and output JSON
 bench-json:
 	chmod +x scripts/run_benchmarks.sh
