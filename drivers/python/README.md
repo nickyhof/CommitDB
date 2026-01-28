@@ -43,6 +43,31 @@ with CommitDBLocal('/path/to/data') as db:  # File-based (persistent)
     db.execute('CREATE DATABASE mydb')
 ```
 
+### Ibis Mode (pandas DataFrame support)
+
+```bash
+pip install commitdb[ibis]
+```
+
+```python
+import ibis
+
+con = ibis.commitdb.connect('localhost', 3306, database='mydb')
+
+# Or use URL-based connection:
+con = ibis.connect('commitdb://localhost:3306/mydb')
+
+# Query with Ibis expressions
+users = con.table('users')
+result = users.filter(users.age > 30).select('name', 'city').execute()  # → pandas DataFrame
+print(result)
+
+# Insert from DataFrame
+import pandas as pd
+df = pd.DataFrame({'id': [1, 2], 'name': ['Alice', 'Bob']})
+con.insert('users', df)
+```
+
 ---
 
 ## API Reference
