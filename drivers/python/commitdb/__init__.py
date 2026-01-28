@@ -30,7 +30,14 @@ Embedded mode (requires libcommitdb):
         db.execute('CREATE DATABASE mydb')
 """
 
+from importlib.metadata import version, PackageNotFoundError
+
 from .client import CommitDB, CommitDBLocal, QueryResult, CommitResult, CommitDBError
 
-__version__ = '0.1.0'
-__all__ = ['CommitDB', 'CommitDBLocal', 'QueryResult', 'CommitResult', 'CommitDBError']
+try:
+    __version__ = version("commitdb")
+except PackageNotFoundError:
+    __version__ = "0.0.0"  # Fallback for development/editable installs
+
+__all__ = ['CommitDB', 'CommitDBLocal', 'QueryResult', 'CommitResult', 'CommitDBError', '__version__']
+

@@ -29,6 +29,8 @@ import ibis.expr.types as ir
 from ibis.backends.sql import SQLBackend
 from ibis.backends.sql.compilers import SQLiteCompiler
 
+from . import __version__
+
 from .client import CommitDB as CommitDBClient, CommitDBError
 
 if TYPE_CHECKING:
@@ -156,8 +158,8 @@ class Backend(SQLBackend):
     
     @property
     def version(self) -> str:
-        """Return CommitDB version."""
-        return "2.0.0"  # TODO: Get from server
+        """Return CommitDB Python driver version."""
+        return __version__
     
     @property
     def current_database(self) -> str | None:
