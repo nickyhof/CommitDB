@@ -21,12 +21,12 @@ type Result interface {
 }
 
 type QueryResult struct {
-	Transaction      ps.Transaction
-	Columns          []string
-	Data             [][]string
-	RecordsRead      int
-	ExecutionTimeSec float64
-	ExecutionOps     int
+	Transaction     ps.Transaction
+	Columns         []string
+	Data            [][]string
+	RecordsRead     int
+	ExecutionTimeMs float64
+	ExecutionOps    int
 }
 
 type CommitResult struct {
@@ -38,7 +38,7 @@ type CommitResult struct {
 	TablesAltered    int
 	RecordsWritten   int
 	RecordsDeleted   int
-	ExecutionTimeSec float64
+	ExecutionTimeMs  float64
 	ExecutionOps     int
 }
 
@@ -78,11 +78,11 @@ func formatDuration(secs float64) string {
 }
 
 func (result QueryResult) ExecutionTime() string {
-	return formatDuration(result.ExecutionTimeSec)
+	return formatDuration(result.ExecutionTimeMs / 1000)
 }
 
 func (result CommitResult) ExecutionTime() string {
-	return formatDuration(result.ExecutionTimeSec)
+	return formatDuration(result.ExecutionTimeMs / 1000)
 }
 
 func (result QueryResult) Display() {
@@ -96,8 +96,8 @@ func (result QueryResult) Display() {
 
 	// Calculate throughput
 	var throughputStr string
-	if result.ExecutionTimeSec > 0 && result.ExecutionOps > 0 {
-		ops := float64(result.ExecutionOps) / result.ExecutionTimeSec
+	if result.ExecutionTimeMs > 0 && result.ExecutionOps > 0 {
+		ops := float64(result.ExecutionOps) / (result.ExecutionTimeMs / 1000)
 		if ops >= 1000000 {
 			throughputStr = fmt.Sprintf(", %.1fM ops/s", ops/1000000)
 		} else if ops >= 1000 {
@@ -138,8 +138,8 @@ func (result CommitResult) Display() {
 
 	// Calculate throughput
 	var throughputStr string
-	if result.ExecutionTimeSec > 0 && result.ExecutionOps > 0 {
-		ops := float64(result.ExecutionOps) / result.ExecutionTimeSec
+	if result.ExecutionTimeMs > 0 && result.ExecutionOps > 0 {
+		ops := float64(result.ExecutionOps) / (result.ExecutionTimeMs / 1000)
 		if ops >= 1000000 {
 			throughputStr = fmt.Sprintf(", %.1fM ops/s", ops/1000000)
 		} else if ops >= 1000 {

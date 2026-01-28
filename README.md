@@ -25,6 +25,7 @@ If you've ever wished your database worked like Git, CommitDB is for you.
 - 🌿 **Git branching** - Experiment in branches, merge when ready
 - ⏪ **Time travel** - Restore any table to any previous state
 - 🔗 **Remote sync** - Push/pull to GitHub, GitLab, or any Git remote
+- 📡 **Shared databases** - Query and JOIN across external repositories
 - 🐍 **Python support** - Native driver for Python applications
 
 ## Quick Start
@@ -77,6 +78,7 @@ If you need sub-millisecond analytics, use DuckDB. If you need version control f
 - [Installation](https://nickyhof.github.io/CommitDB/installation/)
 - [SQL Reference](https://nickyhof.github.io/CommitDB/sql-reference/)
 - [Branching & Merging](https://nickyhof.github.io/CommitDB/branching/)
+- [Shared Databases](https://nickyhof.github.io/CommitDB/shared-databases/)
 - [Python Driver](https://nickyhof.github.io/CommitDB/python-driver/)
 - [Go API](https://nickyhof.github.io/CommitDB/go-api/)
 - [Benchmarks](https://nickyhof.github.io/CommitDB/benchmarks/)

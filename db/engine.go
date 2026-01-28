@@ -103,6 +103,14 @@ func (engine *Engine) Execute(query string) (Result, error) {
 		return engine.executeFetchStatement(statement.(sql.FetchStatement))
 	case sql.CopyStatementType:
 		return engine.executeCopyStatement(statement.(sql.CopyStatement))
+	case sql.CreateShareStatementType:
+		return engine.executeCreateShareStatement(statement.(sql.CreateShareStatement))
+	case sql.SyncShareStatementType:
+		return engine.executeSyncShareStatement(statement.(sql.SyncShareStatement))
+	case sql.DropShareStatementType:
+		return engine.executeDropShareStatement(statement.(sql.DropShareStatement))
+	case sql.ShowSharesStatementType:
+		return engine.executeShowSharesStatement()
 	default:
 		return nil, fmt.Errorf("unsupported statement type: %v", statement.Type())
 	}
@@ -112,7 +120,17 @@ func (engine *Engine) executeSelectStatement(statement sql.SelectStatement) (Que
 	startTime := time.Now()
 	rowsScanned := 0
 
-	tableOp, err := op.GetTable(statement.Database, statement.Table, engine.Persistence)
+	// Determine which persistence to use - share or local
+	persistence := engine.Persistence
+	if statement.Share != "" {
+		sharePersistence, err := engine.Persistence.OpenSharePersistence(statement.Share)
+		if err != nil {
+			return QueryResult{}, fmt.Errorf("failed to access share '%s': %w", statement.Share, err)
+		}
+		persistence = sharePersistence
+	}
+
+	tableOp, err := op.GetTable(statement.Database, statement.Table, persistence)
 	if err != nil {
 		return QueryResult{}, err
 	}
@@ -143,8 +161,25 @@ func (engine *Engine) executeSelectStatement(statement sql.SelectStatement) (Que
 
 	// Execute JOINs
 	for _, join := range statement.Joins {
-		joinTableOp, err := op.GetTable(join.Database, join.Table, engine.Persistence)
+		var joinTableOp *op.TableOp
+		var err error
+
+		// Check if this is a share table (3-level naming)
+		if join.Share != "" {
+			// Open share persistence
+			sharePersistence, shareErr := engine.Persistence.OpenSharePersistence(join.Share)
+			if shareErr != nil {
+				return QueryResult{}, fmt.Errorf("failed to open share '%s' for join: %w", join.Share, shareErr)
+			}
+			joinTableOp, err = op.GetTable(join.Database, join.Table, sharePersistence)
+		} else {
+			joinTableOp, err = op.GetTable(join.Database, join.Table, engine.Persistence)
+		}
+
 		if err != nil {
+			if join.Share != "" {
+				return QueryResult{}, fmt.Errorf("join table not found: %s.%s.%s", join.Share, join.Database, join.Table)
+			}
 			return QueryResult{}, fmt.Errorf("join table not found: %s.%s", join.Database, join.Table)
 		}
 
@@ -199,7 +234,7 @@ func (engine *Engine) executeSelectStatement(statement sql.SelectStatement) (Que
 			Columns:          []string{"COUNT(*)"},
 			Data:             countResult,
 			RecordsRead:      len(results),
-			ExecutionTimeSec: time.Since(startTime).Seconds(),
+			ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 			ExecutionOps:     rowsScanned,
 		}, nil
 	}
@@ -242,7 +277,7 @@ func (engine *Engine) executeSelectStatement(statement sql.SelectStatement) (Que
 		Columns:          columns,
 		Data:             outputData,
 		RecordsRead:      len(outputData),
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:     rowsScanned,
 	}, nil
 }
@@ -307,7 +342,7 @@ func executeAggregates(results []map[string]string, statement sql.SelectStatemen
 		Columns:          outputColumns,
 		Data:             outputData,
 		RecordsRead:      len(results),
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:     opCount,
 	}, nil
 }
@@ -448,7 +483,7 @@ func executeStringFunctions(results []map[string]string, statement sql.SelectSta
 		Columns:          outputColumns,
 		Data:             outputData,
 		RecordsRead:      len(outputData),
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:     opCount,
 	}, nil
 }
@@ -1155,7 +1190,7 @@ func (engine *Engine) executeInsertStatement(statement sql.InsertStatement) (Com
 		TablesDeleted:    0,
 		RecordsWritten:   recordsWritten,
 		RecordsDeleted:   0,
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:     recordsWritten,
 	}, nil
 }
@@ -1231,7 +1266,7 @@ func (engine *Engine) executeUpdateStatement(statement sql.UpdateStatement) (Com
 			TablesDeleted:    0,
 			RecordsWritten:   1,
 			RecordsDeleted:   0,
-			ExecutionTimeSec: time.Since(startTime).Seconds(),
+			ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 			ExecutionOps:     1, // 1 record updated
 		}, nil
 	} else {
@@ -1276,7 +1311,7 @@ func (engine *Engine) executeDeleteStatement(statement sql.DeleteStatement) (Com
 			TablesDeleted:    0,
 			RecordsWritten:   0,
 			RecordsDeleted:   1,
-			ExecutionTimeSec: time.Since(startTime).Seconds(),
+			ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 			ExecutionOps:     1, // 1 record updated
 		}, nil
 	} else {
@@ -1305,7 +1340,7 @@ func (engine *Engine) executeCreateTableStatement(statement sql.CreateTableState
 		TablesDeleted:    0,
 		RecordsWritten:   0,
 		RecordsDeleted:   0,
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:     opCount,
 	}, nil
 }
@@ -1333,7 +1368,7 @@ func (engine *Engine) executeDropTableStatement(statement sql.DropTableStatement
 		TablesDeleted:    1,
 		RecordsWritten:   0,
 		RecordsDeleted:   0,
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:     opCount,
 	}, nil
 }
@@ -1355,7 +1390,7 @@ func (engine *Engine) executeCreateDatabaseStatement(statement sql.CreateDatabas
 		TablesDeleted:    0,
 		RecordsWritten:   0,
 		RecordsDeleted:   0,
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:     opCount,
 	}, nil
 }
@@ -1383,7 +1418,7 @@ func (engine *Engine) executeDropDatabaseStatement(statement sql.DropDatabaseSta
 		TablesDeleted:    0,
 		RecordsWritten:   0,
 		RecordsDeleted:   0,
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:     opCount,
 	}, nil
 }
@@ -1404,7 +1439,7 @@ func (engine *Engine) executeShowDatabasesStatement(statement sql.ShowDatabasesS
 		Columns:          []string{"name"},
 		Data:             data,
 		RecordsRead:      len(databases),
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:     len(databases),
 	}, nil
 }
@@ -1425,7 +1460,7 @@ func (engine *Engine) executeShowTablesStatement(statement sql.ShowTablesStateme
 		Columns:          []string{"name"},
 		Data:             data,
 		RecordsRead:      len(tables),
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:     len(tables),
 	}, nil
 }
@@ -1435,7 +1470,7 @@ func (engine *Engine) executeCreateIndexStatement(statement sql.CreateIndexState
 	opCount := 1
 
 	// Create index manager
-	indexManager := ps.NewIndexManager(engine.Persistence)
+	indexManager := ps.NewIndexManager(engine.Persistence, engine.Identity)
 
 	// Create the index
 	_, err := indexManager.CreateIndex(statement.Name, statement.Database, statement.Table, statement.Column, statement.Unique)
@@ -1445,7 +1480,7 @@ func (engine *Engine) executeCreateIndexStatement(statement sql.CreateIndexState
 
 	return CommitResult{
 		Transaction:      engine.Persistence.LatestTransaction(),
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:     opCount,
 	}, nil
 }
@@ -1455,7 +1490,7 @@ func (engine *Engine) executeDropIndexStatement(statement sql.DropIndexStatement
 	opCount := 1
 
 	// Create index manager
-	indexManager := ps.NewIndexManager(engine.Persistence)
+	indexManager := ps.NewIndexManager(engine.Persistence, engine.Identity)
 
 	// Find and drop the index by looking it up
 	// For now, we need to know the column from the index file
@@ -1467,7 +1502,7 @@ func (engine *Engine) executeDropIndexStatement(statement sql.DropIndexStatement
 
 	return CommitResult{
 		Transaction:      engine.Persistence.LatestTransaction(),
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:     opCount,
 	}, nil
 }
@@ -1565,7 +1600,7 @@ func (engine *Engine) executeAlterTableStatement(statement sql.AlterTableStateme
 	return CommitResult{
 		Transaction:      txn,
 		TablesAltered:    1,
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:     opCount,
 	}, nil
 }
@@ -1604,7 +1639,7 @@ func (engine *Engine) executeBeginStatement() (CommitResult, error) {
 	}
 
 	return CommitResult{
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:     1,
 	}, nil
 }
@@ -1617,7 +1652,7 @@ func (engine *Engine) executeCommitStatement() (CommitResult, error) {
 
 	return CommitResult{
 		Transaction:      engine.Persistence.LatestTransaction(),
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:     1,
 	}, nil
 }
@@ -1629,7 +1664,7 @@ func (engine *Engine) executeRollbackStatement() (CommitResult, error) {
 	// For now, this is a no-op
 
 	return CommitResult{
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:     1,
 	}, nil
 }
@@ -1679,7 +1714,7 @@ func (engine *Engine) executeDescribeStatement(statement sql.DescribeStatement) 
 		Columns:          []string{"Column", "Type", "PrimaryKey"},
 		Data:             data,
 		RecordsRead:      len(data),
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:     opCount,
 	}, nil
 }
@@ -1694,7 +1729,7 @@ func (engine *Engine) executeShowIndexesStatement(statement sql.ShowIndexesState
 	}
 
 	// Load indexes
-	indexManager := ps.NewIndexManager(engine.Persistence)
+	indexManager := ps.NewIndexManager(engine.Persistence, engine.Identity)
 	indexManager.LoadIndexes(statement.Database, statement.Table, tableOp.Table.Columns)
 
 	// Build index info
@@ -1715,7 +1750,7 @@ func (engine *Engine) executeShowIndexesStatement(statement sql.ShowIndexesState
 		Columns:          []string{"Name", "Column", "Unique"},
 		Data:             data,
 		RecordsRead:      len(data),
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:     len(data),
 	}, nil
 }
@@ -1737,7 +1772,7 @@ func (engine *Engine) executeCreateBranchStatement(statement sql.CreateBranchSta
 
 	return CommitResult{
 		Transaction:      engine.Persistence.LatestTransaction(),
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:     1,
 	}, nil
 }
@@ -1752,7 +1787,7 @@ func (engine *Engine) executeCheckoutStatement(statement sql.CheckoutStatement) 
 
 	return CommitResult{
 		Transaction:      engine.Persistence.LatestTransaction(),
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:     1,
 	}, nil
 }
@@ -1787,13 +1822,13 @@ func (engine *Engine) executeMergeStatement(statement sql.MergeStatement) (Resul
 			Columns:          []string{"Database", "Table", "Key", "HEAD", "SOURCE"},
 			Data:             data,
 			RecordsRead:      len(data),
-			ExecutionTimeSec: time.Since(startTime).Seconds(),
+			ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		}, nil
 	}
 
 	return CommitResult{
 		Transaction:      result.Transaction,
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:     1,
 	}, nil
 }
@@ -1822,7 +1857,7 @@ func (engine *Engine) executeShowBranchesStatement(statement sql.ShowBranchesSta
 		Columns:          []string{"Branch", "Current"},
 		Data:             data,
 		RecordsRead:      len(data),
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:     len(data),
 	}, nil
 }
@@ -1836,7 +1871,7 @@ func (engine *Engine) executeShowMergeConflictsStatement() (QueryResult, error) 
 			Columns:          []string{"Database", "Table", "Key", "HEAD", "SOURCE"},
 			Data:             [][]string{},
 			RecordsRead:      0,
-			ExecutionTimeSec: time.Since(startTime).Seconds(),
+			ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		}, nil
 	}
 
@@ -1855,7 +1890,7 @@ func (engine *Engine) executeShowMergeConflictsStatement() (QueryResult, error) 
 		Columns:          []string{"Database", "Table", "Key", "HEAD", "SOURCE"},
 		Data:             data,
 		RecordsRead:      len(data),
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 	}, nil
 }
 
@@ -1900,7 +1935,7 @@ func (engine *Engine) executeResolveConflictStatement(statement sql.ResolveConfl
 		Columns:          []string{"Resolved", "Remaining"},
 		Data:             [][]string{{fmt.Sprintf("%s.%s.%s", statement.Database, statement.Table, statement.Key), fmt.Sprintf("%d", remaining)}},
 		RecordsRead:      1,
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 	}, nil
 }
 
@@ -1914,7 +1949,7 @@ func (engine *Engine) executeCommitMergeStatement() (CommitResult, error) {
 
 	return CommitResult{
 		Transaction:      txn,
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:     1,
 	}, nil
 }
@@ -1931,7 +1966,7 @@ func (engine *Engine) executeAbortMergeStatement() (QueryResult, error) {
 		Columns:          []string{"Status"},
 		Data:             [][]string{{"Merge aborted"}},
 		RecordsRead:      1,
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 	}, nil
 }
 
@@ -1947,7 +1982,7 @@ func (engine *Engine) executeAddRemoteStatement(statement sql.AddRemoteStatement
 		Columns:          []string{"Status"},
 		Data:             [][]string{{fmt.Sprintf("Remote '%s' added", statement.Name)}},
 		RecordsRead:      1,
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 	}, nil
 }
 
@@ -1969,7 +2004,7 @@ func (engine *Engine) executeShowRemotesStatement() (QueryResult, error) {
 		Columns:          []string{"Name", "URLs"},
 		Data:             data,
 		RecordsRead:      len(remotes),
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 	}, nil
 }
 
@@ -1985,7 +2020,7 @@ func (engine *Engine) executeDropRemoteStatement(statement sql.DropRemoteStateme
 		Columns:          []string{"Status"},
 		Data:             [][]string{{fmt.Sprintf("Remote '%s' removed", statement.Name)}},
 		RecordsRead:      1,
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 	}, nil
 }
 
@@ -2002,7 +2037,7 @@ func (engine *Engine) executePushStatement(statement sql.PushStatement) (QueryRe
 		Columns:          []string{"Status"},
 		Data:             [][]string{{fmt.Sprintf("Pushed to '%s'", statement.Remote)}},
 		RecordsRead:      1,
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 	}, nil
 }
 
@@ -2019,7 +2054,7 @@ func (engine *Engine) executePullStatement(statement sql.PullStatement) (QueryRe
 		Columns:          []string{"Status"},
 		Data:             [][]string{{fmt.Sprintf("Pulled from '%s'", statement.Remote)}},
 		RecordsRead:      1,
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 	}, nil
 }
 
@@ -2036,7 +2071,7 @@ func (engine *Engine) executeFetchStatement(statement sql.FetchStatement) (Query
 		Columns:          []string{"Status"},
 		Data:             [][]string{{fmt.Sprintf("Fetched from '%s'", statement.Remote)}},
 		RecordsRead:      1,
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 	}, nil
 }
 
@@ -2070,6 +2105,79 @@ func convertAuthConfig(auth *sql.AuthConfig) *ps.RemoteAuth {
 	}
 
 	return nil
+}
+
+// Share statement handlers
+
+func (engine *Engine) executeCreateShareStatement(statement sql.CreateShareStatement) (QueryResult, error) {
+	startTime := time.Now()
+
+	auth := convertAuthConfig(statement.Auth)
+	err := engine.Persistence.CreateShare(statement.Name, statement.URL, auth, engine.Identity)
+	if err != nil {
+		return QueryResult{}, err
+	}
+
+	return QueryResult{
+		Columns:          []string{"Status"},
+		Data:             [][]string{{fmt.Sprintf("Share '%s' created from '%s'", statement.Name, statement.URL)}},
+		RecordsRead:      1,
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
+	}, nil
+}
+
+func (engine *Engine) executeSyncShareStatement(statement sql.SyncShareStatement) (QueryResult, error) {
+	startTime := time.Now()
+
+	auth := convertAuthConfig(statement.Auth)
+	err := engine.Persistence.SyncShare(statement.Name, auth)
+	if err != nil {
+		return QueryResult{}, err
+	}
+
+	return QueryResult{
+		Columns:          []string{"Status"},
+		Data:             [][]string{{fmt.Sprintf("Share '%s' synced", statement.Name)}},
+		RecordsRead:      1,
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
+	}, nil
+}
+
+func (engine *Engine) executeDropShareStatement(statement sql.DropShareStatement) (QueryResult, error) {
+	startTime := time.Now()
+
+	err := engine.Persistence.DropShare(statement.Name, engine.Identity)
+	if err != nil {
+		return QueryResult{}, err
+	}
+
+	return QueryResult{
+		Columns:          []string{"Status"},
+		Data:             [][]string{{fmt.Sprintf("Share '%s' dropped", statement.Name)}},
+		RecordsRead:      1,
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
+	}, nil
+}
+
+func (engine *Engine) executeShowSharesStatement() (QueryResult, error) {
+	startTime := time.Now()
+
+	shares, err := engine.Persistence.ListShares()
+	if err != nil {
+		return QueryResult{}, err
+	}
+
+	data := make([][]string, len(shares))
+	for i, share := range shares {
+		data[i] = []string{share.Name, share.URL}
+	}
+
+	return QueryResult{
+		Columns:          []string{"Name", "URL"},
+		Data:             data,
+		RecordsRead:      len(shares),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
+	}, nil
 }
 
 // executeCopyStatement handles COPY INTO for bulk CSV import/export
@@ -2138,7 +2246,7 @@ func (engine *Engine) executeCopyIntoTable(statement sql.CopyStatement, startTim
 			if err == io.EOF {
 				return CommitResult{
 					RecordsWritten:   0,
-					ExecutionTimeSec: time.Since(startTime).Seconds(),
+					ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 				}, nil
 			}
 			return nil, fmt.Errorf("failed to read CSV header: %v", err)
@@ -2212,7 +2320,7 @@ func (engine *Engine) executeCopyIntoTable(statement sql.CopyStatement, startTim
 	if recordCount == 0 {
 		return CommitResult{
 			RecordsWritten:   0,
-			ExecutionTimeSec: time.Since(startTime).Seconds(),
+			ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 		}, nil
 	}
 
@@ -2225,7 +2333,7 @@ func (engine *Engine) executeCopyIntoTable(statement sql.CopyStatement, startTim
 	return CommitResult{
 		Transaction:      txn,
 		RecordsWritten:   recordCount,
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 	}, nil
 }
 
@@ -2298,6 +2406,6 @@ func (engine *Engine) executeCopyIntoFile(statement sql.CopyStatement, startTime
 
 	return CommitResult{
 		RecordsWritten:   recordsWritten,
-		ExecutionTimeSec: time.Since(startTime).Seconds(),
+		ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
 	}, nil
 }

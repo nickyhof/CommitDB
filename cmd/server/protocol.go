@@ -20,10 +20,11 @@ type Response struct {
 
 // QueryResponse contains tabular query results.
 type QueryResponse struct {
-	Columns     []string   `json:"columns"`
-	Data        [][]string `json:"data"`
-	RecordsRead int        `json:"records_read"`
-	TimeMs      float64    `json:"time_ms"`
+	Columns         []string   `json:"columns"`
+	Data            [][]string `json:"data"`
+	RecordsRead     int        `json:"records_read"`
+	ExecutionTimeMs float64    `json:"execution_time_ms"`
+	ExecutionOps    int        `json:"execution_ops"`
 }
 
 // CommitResponse contains mutation operation results.
@@ -34,7 +35,8 @@ type CommitResponse struct {
 	TablesDeleted    int     `json:"tables_deleted,omitempty"`
 	RecordsWritten   int     `json:"records_written,omitempty"`
 	RecordsDeleted   int     `json:"records_deleted,omitempty"`
-	TimeMs           float64 `json:"time_ms"`
+	ExecutionTimeMs  float64 `json:"execution_time_ms"`
+	ExecutionOps     int     `json:"execution_ops"`
 }
 
 // AuthResponse contains authentication result.

@@ -6,6 +6,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-git/go-billy/v6/osfs"
+	"github.com/go-git/go-git/v6"
+	"github.com/go-git/go-git/v6/plumbing/cache"
+	"github.com/go-git/go-git/v6/storage/filesystem"
 	"github.com/nickyhof/CommitDB"
 	"github.com/nickyhof/CommitDB/core"
 	"github.com/nickyhof/CommitDB/db"
@@ -1421,10 +1425,25 @@ func TestRemoteManagementSQL(t *testing.T) {
 	})
 }
 
-// TestRemotePushPullSQL tests SQL syntax parsing for push/pull/fetch
-// Note: This only tests syntax parsing, not actual remote operations
+// TestRemotePushPullSQL tests actual push/pull/fetch operations using a local bare repo
 func TestRemotePushPullSyntax(t *testing.T) {
 	t.Run("File", func(t *testing.T) {
+		// Create a bare git repo using go-git directly
+		remoteDir, err := os.MkdirTemp("", "commitdb-bare-remote-*")
+		if err != nil {
+			t.Fatalf("Failed to create remote temp dir: %v", err)
+		}
+		defer os.RemoveAll(remoteDir)
+
+		// Initialize bare repo using go-git filesystem storage (no worktree = bare)
+		bareFS := osfs.New(remoteDir)
+		bareStorer := filesystem.NewStorage(bareFS, cache.NewObjectLRUDefault())
+		_, err = git.Init(bareStorer)
+		if err != nil {
+			t.Fatalf("Failed to init bare repo: %v", err)
+		}
+
+		// Create the main CommitDB repo
 		tmpDir, err := os.MkdirTemp("", "commitdb-pushpull-test-*")
 		if err != nil {
 			t.Fatalf("Failed to create temp dir: %v", err)
@@ -1438,53 +1457,312 @@ func TestRemotePushPullSyntax(t *testing.T) {
 		DB := CommitDB.Open(&persistence)
 		engine := DB.Engine(core.Identity{Name: "test", Email: "test@test.com"})
 
-		// Add a remote first
-		_, err = engine.Execute("CREATE REMOTE origin 'https://github.com/test/repo.git'")
+		// Create some data to push
+		_, err = engine.Execute("CREATE DATABASE testdb")
+		if err != nil {
+			t.Fatalf("CREATE DATABASE failed: %v", err)
+		}
+		_, err = engine.Execute("CREATE TABLE testdb.items (id INT PRIMARY KEY, name STRING)")
+		if err != nil {
+			t.Fatalf("CREATE TABLE failed: %v", err)
+		}
+		_, err = engine.Execute("INSERT INTO testdb.items (id, name) VALUES (1, 'Item1')")
+		if err != nil {
+			t.Fatalf("INSERT failed: %v", err)
+		}
+
+		// Add the local bare repo as a remote
+		_, err = engine.Execute("CREATE REMOTE origin '" + remoteDir + "'")
 		if err != nil {
 			t.Fatalf("CREATE REMOTE failed: %v", err)
 		}
 
-		// Test PUSH syntax (will fail since remote doesn't exist, but should parse)
-		_, err = engine.Execute("PUSH")
-		// Expected to fail with connection error, not parse error
-		if err == nil || err.Error() == "unknown statement type" {
-			t.Logf("PUSH parsed successfully (operation failed as expected: %v)", err)
+		// Verify remote was added
+		result, err := engine.Execute("SHOW REMOTES")
+		if err != nil {
+			t.Fatalf("SHOW REMOTES failed: %v", err)
+		}
+		qr := result.(db.QueryResult)
+		if len(qr.Data) != 1 || qr.Data[0][0] != "origin" {
+			t.Errorf("Expected remote 'origin', got: %v", qr.Data)
 		}
 
-		// Test PUSH TO syntax
+		// Test PUSH to local bare repo
 		_, err = engine.Execute("PUSH TO origin")
-		if err == nil || err.Error() == "unknown statement type" {
-			t.Logf("PUSH TO parsed successfully (operation failed as expected: %v)", err)
+		if err != nil {
+			t.Fatalf("PUSH TO origin failed: %v", err)
 		}
+		t.Log("PUSH TO origin succeeded")
 
-		// Test PUSH with branch
-		_, err = engine.Execute("PUSH TO origin BRANCH master")
-		if err == nil || err.Error() == "unknown statement type" {
-			t.Logf("PUSH TO BRANCH parsed successfully (operation failed as expected: %v)", err)
-		}
-
-		// Test PULL syntax
-		_, err = engine.Execute("PULL")
-		if err == nil || err.Error() == "unknown statement type" {
-			t.Logf("PULL parsed successfully (operation failed as expected: %v)", err)
-		}
-
-		// Test PULL FROM syntax
-		_, err = engine.Execute("PULL FROM origin")
-		if err == nil || err.Error() == "unknown statement type" {
-			t.Logf("PULL FROM parsed successfully (operation failed as expected: %v)", err)
-		}
-
-		// Test FETCH syntax
-		_, err = engine.Execute("FETCH")
-		if err == nil || err.Error() == "unknown statement type" {
-			t.Logf("FETCH parsed successfully (operation failed as expected: %v)", err)
-		}
-
-		// Test FETCH FROM syntax
+		// Test FETCH from the bare remote
 		_, err = engine.Execute("FETCH FROM origin")
-		if err == nil || err.Error() == "unknown statement type" {
-			t.Logf("FETCH FROM parsed successfully (operation failed as expected: %v)", err)
+		if err != nil {
+			t.Fatalf("FETCH FROM origin failed: %v", err)
+		}
+		t.Log("FETCH FROM origin succeeded")
+
+		// Create a second repo to test PULL
+		tmpDir2, err := os.MkdirTemp("", "commitdb-pull-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create second temp dir: %v", err)
+		}
+		defer os.RemoveAll(tmpDir2)
+
+		persistence2, err := ps.NewFilePersistence(tmpDir2, nil)
+		if err != nil {
+			t.Fatalf("Failed to initialize second persistence: %v", err)
+		}
+		DB2 := CommitDB.Open(&persistence2)
+		engine2 := DB2.Engine(core.Identity{Name: "test2", Email: "test2@test.com"})
+
+		// Add the same remote
+		_, err = engine2.Execute("CREATE REMOTE origin '" + remoteDir + "'")
+		if err != nil {
+			t.Fatalf("CREATE REMOTE in repo2 failed: %v", err)
+		}
+
+		// First fetch to get remote refs
+		_, err = engine2.Execute("FETCH FROM origin")
+		if err != nil {
+			t.Fatalf("FETCH FROM origin in repo2 failed: %v", err)
+		}
+		t.Log("FETCH FROM origin in repo2 succeeded")
+
+		// Test PULL from the remote
+		_, err = engine2.Execute("PULL FROM origin")
+		if err != nil {
+			t.Fatalf("PULL FROM origin failed: %v", err)
+		}
+		t.Log("PULL FROM origin succeeded")
+
+		// Verify data was pulled - the database should now exist
+		result, err = engine2.Execute("SHOW DATABASES")
+		if err != nil {
+			t.Fatalf("SHOW DATABASES after PULL failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		found := false
+		for _, row := range qr.Data {
+			if row[0] == "testdb" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected to find 'testdb' after PULL, got: %v", qr.Data)
+		}
+
+		// Test DROP REMOTE
+		_, err = engine.Execute("DROP REMOTE origin")
+		if err != nil {
+			t.Fatalf("DROP REMOTE failed: %v", err)
+		}
+
+		// Verify remote is removed
+		result, err = engine.Execute("SHOW REMOTES")
+		if err != nil {
+			t.Fatalf("SHOW REMOTES after DROP failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 0 {
+			t.Errorf("Expected 0 remotes after DROP, got %d", len(qr.Data))
+		}
+	})
+}
+
+// TestShareManagementSQL tests share-related SQL commands with actual git clone
+func TestShareManagementSQL(t *testing.T) {
+	t.Run("File", func(t *testing.T) {
+		// Create a source CommitDB repo with sample data
+		sourceDir, err := os.MkdirTemp("", "commitdb-share-source-*")
+		if err != nil {
+			t.Fatalf("Failed to create source temp dir: %v", err)
+		}
+		defer os.RemoveAll(sourceDir)
+
+		// Initialize source repo with data
+		sourcePersistence, err := ps.NewFilePersistence(sourceDir, nil)
+		if err != nil {
+			t.Fatalf("Failed to initialize source persistence: %v", err)
+		}
+		sourceDB := CommitDB.Open(&sourcePersistence)
+		sourceEngine := sourceDB.Engine(core.Identity{Name: "source", Email: "source@test.com"})
+
+		// Create test data in source repo
+		_, err = sourceEngine.Execute("CREATE DATABASE sample")
+		if err != nil {
+			t.Fatalf("Failed to create database in source: %v", err)
+		}
+		_, err = sourceEngine.Execute("CREATE TABLE sample.users (id INT PRIMARY KEY, name STRING)")
+		if err != nil {
+			t.Fatalf("Failed to create table in source: %v", err)
+		}
+		_, err = sourceEngine.Execute("INSERT INTO sample.users (id, name) VALUES (1, 'Alice')")
+		if err != nil {
+			t.Fatalf("Failed to insert into source: %v", err)
+		}
+		_, err = sourceEngine.Execute("INSERT INTO sample.users (id, name) VALUES (2, 'Bob')")
+		if err != nil {
+			t.Fatalf("Failed to insert into source: %v", err)
+		}
+
+		// Create a bare repo to act as the share source
+		bareDir, err := os.MkdirTemp("", "commitdb-share-bare-*")
+		if err != nil {
+			t.Fatalf("Failed to create bare temp dir: %v", err)
+		}
+		defer os.RemoveAll(bareDir)
+
+		// Initialize bare repo using go-git
+		bareFS := osfs.New(bareDir)
+		bareStorer := filesystem.NewStorage(bareFS, cache.NewObjectLRUDefault())
+		_, err = git.Init(bareStorer)
+		if err != nil {
+			t.Fatalf("Failed to init bare repo: %v", err)
+		}
+
+		// Add bare repo as remote and push source data to it
+		_, err = sourceEngine.Execute("CREATE REMOTE origin '" + bareDir + "'")
+		if err != nil {
+			t.Fatalf("CREATE REMOTE in source failed: %v", err)
+		}
+		_, err = sourceEngine.Execute("PUSH TO origin")
+		if err != nil {
+			t.Fatalf("PUSH to bare repo failed: %v", err)
+		}
+		t.Log("Source data pushed to bare repo")
+
+		// Create the main CommitDB repo that will use the share
+		tmpDir, err := os.MkdirTemp("", "commitdb-share-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		persistence, err := ps.NewFilePersistence(tmpDir, nil)
+		if err != nil {
+			t.Fatalf("Failed to initialize file persistence: %v", err)
+		}
+		DB := CommitDB.Open(&persistence)
+		engine := DB.Engine(core.Identity{Name: "test", Email: "test@test.com"})
+
+		// Test SHOW SHARES (should be empty)
+		result, err := engine.Execute("SHOW SHARES")
+		if err != nil {
+			t.Fatalf("SHOW SHARES failed: %v", err)
+		}
+		qr := result.(db.QueryResult)
+		if len(qr.Data) != 0 {
+			t.Errorf("Expected 0 shares initially, got %d", len(qr.Data))
+		}
+		if len(qr.Columns) != 2 || qr.Columns[0] != "Name" || qr.Columns[1] != "URL" {
+			t.Errorf("Expected columns [Name, URL], got %v", qr.Columns)
+		}
+
+		// Test CREATE SHARE - actually clones from the bare repo
+		_, err = engine.Execute("CREATE SHARE external FROM '" + bareDir + "'")
+		if err != nil {
+			t.Fatalf("CREATE SHARE failed: %v", err)
+		}
+		t.Log("CREATE SHARE succeeded")
+
+		// Test SHOW SHARES (should have 1 now)
+		result, err = engine.Execute("SHOW SHARES")
+		if err != nil {
+			t.Fatalf("SHOW SHARES failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 {
+			t.Errorf("Expected 1 share, got %d", len(qr.Data))
+		}
+		if len(qr.Data) > 0 && qr.Data[0][0] != "external" {
+			t.Errorf("Expected share name 'external', got '%s'", qr.Data[0][0])
+		}
+
+		// Test SELECT from share using 3-level naming (share.database.table)
+		result, err = engine.Execute("SELECT * FROM external.sample.users")
+		if err != nil {
+			t.Fatalf("SELECT from share failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 2 {
+			t.Errorf("Expected 2 rows from share, got %d", len(qr.Data))
+		}
+
+		// Verify we can find Alice and Bob
+		names := make(map[string]bool)
+		nameIdx := -1
+		for i, col := range qr.Columns {
+			if col == "name" {
+				nameIdx = i
+				break
+			}
+		}
+		if nameIdx >= 0 {
+			for _, row := range qr.Data {
+				names[row[nameIdx]] = true
+			}
+		}
+		if !names["Alice"] || !names["Bob"] {
+			t.Errorf("Expected to find Alice and Bob in share data, got: %v", names)
+		}
+
+		// Create local data to test JOIN with share
+		_, err = engine.Execute("CREATE DATABASE local")
+		if err != nil {
+			t.Fatalf("CREATE DATABASE local failed: %v", err)
+		}
+		_, err = engine.Execute("CREATE TABLE local.orders (id INT PRIMARY KEY, user_id INT, product STRING)")
+		if err != nil {
+			t.Fatalf("CREATE TABLE orders failed: %v", err)
+		}
+		_, err = engine.Execute("INSERT INTO local.orders (id, user_id, product) VALUES (100, 1, 'Widget')")
+		if err != nil {
+			t.Fatalf("INSERT order 1 failed: %v", err)
+		}
+		_, err = engine.Execute("INSERT INTO local.orders (id, user_id, product) VALUES (101, 2, 'Gadget')")
+		if err != nil {
+			t.Fatalf("INSERT order 2 failed: %v", err)
+		}
+
+		// Test JOIN between local table and shared table using 3-level naming
+		result, err = engine.Execute("SELECT o.product, u.name FROM local.orders o JOIN external.sample.users u ON o.user_id = u.id")
+		if err != nil {
+			t.Fatalf("JOIN with share failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 2 {
+			t.Errorf("Expected 2 rows from JOIN, got %d", len(qr.Data))
+		}
+		t.Log("JOIN between local and share succeeded")
+
+		// Test SYNC SHARE - should succeed now that the share exists
+		_, err = engine.Execute("SYNC SHARE external")
+		if err != nil {
+			t.Fatalf("SYNC SHARE failed: %v", err)
+		}
+		t.Log("SYNC SHARE succeeded")
+
+		// Test DROP SHARE
+		_, err = engine.Execute("DROP SHARE external")
+		if err != nil {
+			t.Fatalf("DROP SHARE failed: %v", err)
+		}
+
+		// Verify share is removed
+		result, err = engine.Execute("SHOW SHARES")
+		if err != nil {
+			t.Fatalf("SHOW SHARES after DROP failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 0 {
+			t.Errorf("Expected 0 shares after DROP, got %d", len(qr.Data))
+		}
+
+		// Verify share directory is removed
+		shareDir := tmpDir + "/.shares/external"
+		if _, err := os.Stat(shareDir); !os.IsNotExist(err) {
+			t.Error("Expected share directory to be removed")
 		}
 	})
 }

@@ -39,6 +39,7 @@ nav:
   - Version Control:
     - Branching & Merging: branching.md
     - Remote Operations: remote-operations.md
+    - Shared Databases: shared-databases.md
   - Drivers:
     - Python Driver: python-driver.md
     - Go API: go-api.md

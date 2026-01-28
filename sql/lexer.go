@@ -140,6 +140,9 @@ const (
 	AwsKey
 	AwsSecret
 	AwsRegion
+	Share
+	Shares
+	Sync
 	EOF
 	Unknown
 )
@@ -573,6 +576,12 @@ func lookupIdentifier(id string) TokenType {
 		return Pull
 	case "FETCH":
 		return Fetch
+	case "SHARE":
+		return Share
+	case "SHARES":
+		return Shares
+	case "SYNC":
+		return Sync
 	case "TOKEN":
 		return TokenKeyword
 	case "KEY":

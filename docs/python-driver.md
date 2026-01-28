@@ -101,9 +101,10 @@ for row in result:
 
 ```python
 result = db.execute('INSERT INTO mydb.users ...')
-result.records_written   # 1
-result.affected_rows     # 1
-result.time_ms           # 1.5
+result.records_written    # 1
+result.affected_rows      # 1
+result.execution_time_ms  # 1.5
+result.execution_ops      # 1
 ```
 
 ## SSL/TLS Encryption

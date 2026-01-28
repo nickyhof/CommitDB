@@ -18,7 +18,7 @@ class TestQueryResult:
             columns=['id', 'name'],
             data=[['1', 'Alice'], ['2', 'Bob']],
             records_read=2,
-            time_ms=1.0
+            execution_time_ms=1.0
         )
 
         rows = list(result)
@@ -32,7 +32,7 @@ class TestQueryResult:
             columns=['id'],
             data=[['1'], ['2'], ['3']],
             records_read=3,
-            time_ms=1.0
+            execution_time_ms=1.0
         )
         assert len(result) == 3
 
@@ -41,7 +41,7 @@ class TestQueryResult:
             columns=['id', 'name'],
             data=[['1', 'Alice'], ['2', 'Bob']],
             records_read=2,
-            time_ms=1.0
+            execution_time_ms=1.0
         )
         assert result[0] == {'id': '1', 'name': 'Alice'}
         assert result[1] == {'id': '2', 'name': 'Bob'}
@@ -61,7 +61,7 @@ class TestCommitResult:
     def test_defaults(self):
         result = CommitResult()
         assert result.affected_rows == 0
-        assert result.time_ms == 0.0
+        assert result.execution_time_ms == 0.0
 
 
 class TestCommitDBUnit:

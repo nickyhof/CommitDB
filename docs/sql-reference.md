@@ -219,6 +219,40 @@ COPY INTO mydb.users FROM 's3://bucket/file.csv' WITH (
 - Or specify credentials via `WITH` clause (AWS_KEY, AWS_SECRET, AWS_REGION)
 - IAM roles work automatically on EC2/ECS/Lambda
 
+## Shared Databases
+
+Query external Git repositories without copying data:
+
+```sql
+-- Create a share from an external repository
+CREATE SHARE external FROM 'https://github.com/company/data.git';
+
+-- With SSH authentication
+CREATE SHARE reports FROM 'git@github.com:company/reports.git'
+    WITH SSH KEY '/path/to/key';
+
+-- With token authentication
+CREATE SHARE data FROM 'https://github.com/company/data.git'
+    WITH TOKEN 'ghp_xxxxxxxxxxxx';
+
+-- Query shared tables using 3-level naming
+SELECT * FROM external.mydb.users;
+
+-- JOIN local and shared tables
+SELECT o.id, u.name 
+FROM local.orders o 
+JOIN external.customers.users u ON o.user_id = u.id;
+
+-- Sync latest changes
+SYNC SHARE external;
+
+-- List shares
+SHOW SHARES;
+
+-- Remove a share
+DROP SHARE external;
+```
+
 ## Transactions
 
 ```sql
