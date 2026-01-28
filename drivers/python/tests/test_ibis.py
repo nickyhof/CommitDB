@@ -73,16 +73,80 @@ class TestIbisBackendIntegration:
     
     def test_query_to_dataframe(self, connection):
         """Test that queries return pandas DataFrames."""
-        # This requires a table to exist
-        # Skipped if no tables exist
-        databases = connection.list_databases()
-        if not databases:
-            pytest.skip("No databases available")
+        from commitdb.client import CommitDBError
         
-        tables = connection.list_tables(database=databases[0])
-        if not tables:
-            pytest.skip("No tables available")
+        # Setup: create database (ignore if exists)
+        try:
+            connection._client.execute("CREATE DATABASE ibis_test")
+        except CommitDBError:
+            pass  # Already exists
         
-        table = connection.table(f"{databases[0]}.{tables[0]}")
-        result = table.limit(5).execute()
-        assert isinstance(result, pd.DataFrame)
+        connection._client.execute("DROP TABLE IF EXISTS ibis_test.users")
+        connection._client.execute(
+            "CREATE TABLE ibis_test.users (id INT PRIMARY KEY, name STRING, age INT)"
+        )
+        connection._client.execute(
+            "INSERT INTO ibis_test.users (id, name, age) VALUES (1, 'Alice', 30)"
+        )
+        connection._client.execute(
+            "INSERT INTO ibis_test.users (id, name, age) VALUES (2, 'Bob', 25)"
+        )
+        
+        try:
+            # Query using Ibis
+            table = connection.table("ibis_test.users")
+            result = table.execute()
+            
+            assert isinstance(result, pd.DataFrame)
+            assert len(result) == 2
+            assert "id" in result.columns
+            assert "name" in result.columns
+            assert "age" in result.columns
+        finally:
+            # Cleanup
+            connection._client.execute("DROP TABLE IF EXISTS ibis_test.users")
+            connection._client.execute("DROP DATABASE IF EXISTS ibis_test")
+    
+    def test_drop_table(self, connection):
+        """Test dropping a table via the backend."""
+        from commitdb.client import CommitDBError
+        
+        # Setup: create database (ignore if exists)
+        try:
+            connection._client.execute("CREATE DATABASE ibis_test")
+        except CommitDBError:
+            pass
+        
+        connection._client.execute("DROP TABLE IF EXISTS ibis_test.temp_table")
+        connection._client.execute(
+            "CREATE TABLE ibis_test.temp_table (id INT PRIMARY KEY)"
+        )
+        
+        try:
+            # Drop using the backend method
+            connection.drop_table("temp_table", database="ibis_test")
+            
+            # Verify table is gone
+            tables = connection.list_tables(database="ibis_test")
+            assert "temp_table" not in tables
+        finally:
+            # Cleanup
+            connection._client.execute("DROP TABLE IF EXISTS ibis_test.temp_table")
+            connection._client.execute("DROP DATABASE IF EXISTS ibis_test")
+    
+    def test_drop_table_force(self, connection):
+        """Test dropping a non-existent table with force=True."""
+        from commitdb.client import CommitDBError
+        
+        # Setup: create database (ignore if exists)
+        try:
+            connection._client.execute("CREATE DATABASE ibis_test")
+        except CommitDBError:
+            pass
+        
+        try:
+            # Should not raise an error with force=True
+            connection.drop_table("nonexistent_table", database="ibis_test", force=True)
+        finally:
+            connection._client.execute("DROP DATABASE IF EXISTS ibis_test")
+
