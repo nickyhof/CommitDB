@@ -260,10 +260,11 @@ func (s *Server) executeQueryWithEngine(query string, engine *db.Engine) Respons
 	switch r := result.(type) {
 	case db.QueryResult:
 		qr := QueryResponse{
-			Columns:     r.Columns,
-			Data:        r.Data,
-			RecordsRead: r.RecordsRead,
-			TimeMs:      r.ExecutionTimeSec * 1000,
+			Columns:         r.Columns,
+			Data:            r.Data,
+			RecordsRead:     r.RecordsRead,
+			ExecutionTimeMs: r.ExecutionTimeMs,
+			ExecutionOps:    r.ExecutionOps,
 		}
 		data, _ := json.Marshal(qr)
 		return Response{
@@ -280,7 +281,8 @@ func (s *Server) executeQueryWithEngine(query string, engine *db.Engine) Respons
 			TablesDeleted:    r.TablesDeleted,
 			RecordsWritten:   r.RecordsWritten,
 			RecordsDeleted:   r.RecordsDeleted,
-			TimeMs:           r.ExecutionTimeSec * 1000,
+			ExecutionTimeMs:  r.ExecutionTimeMs,
+			ExecutionOps:     r.ExecutionOps,
 		}
 		data, _ := json.Marshal(cr)
 		return Response{

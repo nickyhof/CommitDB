@@ -33,10 +33,11 @@ type Response struct {
 }
 
 type QueryResponse struct {
-	Columns     []string   `json:"columns"`
-	Data        [][]string `json:"data"`
-	RecordsRead int        `json:"records_read"`
-	TimeMs      float64    `json:"time_ms"`
+	Columns         []string   `json:"columns"`
+	Data            [][]string `json:"data"`
+	RecordsRead     int        `json:"records_read"`
+	ExecutionTimeMs float64    `json:"execution_time_ms"`
+	ExecutionOps    int        `json:"execution_ops"`
 }
 
 type CommitResponse struct {
@@ -46,7 +47,8 @@ type CommitResponse struct {
 	TablesDeleted    int     `json:"tables_deleted,omitempty"`
 	RecordsWritten   int     `json:"records_written,omitempty"`
 	RecordsDeleted   int     `json:"records_deleted,omitempty"`
-	TimeMs           float64 `json:"time_ms"`
+	ExecutionTimeMs  float64 `json:"execution_time_ms"`
+	ExecutionOps     int     `json:"execution_ops"`
 }
 
 //export commitdb_open_memory
@@ -121,10 +123,11 @@ func commitdb_execute(handle C.int, query *C.char) *C.char {
 	switch r := result.(type) {
 	case db.QueryResult:
 		qr := QueryResponse{
-			Columns:     r.Columns,
-			Data:        r.Data,
-			RecordsRead: r.RecordsRead,
-			TimeMs:      r.ExecutionTimeSec * 1000,
+			Columns:         r.Columns,
+			Data:            r.Data,
+			RecordsRead:     r.RecordsRead,
+			ExecutionTimeMs: r.ExecutionTimeMs,
+			ExecutionOps:    r.ExecutionOps,
 		}
 		data, _ := json.Marshal(qr)
 		resp = Response{
@@ -141,7 +144,8 @@ func commitdb_execute(handle C.int, query *C.char) *C.char {
 			TablesDeleted:    r.TablesDeleted,
 			RecordsWritten:   r.RecordsWritten,
 			RecordsDeleted:   r.RecordsDeleted,
-			TimeMs:           r.ExecutionTimeSec * 1000,
+			ExecutionTimeMs:  r.ExecutionTimeMs,
+			ExecutionOps:     r.ExecutionOps,
 		}
 		data, _ := json.Marshal(cr)
 		resp = Response{

@@ -20,7 +20,8 @@ class QueryResult:
     columns: list[str]
     data: list[list[str]]
     records_read: int
-    time_ms: float
+    execution_time_ms: float
+    execution_ops: int = 0
 
     def __iter__(self) -> Iterator[dict[str, str]]:
         """Iterate over rows as dictionaries."""
@@ -43,7 +44,8 @@ class CommitResult:
     tables_deleted: int = 0
     records_written: int = 0
     records_deleted: int = 0
-    time_ms: float = 0.0
+    execution_time_ms: float = 0.0
+    execution_ops: int = 0
 
     @property
     def affected_rows(self) -> int:
@@ -236,7 +238,8 @@ class CommitDB:
                 columns=result_data.get('columns', []),
                 data=result_data.get('data', []),
                 records_read=result_data.get('records_read', 0),
-                time_ms=result_data.get('time_ms', 0.0)
+                execution_time_ms=result_data.get('execution_time_ms', 0.0),
+                execution_ops=result_data.get('execution_ops', 0)
             )
         elif result_type == 'commit':
             return CommitResult(
@@ -246,7 +249,8 @@ class CommitDB:
                 tables_deleted=result_data.get('tables_deleted', 0),
                 records_written=result_data.get('records_written', 0),
                 records_deleted=result_data.get('records_deleted', 0),
-                time_ms=result_data.get('time_ms', 0.0)
+                execution_time_ms=result_data.get('execution_time_ms', 0.0),
+                execution_ops=result_data.get('execution_ops', 0)
             )
         else:
             # Unknown type, return empty commit result
@@ -449,7 +453,8 @@ class CommitDBLocal:
                 columns=result_data.get('columns', []),
                 data=result_data.get('data', []),
                 records_read=result_data.get('records_read', 0),
-                time_ms=result_data.get('time_ms', 0.0)
+                execution_time_ms=result_data.get('execution_time_ms', 0.0),
+                execution_ops=result_data.get('execution_ops', 0)
             )
         elif result_type == 'commit':
             return CommitResult(
@@ -459,7 +464,8 @@ class CommitDBLocal:
                 tables_deleted=result_data.get('tables_deleted', 0),
                 records_written=result_data.get('records_written', 0),
                 records_deleted=result_data.get('records_deleted', 0),
-                time_ms=result_data.get('time_ms', 0.0)
+                execution_time_ms=result_data.get('execution_time_ms', 0.0),
+                execution_ops=result_data.get('execution_ops', 0)
             )
         else:
             return CommitResult()
