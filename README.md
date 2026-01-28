@@ -17,7 +17,7 @@ Traditional databases lose history. Once you UPDATE or DELETE, the old data is g
 - **Built-in backup** - Push your entire database to GitHub/GitLab as a remote
 - **No migration headaches** - Branch your schema, test changes, merge when ready
 
-If you've ever wished your database worked like Git, CommitDB is for you.
+> ⚠️ **Experimental Project** - This is a hobby project and should not be used in any production environment.
 
 ## Features
 

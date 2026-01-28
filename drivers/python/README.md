@@ -7,6 +7,8 @@ Python client for CommitDB - a Git-backed SQL database engine.
 
 **[📚 Full Documentation](https://nickyhof.github.io/CommitDB/python-driver/)**
 
+> ⚠️ **Experimental Project** - This is a hobby project and should not be used in any production environment.
+
 ## Installation
 
 ```bash
