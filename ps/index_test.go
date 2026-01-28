@@ -2,6 +2,8 @@ package ps
 
 import (
 	"testing"
+
+	"github.com/nickyhof/CommitDB/core"
 )
 
 func TestIndexManager(t *testing.T) {
@@ -10,7 +12,8 @@ func TestIndexManager(t *testing.T) {
 		t.Fatalf("Failed to create persistence: %v", err)
 	}
 
-	im := NewIndexManager(&persistence)
+	testIdentity := core.Identity{Name: "test", Email: "test@test.com"}
+	im := NewIndexManager(&persistence, testIdentity)
 
 	// Create index
 	idx, err := im.CreateIndex("idx_name", "testdb", "users", "name", false)
@@ -32,7 +35,8 @@ func TestIndexManagerDuplicateIndex(t *testing.T) {
 		t.Fatalf("Failed to create persistence: %v", err)
 	}
 
-	im := NewIndexManager(&persistence)
+	testIdentity := core.Identity{Name: "test", Email: "test@test.com"}
+	im := NewIndexManager(&persistence, testIdentity)
 
 	// Create first index
 	_, err = im.CreateIndex("idx_name", "testdb", "users", "name", false)
@@ -152,7 +156,8 @@ func TestDropIndex(t *testing.T) {
 		t.Fatalf("Failed to create persistence: %v", err)
 	}
 
-	im := NewIndexManager(&persistence)
+	testIdentity := core.Identity{Name: "test", Email: "test@test.com"}
+	im := NewIndexManager(&persistence, testIdentity)
 
 	// Create and drop index
 	_, err = im.CreateIndex("idx_name", "testdb", "users", "name", false)
@@ -178,7 +183,8 @@ func TestDropNonExistentIndex(t *testing.T) {
 		t.Fatalf("Failed to create persistence: %v", err)
 	}
 
-	im := NewIndexManager(&persistence)
+	testIdentity := core.Identity{Name: "test", Email: "test@test.com"}
+	im := NewIndexManager(&persistence, testIdentity)
 
 	err = im.DropIndex("testdb", "users", "nonexistent")
 	if err == nil {

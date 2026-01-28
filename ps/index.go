@@ -22,14 +22,16 @@ type Index struct {
 // IndexManager manages indexes for a persistence layer
 type IndexManager struct {
 	persistence *Persistence
+	identity    core.Identity
 	indexes     map[string]*Index // key: database.table.column
 	mu          sync.RWMutex
 }
 
 // NewIndexManager creates a new index manager
-func NewIndexManager(persistence *Persistence) *IndexManager {
+func NewIndexManager(persistence *Persistence, identity core.Identity) *IndexManager {
 	return &IndexManager{
 		persistence: persistence,
+		identity:    identity,
 		indexes:     make(map[string]*Index),
 	}
 }
@@ -185,8 +187,8 @@ func (im *IndexManager) saveIndex(idx *Index) error {
 		return fmt.Errorf("failed to update tree: %w", err)
 	}
 
-	// Create commit (without worktree sync since this is internal)
-	_, err = im.persistence.createCommitDirect(newTree, core.Identity{Name: "system", Email: "system@commitdb"}, "Saving index")
+	// Create commit
+	_, err = im.persistence.createCommitDirect(newTree, im.identity, "Saving index")
 	if err != nil {
 		return err
 	}
@@ -211,7 +213,7 @@ func (im *IndexManager) deleteIndex(idx *Index) error {
 	}
 
 	// Create commit
-	_, err = im.persistence.createCommitDirect(newTree, core.Identity{Name: "system", Email: "system@commitdb"}, "Deleting index")
+	_, err = im.persistence.createCommitDirect(newTree, im.identity, "Deleting index")
 	if err != nil {
 		return err
 	}

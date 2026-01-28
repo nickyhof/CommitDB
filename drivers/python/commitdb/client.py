@@ -325,6 +325,60 @@ class CommitDB:
         result = self.query(f'SHOW TABLES IN {database}')
         return [row[0] for row in result.data] if result.data else []
 
+    def create_share(self, name: str, url: str, token: str = None,
+                     ssh_key: str = None, passphrase: str = None) -> CommitResult:
+        """
+        Create a share from an external Git repository.
+
+        Args:
+            name: Share name
+            url: Git repository URL
+            token: Optional authentication token (for HTTPS)
+            ssh_key: Optional path to SSH private key
+            passphrase: Optional passphrase for SSH key
+
+        Example:
+            db.create_share('sample', 'https://github.com/org/data.git')
+            db.create_share('private', 'git@github.com:org/data.git', ssh_key='~/.ssh/id_rsa')
+        """
+        query = f"CREATE SHARE {name} FROM '{url}'"
+        if token:
+            query += f" WITH TOKEN '{token}'"
+        elif ssh_key:
+            query += f" WITH SSH KEY '{ssh_key}'"
+            if passphrase:
+                query += f" PASSPHRASE '{passphrase}'"
+        return self.execute(query)
+
+    def sync_share(self, name: str, token: str = None,
+                   ssh_key: str = None, passphrase: str = None) -> CommitResult:
+        """
+        Synchronize a share with its remote repository.
+
+        Args:
+            name: Share name
+            token: Optional authentication token (for HTTPS)
+            ssh_key: Optional path to SSH private key
+            passphrase: Optional passphrase for SSH key
+        """
+        query = f"SYNC SHARE {name}"
+        if token:
+            query += f" WITH TOKEN '{token}'"
+        elif ssh_key:
+            query += f" WITH SSH KEY '{ssh_key}'"
+            if passphrase:
+                query += f" PASSPHRASE '{passphrase}'"
+        return self.execute(query)
+
+    def drop_share(self, name: str) -> CommitResult:
+        """Drop a share."""
+        return self.execute(f"DROP SHARE {name}")
+
+    def show_shares(self) -> list[dict[str, str]]:
+        """List all shares."""
+        result = self.query('SHOW SHARES')
+        return [{'name': row[0], 'url': row[1]} for row in result.data] if result.data else []
+
 
 class CommitDBLocal:
     """

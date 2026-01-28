@@ -44,6 +44,10 @@ const (
 	PullStatementType
 	FetchStatementType
 	CopyStatementType
+	CreateShareStatementType
+	SyncShareStatementType
+	DropShareStatementType
+	ShowSharesStatementType
 )
 
 type Statement interface {
@@ -51,6 +55,7 @@ type Statement interface {
 }
 
 type SelectStatement struct {
+	Share      string // For 3-level naming: share.database.table
 	Database   string
 	Table      string
 	TableAlias string
@@ -70,6 +75,7 @@ type SelectStatement struct {
 
 type JoinClause struct {
 	Type       string // INNER, LEFT, RIGHT
+	Share      string // optional: for 3-level naming (share.database.table)
 	Database   string
 	Table      string
 	TableAlias string
@@ -431,6 +437,40 @@ func (s CopyStatement) Type() StatementType {
 	return CopyStatementType
 }
 
+// Share statements for external database references
+type CreateShareStatement struct {
+	Name string
+	URL  string
+	Auth *AuthConfig
+}
+
+type SyncShareStatement struct {
+	Name string
+	Auth *AuthConfig
+}
+
+type DropShareStatement struct {
+	Name string
+}
+
+type ShowSharesStatement struct{}
+
+func (s CreateShareStatement) Type() StatementType {
+	return CreateShareStatementType
+}
+
+func (s SyncShareStatement) Type() StatementType {
+	return SyncShareStatementType
+}
+
+func (s DropShareStatement) Type() StatementType {
+	return DropShareStatementType
+}
+
+func (s ShowSharesStatement) Type() StatementType {
+	return ShowSharesStatementType
+}
+
 type Parser struct {
 	lexer *Lexer
 }
@@ -489,6 +529,8 @@ func (parser *Parser) Parse() (Statement, error) {
 		return ParseFetch(parser)
 	case Copy:
 		return ParseCopy(parser)
+	case Sync:
+		return ParseSyncShare(parser)
 	default:
 		return nil, errors.New("unknown statement type")
 	}
@@ -928,11 +970,16 @@ func ParseSelect(parser *Parser) (Statement, error) {
 	}
 
 	parts := strings.Split(token.Value, ".")
-	if len(parts) == 2 {
+	if len(parts) == 3 {
+		// share.database.table format
+		selectStatement.Share = parts[0]
+		selectStatement.Database = parts[1]
+		selectStatement.Table = parts[2]
+	} else if len(parts) == 2 {
 		selectStatement.Database = parts[0]
 		selectStatement.Table = parts[1]
 	} else {
-		return nil, errors.New("expected database.table format")
+		return nil, errors.New("expected database.table or share.database.table format")
 	}
 
 	token = parser.lexer.NextToken()
@@ -990,7 +1037,12 @@ func ParseSelect(parser *Parser) (Statement, error) {
 		}
 
 		tableParts := strings.Split(token.Value, ".")
-		if len(tableParts) == 2 {
+		if len(tableParts) == 3 {
+			// 3-level naming: share.database.table
+			joinClause.Share = tableParts[0]
+			joinClause.Database = tableParts[1]
+			joinClause.Table = tableParts[2]
+		} else if len(tableParts) == 2 {
 			joinClause.Database = tableParts[0]
 			joinClause.Table = tableParts[1]
 		} else {
@@ -1512,8 +1564,10 @@ func ParseCreate(parser *Parser) (Statement, error) {
 		return ParseCreateBranch(parser)
 	case Remote:
 		return ParseAddRemote(parser)
+	case Share:
+		return ParseCreateShare(parser)
 	default:
-		return nil, errors.New("expected TABLE, DATABASE, INDEX, BRANCH, or REMOTE after CREATE")
+		return nil, errors.New("expected TABLE, DATABASE, INDEX, BRANCH, REMOTE, or SHARE after CREATE")
 	}
 }
 
@@ -1660,8 +1714,10 @@ func ParseDrop(parser *Parser) (Statement, error) {
 		return ParseDropIndex(parser)
 	case Remote:
 		return ParseDropRemote(parser)
+	case Share:
+		return ParseDropShare(parser)
 	default:
-		return nil, errors.New("expected TABLE, DATABASE, INDEX, or REMOTE after DROP")
+		return nil, errors.New("expected TABLE, DATABASE, INDEX, REMOTE, or SHARE after DROP")
 	}
 }
 
@@ -1787,8 +1843,10 @@ func ParseShow(parser *Parser) (Statement, error) {
 		return ShowMergeConflictsStatement{}, nil
 	case Remotes:
 		return ShowRemotesStatement{}, nil
+	case Shares:
+		return ShowSharesStatement{}, nil
 	default:
-		return nil, errors.New("expected DATABASES, TABLES, INDEXES, BRANCHES, REMOTES, or MERGE CONFLICTS after SHOW")
+		return nil, errors.New("expected DATABASES, TABLES, INDEXES, BRANCHES, REMOTES, SHARES, or MERGE CONFLICTS after SHOW")
 	}
 }
 
@@ -2391,4 +2449,80 @@ func ParseCopy(parser *Parser) (Statement, error) {
 	}
 
 	return stmt, nil
+}
+
+// ParseCreateShare parses CREATE SHARE <name> FROM '<url>' [WITH TOKEN '<token>']
+func ParseCreateShare(parser *Parser) (Statement, error) {
+	stmt := CreateShareStatement{}
+
+	// Expect share name
+	token := parser.lexer.NextToken()
+	if token.Type != Identifier && token.Type != String {
+		return nil, errors.New("expected share name after SHARE")
+	}
+	stmt.Name = token.Value
+
+	// Expect FROM
+	token = parser.lexer.NextToken()
+	if token.Type != From {
+		return nil, errors.New("expected FROM after share name")
+	}
+
+	// Expect URL
+	token = parser.lexer.NextToken()
+	if token.Type != String && token.Type != Identifier {
+		return nil, errors.New("expected URL after FROM")
+	}
+	stmt.URL = token.Value
+
+	// Optional: WITH TOKEN 'xxx'
+	token = parser.lexer.NextToken()
+	if token.Type == With {
+		auth, err := parseAuth(parser)
+		if err != nil {
+			return nil, err
+		}
+		stmt.Auth = auth
+	}
+
+	return stmt, nil
+}
+
+// ParseSyncShare parses SYNC SHARE <name> [WITH TOKEN '<token>']
+func ParseSyncShare(parser *Parser) (Statement, error) {
+	stmt := SyncShareStatement{}
+
+	// Expect SHARE
+	token := parser.lexer.NextToken()
+	if token.Type != Share {
+		return nil, errors.New("expected SHARE after SYNC")
+	}
+
+	// Expect share name
+	token = parser.lexer.NextToken()
+	if token.Type != Identifier && token.Type != String {
+		return nil, errors.New("expected share name after SHARE")
+	}
+	stmt.Name = token.Value
+
+	// Optional: WITH TOKEN 'xxx'
+	token = parser.lexer.NextToken()
+	if token.Type == With {
+		auth, err := parseAuth(parser)
+		if err != nil {
+			return nil, err
+		}
+		stmt.Auth = auth
+	}
+
+	return stmt, nil
+}
+
+// ParseDropShare parses DROP SHARE <name>
+func ParseDropShare(parser *Parser) (Statement, error) {
+	token := parser.lexer.NextToken()
+	if token.Type != Identifier && token.Type != String {
+		return nil, errors.New("expected share name after SHARE")
+	}
+	return DropShareStatement{Name: token.Value}, nil
 }

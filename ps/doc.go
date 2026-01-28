@@ -35,7 +35,7 @@
 //
 // The persistence layer supports B-tree indexes for faster queries:
 //
-//	im := ps.NewIndexManager(persistence)
+//	im := ps.NewIndexManager(persistence, identity)
 //	im.CreateIndex("idx_name", "db", "table", "column", false)
 //	keys := im.Lookup("db", "table", "column", "value")
 package ps
