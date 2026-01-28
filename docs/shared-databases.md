@@ -16,15 +16,16 @@ A **share** is a read-only reference to an external CommitDB repository. Once cr
 CREATE SHARE external FROM 'https://github.com/company/shared-data.git';
 
 -- With authentication (SSH)
-CREATE SHARE reports FROM 'git@github.com:company/reports.git' WITH (
-    SSH_KEY = '/path/to/key'
-);
+CREATE SHARE reports FROM 'git@github.com:company/reports.git'
+    WITH SSH KEY '/path/to/key';
 
--- With authentication (HTTPS)
-CREATE SHARE analytics FROM 'https://github.com/company/analytics.git' WITH (
-    USERNAME = 'user',
-    PASSWORD = 'token'
-);
+-- With SSH and passphrase
+CREATE SHARE reports FROM 'git@github.com:company/reports.git'
+    WITH SSH KEY '/path/to/key' PASSPHRASE 'mypassphrase';
+
+-- With token authentication (GitHub, GitLab, etc.)
+CREATE SHARE data FROM 'https://github.com/company/data.git'
+    WITH TOKEN 'ghp_xxxxxxxxxxxx';
 ```
 
 ## Querying Shared Data
@@ -52,7 +53,8 @@ Pull the latest changes from the remote repository:
 SYNC SHARE external;
 
 -- With authentication if required
-SYNC SHARE reports WITH (SSH_KEY = '/path/to/key');
+SYNC SHARE reports WITH SSH KEY '/path/to/key';
+SYNC SHARE analytics WITH TOKEN 'ghp_xxxxxxxxxxxx';
 ```
 
 ## Managing Shares

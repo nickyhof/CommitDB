@@ -227,10 +227,13 @@ Query external Git repositories without copying data:
 -- Create a share from an external repository
 CREATE SHARE external FROM 'https://github.com/company/data.git';
 
--- With authentication
-CREATE SHARE reports FROM 'git@github.com:company/reports.git' WITH (
-    SSH_KEY = '/path/to/key'
-);
+-- With SSH authentication
+CREATE SHARE reports FROM 'git@github.com:company/reports.git'
+    WITH SSH KEY '/path/to/key';
+
+-- With token authentication
+CREATE SHARE data FROM 'https://github.com/company/data.git'
+    WITH TOKEN 'ghp_xxxxxxxxxxxx';
 
 -- Query shared tables using 3-level naming
 SELECT * FROM external.mydb.users;
