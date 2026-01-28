@@ -130,6 +130,7 @@ type CreateTableStatement struct {
 type DropTableStatement struct {
 	Database string
 	Table    string
+	IfExists bool
 }
 
 type ShowDatabasesStatement struct {
@@ -185,6 +186,7 @@ type CreateDatabaseStatement struct {
 
 type DropDatabaseStatement struct {
 	Database string
+	IfExists bool
 }
 
 type CreateIndexStatement struct {
@@ -1758,8 +1760,19 @@ func ParseDropIndex(parser *Parser) (Statement, error) {
 func ParseDropTable(parser *Parser) (Statement, error) {
 	var dropTableStatement DropTableStatement
 
+	// Check for IF EXISTS
+	token := parser.lexer.PeekToken()
+	if token.Type == If {
+		parser.lexer.NextToken() // consume IF
+		token = parser.lexer.NextToken()
+		if token.Type != Exists {
+			return nil, errors.New("expected EXISTS after IF")
+		}
+		dropTableStatement.IfExists = true
+	}
+
 	// Parse table name
-	token := parser.lexer.NextToken()
+	token = parser.lexer.NextToken()
 	if token.Type != Identifier {
 		return nil, errors.New("expected table name after TABLE")
 	}
@@ -1791,8 +1804,19 @@ func ParseCreateDatabase(parser *Parser) (Statement, error) {
 func ParseDropDatabase(parser *Parser) (Statement, error) {
 	var dropDatabaseStatement DropDatabaseStatement
 
+	// Check for IF EXISTS
+	token := parser.lexer.PeekToken()
+	if token.Type == If {
+		parser.lexer.NextToken() // consume IF
+		token = parser.lexer.NextToken()
+		if token.Type != Exists {
+			return nil, errors.New("expected EXISTS after IF")
+		}
+		dropDatabaseStatement.IfExists = true
+	}
+
 	// Parse database name
-	token := parser.lexer.NextToken()
+	token = parser.lexer.NextToken()
 	if token.Type != Identifier {
 		return nil, errors.New("expected database name after DATABASE")
 	}

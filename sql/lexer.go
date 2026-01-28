@@ -143,6 +143,8 @@ const (
 	Share
 	Shares
 	Sync
+	If
+	Exists
 	EOF
 	Unknown
 )
@@ -498,6 +500,10 @@ func lookupIdentifier(id string) TokenType {
 		return Create
 	case "DROP":
 		return Drop
+	case "IF":
+		return If
+	case "EXISTS":
+		return Exists
 	case "ALTER":
 		return Alter
 	case "ADD":

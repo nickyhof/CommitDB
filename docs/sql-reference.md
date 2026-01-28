@@ -9,6 +9,7 @@ Complete SQL syntax reference for CommitDB.
 ```sql
 CREATE DATABASE mydb;
 DROP DATABASE mydb;
+DROP DATABASE IF EXISTS mydb;  -- No error if database doesn't exist
 SHOW DATABASES;
 ```
 
@@ -27,6 +28,7 @@ CREATE TABLE mydb.users (
 );
 
 DROP TABLE mydb.users;
+DROP TABLE IF EXISTS mydb.users;  -- No error if table doesn't exist
 SHOW TABLES IN mydb;
 DESCRIBE mydb.users;
 ```

@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-01-28
+
+### Added
+
+#### IF EXISTS Clause
+- `DROP TABLE IF EXISTS db.table` - Silently succeeds if table doesn't exist
+- `DROP DATABASE IF EXISTS db` - Silently succeeds if database doesn't exist
+
+### Changed
+
+#### Ibis Backend Improvements
+- Simplified `execute()` method - removed redundant type conversion logic
+- Simplified `insert()` method - now only accepts pandas DataFrames
+- Added `drop_table()` method with `force` parameter for IF EXISTS support
+- Removed unused internal code and imports
+
 ## [2.2.0] - 2026-01-28
 
 ### Added
@@ -415,6 +431,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests run with both memory and file persistence modes
 - Persistence reopen tests for data durability verification
 
+[2.3.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.3.0
 [2.2.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.2.0
 [2.1.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.1.0
 [2.0.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.0.0

@@ -20,7 +20,6 @@ Usage:
 
 from __future__ import annotations
 
-import contextlib
 from typing import TYPE_CHECKING, Any
 
 import ibis.expr.datatypes as dt
@@ -122,7 +121,6 @@ class Backend(SQLBackend):
         super().__init__()
         self._client: CommitDBClient | None = None
         self._current_database: str | None = None
-        self._in_memory_tables: dict[str, Any] = {}
     
     def _get_schema_using_query(self, query: str) -> sch.Schema:
         """Get schema by executing a query with LIMIT 1.
@@ -150,11 +148,10 @@ class Backend(SQLBackend):
     def _register_in_memory_table(self, op: Any) -> None:
         """Register a table for in-memory operations.
         
-        CommitDB doesn't support in-memory tables, so we store them locally.
+        CommitDB doesn't support in-memory tables, so this is a no-op.
+        Required by SQLBackend abstract base class.
         """
-        # Store the table data for later insertion
-        name = op.name
-        self._in_memory_tables[name] = op
+        pass
     
     @property
     def version(self) -> str:
@@ -296,14 +293,9 @@ class Backend(SQLBackend):
             query = query.sql(dialect="sqlite")
         return client.execute(query)
     
-    @contextlib.contextmanager
     def _safe_raw_sql(self, query: str | sg.Expression, **kwargs):
         """Execute SQL and yield the result."""
-        result = self.raw_sql(query, **kwargs)
-        try:
-            yield result
-        finally:
-            pass  # No cursor to close
+        yield self.raw_sql(query, **kwargs)
     
     def execute(
         self,
@@ -322,22 +314,8 @@ class Backend(SQLBackend):
         client = self._ensure_connected()
         result = client.query(sql)
         
-        # Convert to DataFrame
-        df = pd.DataFrame(result.data, columns=result.columns)
-        
-        # Apply type conversions if needed
-        schema = expr.schema() if hasattr(expr, "schema") else None
-        if schema:
-            for col, dtype in schema.items():
-                if col in df.columns:
-                    if isinstance(dtype, dt.Int64):
-                        df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
-                    elif isinstance(dtype, dt.Float64):
-                        df[col] = pd.to_numeric(df[col], errors="coerce")
-                    elif isinstance(dtype, dt.Boolean):
-                        df[col] = df[col].map({"true": True, "false": False, "1": True, "0": False})
-        
-        return df
+        # Convert to DataFrame - pandas infers types from the JSON response
+        return pd.DataFrame(result.data, columns=result.columns)
     
     def create_table(
         self,
@@ -432,25 +410,44 @@ class Backend(SQLBackend):
     def insert(
         self,
         table_name: str,
-        obj: pd.DataFrame | ir.Table,
+        obj: pd.DataFrame,
         *,
         database: str | None = None,
     ) -> None:
-        """Insert data into a table."""
-        import pandas as pd
-        
+        """Insert data from a pandas DataFrame into a table."""
         db = database or self._current_database
         if not db:
             raise CommitDBError("No database specified.")
         
         full_name = f"{db}.{table_name}"
+        self._insert_dataframe(full_name, obj)
+    
+    def drop_table(
+        self,
+        name: str,
+        *,
+        database: str | None = None,
+        force: bool = False,
+    ) -> None:
+        """Drop a table.
         
-        if isinstance(obj, pd.DataFrame):
-            self._insert_dataframe(full_name, obj)
-        else:
-            # Ibis Table - execute and insert
-            df = obj.execute()
-            self._insert_dataframe(full_name, df)
+        Parameters
+        ----------
+        name
+            Table name to drop
+        database
+            Database containing the table
+        force
+            If True, use IF EXISTS to avoid error if table doesn't exist
+        """
+        client = self._ensure_connected()
+        db = database or self._current_database
+        if not db:
+            raise CommitDBError("No database specified.")
+        
+        full_name = f"{db}.{name}"
+        if_exists = "IF EXISTS " if force else ""
+        client.execute(f"DROP TABLE {if_exists}{full_name}")
 
 
 def connect(
