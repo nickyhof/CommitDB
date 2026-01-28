@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-01-28
+
+### Added
+
+#### Shared Databases
+- Query external Git repositories without copying data
+- `CREATE SHARE name FROM 'url'` - Create a read-only reference to external repository
+- `SYNC SHARE name` - Pull latest changes from remote
+- `DROP SHARE name` - Remove a share
+- `SHOW SHARES` - List all configured shares
+- 3-level naming for shared tables: `share.database.table`
+- Cross-repository JOINs: `SELECT * FROM local.orders JOIN external.users u ON ...`
+- Authentication support: SSH keys, tokens
+- Share metadata persisted in Git (`.commitdb/shares.json`)
+- Cloned repositories stored in `.shares/` directory
+
+#### Ibis Backend for Pandas Integration
+- Official Ibis backend enabling pandas DataFrame support
+- Connect via `ibis.commitdb.connect(host, port, database=...)`
+- URL-based connection: `ibis.connect('commitdb://localhost:3306/mydb')`
+- Lazy expression evaluation with Ibis query DSL
+- Full pandas DataFrame output from `execute()` calls
+- Schema introspection and table listing
+
+#### Python Driver Improvements
+- Dynamic version reading from package metadata using `importlib.metadata`
+- Single source of truth for version in `pyproject.toml`
+
+### Changed
+
+#### Execution Time Standardization
+- Renamed `ExecutionTimeSec` to `ExecutionTimeMs` across all result types
+- Added `ExecutionOps` field to CGO bindings and server protocol
+- Renamed JSON fields from `time_ms` to `execution_time_ms`
+- Added `execution_ops` JSON field
+- Python driver updated to use `execution_time_ms` and `execution_ops`
+
+#### Benchmarks
+- Added DuckDB comparative benchmarks for performance baseline
+
 ## [2.1.0] - 2026-01-25
 
 ### Added
@@ -375,6 +415,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests run with both memory and file persistence modes
 - Persistence reopen tests for data durability verification
 
+[2.2.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.2.0
+[2.1.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.1.0
 [2.0.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.0.0
 [1.7.0]: https://github.com/nickyhof/CommitDB/releases/tag/v1.7.0
 [1.6.0]: https://github.com/nickyhof/CommitDB/releases/tag/v1.6.0
