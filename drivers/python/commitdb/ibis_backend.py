@@ -20,6 +20,7 @@ Usage:
 
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING, Any
 
 import ibis.expr.datatypes as dt
@@ -121,6 +122,8 @@ class Backend(SQLBackend):
         super().__init__()
         self._client: CommitDBClient | None = None
         self._current_database: str | None = None
+        # Compile must be an instance, not a class
+        self.compiler = CommitDBCompiler()
     
     def _get_schema_using_query(self, query: str) -> sch.Schema:
         """Get schema by executing a query with LIMIT 1.
@@ -293,9 +296,46 @@ class Backend(SQLBackend):
             query = query.sql(dialect="sqlite")
         return client.execute(query)
     
+    @contextlib.contextmanager
     def _safe_raw_sql(self, query: str | sg.Expression, **kwargs):
         """Execute SQL and yield the result."""
         yield self.raw_sql(query, **kwargs)
+    
+    def table(
+        self,
+        name: str,
+        database: str | None = None,
+    ) -> ir.Table:
+        """Get a reference to a table.
+        
+        Handles CommitDB's database.table format by splitting the name.
+        """
+        # Handle database.table format
+        if "." in name and database is None:
+            database, name = name.split(".", 1)
+        
+        return super().table(name, database=database)
+    
+    def compile(
+        self,
+        expr: ir.Expr,
+        /,
+        *,
+        limit: str | int | None = None,
+        params: dict | None = None,
+        pretty: bool = False,
+    ) -> str:
+        """Compile an expression to a SQL string.
+        
+        Overridden to remove quotes from identifiers since CommitDB
+        doesn't require quoted identifiers for simple names.
+        """
+        query = self.compiler.to_sqlglot(expr, limit=limit, params=params)
+        sql = query.sql(dialect=self.dialect, pretty=pretty, copy=False)
+        # Remove quotes from simple identifiers (CommitDB doesn't need them)
+        sql = sql.replace('"', '')
+        self._log(sql)
+        return sql
     
     def execute(
         self,
