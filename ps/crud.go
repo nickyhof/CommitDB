@@ -117,11 +117,21 @@ func (persistence *Persistence) ListDatabases() []string {
 		return nil
 	}
 
-	var databases []string
+	// Use a set to avoid duplicates (database can exist as both .database file and directory)
+	databaseSet := make(map[string]bool)
 	for _, entry := range entries {
-		if entry.IsDir && entry.Name != ".git" {
-			databases = append(databases, entry.Name)
+		if entry.IsDir && entry.Name != ".git" && entry.Name != ".shares" {
+			databaseSet[entry.Name] = true
+		} else if !entry.IsDir && strings.HasSuffix(entry.Name, ".database") {
+			// Extract database name from .database file
+			dbName := strings.TrimSuffix(entry.Name, ".database")
+			databaseSet[dbName] = true
 		}
+	}
+
+	var databases []string
+	for db := range databaseSet {
+		databases = append(databases, db)
 	}
 
 	return databases

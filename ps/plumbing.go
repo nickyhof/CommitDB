@@ -369,9 +369,17 @@ func (p *Persistence) createCommitDirect(treeHash plumbing.Hash, identity core.I
 	}
 
 	// Update HEAD reference
+	// Determine the branch name - use HEAD's target even if no commits exist
 	branchName := plumbing.Master
 	if headRef != nil && headRef.Name().IsBranch() {
 		branchName = headRef.Name()
+	} else {
+		// HEAD might point to an unborn branch (no commits yet)
+		// Try to resolve the symbolic HEAD to get the target branch
+		head, err := p.repo.Storer.Reference(plumbing.HEAD)
+		if err == nil && head.Type() == plumbing.SymbolicReference {
+			branchName = head.Target()
+		}
 	}
 
 	ref := plumbing.NewHashReference(branchName, commitHash)
@@ -452,7 +460,8 @@ func (p *Persistence) syncWorktree() error {
 
 	headRef, err := p.repo.Head()
 	if err != nil {
-		return err
+		// No HEAD means empty repo - nothing to sync
+		return nil
 	}
 
 	// Check if tree is empty (happens after DROP operations)

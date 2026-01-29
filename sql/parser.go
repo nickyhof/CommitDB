@@ -1598,7 +1598,12 @@ func ParseCreateTable(parser *Parser) (Statement, error) {
 
 	for {
 		token = parser.lexer.NextToken()
-		if token.Type != Identifier {
+		// Allow keywords to be used as column names (e.g., date, key, column)
+		// Check for valid column name: Identifier or any keyword with a non-empty value
+		if token.Type == ParenClose {
+			return nil, errors.New("expected column name")
+		}
+		if token.Value == "" || token.Type == EOF {
 			return nil, errors.New("expected column name")
 		}
 		columnName := token.Value

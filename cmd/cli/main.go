@@ -53,7 +53,11 @@ func main() {
 		Instance = *CommitDB.Open(&persistence)
 	} else {
 		fmt.Printf("%sUsing file persistence: %s%s\n", SuccessColor, *baseDir, ResetColor)
-		persistence, err := ps.NewFilePersistence(*baseDir, gitUrl)
+		var gitUrlPtr *string
+		if *gitUrl != "" {
+			gitUrlPtr = gitUrl
+		}
+		persistence, err := ps.NewFilePersistence(*baseDir, gitUrlPtr)
 		if err != nil {
 			fmt.Printf("%sError: %v%s\n", ErrorColor, err, ResetColor)
 			return

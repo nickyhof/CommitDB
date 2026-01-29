@@ -2275,24 +2275,9 @@ func (engine *Engine) executeCopyIntoTable(statement sql.CopyStatement, startTim
 		return nil, fmt.Errorf("CSV columns (%d) don't match table columns (%d)", len(columnNames), len(tableColumns))
 	}
 
-	// Create a staging table with unique name for disk-backed staging
-	stagingTableName := fmt.Sprintf("_staging_%s_%d", statement.Table, time.Now().UnixNano())
-	stagingTable := tableOp.Table
-	stagingTable.Name = stagingTableName
-
-	_, stagingOp, err := op.CreateTable(stagingTable, engine.Persistence, engine.Identity)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create staging table: %v", err)
-	}
-
-	// Ensure cleanup of staging table on exit
-	defer func() {
-		stagingOp.DropTable(engine.Identity)
-	}()
-
-	// Stream rows into staging table (disk-backed)
+	// Batch all records for a single commit
+	records := make(map[string][]byte)
 	rowNum := 1
-	recordCount := 0
 	if statement.Header {
 		rowNum = 2 // Account for header row in error messages
 	}
@@ -2311,7 +2296,8 @@ func (engine *Engine) executeCopyIntoTable(statement sql.CopyStatement, startTim
 		}
 
 		data := make(map[string]interface{})
-		for j, colName := range columnNames {
+		// Use table column names (not CSV header names) so primary key lookup works
+		for j, colName := range tableColumns {
 			data[colName] = row[j]
 		}
 
@@ -2321,32 +2307,26 @@ func (engine *Engine) executeCopyIntoTable(statement sql.CopyStatement, startTim
 			return nil, fmt.Errorf("failed to marshal row %d: %v", rowNum, err)
 		}
 
-		// Insert into staging table (writes to disk)
-		_, err = stagingOp.Put(pkValue, jsonData, engine.Identity)
-		if err != nil {
-			return nil, fmt.Errorf("failed to stage row %d: %v", rowNum, err)
-		}
-
-		recordCount++
+		records[pkValue] = jsonData
 		rowNum++
 	}
 
-	if recordCount == 0 {
+	if len(records) == 0 {
 		return CommitResult{
 			RecordsWritten:  0,
 			ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
 		}, nil
 	}
 
-	// Copy from staging to final table in single atomic transaction (zero-memory)
-	txn, err := tableOp.CopyFrom(stagingOp, engine.Identity)
+	// Insert all records in a single atomic transaction
+	txn, err := tableOp.PutAll(records, engine.Identity)
 	if err != nil {
-		return nil, fmt.Errorf("failed to copy records: %v", err)
+		return nil, fmt.Errorf("failed to insert records: %v", err)
 	}
 
 	return CommitResult{
 		Transaction:     txn,
-		RecordsWritten:  recordCount,
+		RecordsWritten:  len(records),
 		ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
 	}, nil
 }
