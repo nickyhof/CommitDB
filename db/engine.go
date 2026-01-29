@@ -145,18 +145,53 @@ func (engine *Engine) executeSelectStatement(statement sql.SelectStatement) (Que
 		columns = append(columns, statement.Columns...)
 	}
 
-	// Scan all rows from the main table
+	// Try to use an index for WHERE clause optimization
 	var results []map[string]string
-	for _, rawData := range tableOp.Scan() {
-		rowsScanned++
+	indexUsed := false
 
-		var jsonData map[string]string
-		err := json.Unmarshal(rawData, &jsonData)
-		if err != nil {
-			return QueryResult{}, err
+	if len(statement.Where.Conditions) > 0 && len(statement.Joins) == 0 {
+		// Load indexes for this table
+		indexManager := ps.NewIndexManager(persistence, engine.Identity)
+		indexManager.LoadIndexes(statement.Database, statement.Table, tableOp.Table.Columns)
+
+		// Check if any WHERE condition can use an index (simple equality for now)
+		for _, cond := range statement.Where.Conditions {
+			if cond.Operator == sql.EqualsOperator {
+				if idx, found := indexManager.GetIndex(statement.Database, statement.Table, cond.Left); found {
+					// Use index lookup!
+					primaryKeys := idx.Lookup(cond.Right)
+					for _, pk := range primaryKeys {
+						rowsScanned++
+						rawData, exists := tableOp.Get(pk)
+						if !exists {
+							continue
+						}
+						var jsonData map[string]string
+						if err := json.Unmarshal(rawData, &jsonData); err != nil {
+							continue
+						}
+						results = append(results, jsonData)
+					}
+					indexUsed = true
+					break // Only use first matching index
+				}
+			}
 		}
+	}
 
-		results = append(results, jsonData)
+	// Fall back to full scan if no index was used
+	if !indexUsed {
+		for _, rawData := range tableOp.Scan() {
+			rowsScanned++
+
+			var jsonData map[string]string
+			err := json.Unmarshal(rawData, &jsonData)
+			if err != nil {
+				return QueryResult{}, err
+			}
+
+			results = append(results, jsonData)
+		}
 	}
 
 	// Execute JOINs
@@ -1481,15 +1516,44 @@ func (engine *Engine) executeShowTablesStatement(statement sql.ShowTablesStateme
 
 func (engine *Engine) executeCreateIndexStatement(statement sql.CreateIndexStatement) (CommitResult, error) {
 	startTime := time.Now()
-	opCount := 1
+	opCount := 0
+
+	// Get table to scan existing data
+	tableOp, err := op.GetTable(statement.Database, statement.Table, engine.Persistence)
+	if err != nil {
+		return CommitResult{}, fmt.Errorf("table not found: %v", err)
+	}
 
 	// Create index manager
 	indexManager := ps.NewIndexManager(engine.Persistence, engine.Identity)
 
-	// Create the index
-	_, err := indexManager.CreateIndex(statement.Name, statement.Database, statement.Table, statement.Column, statement.Unique)
+	// Create the index (not yet persisted)
+	idx, err := indexManager.CreateIndex(statement.Name, statement.Database, statement.Table, statement.Column, statement.Unique)
 	if err != nil {
 		return CommitResult{}, err
+	}
+
+	// Scan all existing rows and populate the index
+	for pk, rawData := range tableOp.Scan() {
+		opCount++
+		var row map[string]string
+		if err := json.Unmarshal(rawData, &row); err != nil {
+			continue
+		}
+
+		columnValue, exists := row[statement.Column]
+		if !exists {
+			continue
+		}
+
+		if err := idx.Insert(columnValue, pk); err != nil {
+			return CommitResult{}, fmt.Errorf("failed to build index: %v", err)
+		}
+	}
+
+	// Save the populated index
+	if err := indexManager.SaveIndex(idx); err != nil {
+		return CommitResult{}, fmt.Errorf("failed to save index: %v", err)
 	}
 
 	return CommitResult{
