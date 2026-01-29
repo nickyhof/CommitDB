@@ -53,13 +53,13 @@ docker run -p 3306:3306 \
   --jwt-secret "your-secret" --jwt-issuer "https://auth.example.com"
 ```
 
-## Python Driver
+## Python Client
 
 ```bash
 pip install commitdb
 ```
 
-See [Python Driver](python-driver.md) for usage.
+See [Python Client](python-client.md) for usage.
 
 ## Go Library
 

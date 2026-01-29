@@ -341,7 +341,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Python Driver
-- Python client library at `drivers/python/`
+- Python client library at `clients/python/`
 - `CommitDB` class with connection handling and query execution
 - `QueryResult` and `CommitResult` dataclasses for typed results
 - Context manager support for automatic connection cleanup

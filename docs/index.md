@@ -62,3 +62,13 @@ A Git-backed SQL database engine written in Go. Every transaction is a Git commi
 | **Bulk I/O** | COPY INTO for CSV import/export |
 | **Version Control** | Branching, merging, snapshots, time-travel restore |
 | **Remote** | Push, pull, fetch with token/SSH/basic auth |
+
+## Documentation
+
+- [Quick Start](quickstart.md) – Get running in 5 minutes
+- [CLI & Server Reference](cli-server.md) – Command-line options and usage
+- [SQL Reference](sql-reference.md) – Full SQL syntax
+- [Branching & Merging](branching.md) – Version control features
+- [Shared Databases](shared-databases.md) – Cross-database queries
+- [Python Client](python-client.md) – Python client library
+- [Go API](go-api.md) – Embedding in Go applications

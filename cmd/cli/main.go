@@ -36,7 +36,9 @@ type CLI struct {
 func main() {
 	baseDir := flag.String("baseDir", "", "Base directory for the database")
 	gitUrl := flag.String("gitUrl", "", "Git URL for the database")
-	sqlFile := flag.String("f", "", "SQL file to execute")
+	sqlFile := flag.String("sqlFile", "", "SQL file to execute (non-interactive)")
+	userName := flag.String("name", "CommitDB", "User name for Git commits")
+	userEmail := flag.String("email", "cli@commitdb.local", "User email for Git commits")
 	flag.Parse()
 
 	printBanner()
@@ -53,7 +55,11 @@ func main() {
 		Instance = *CommitDB.Open(&persistence)
 	} else {
 		fmt.Printf("%sUsing file persistence: %s%s\n", SuccessColor, *baseDir, ResetColor)
-		persistence, err := ps.NewFilePersistence(*baseDir, gitUrl)
+		var gitUrlPtr *string
+		if *gitUrl != "" {
+			gitUrlPtr = gitUrl
+		}
+		persistence, err := ps.NewFilePersistence(*baseDir, gitUrlPtr)
 		if err != nil {
 			fmt.Printf("%sError: %v%s\n", ErrorColor, err, ResetColor)
 			return
@@ -62,8 +68,8 @@ func main() {
 	}
 
 	engine := Instance.Engine(core.Identity{
-		Name:  "CommitDB",
-		Email: "cli@commitdb.local",
+		Name:  *userName,
+		Email: *userEmail,
 	})
 
 	cli := &CLI{

@@ -436,7 +436,7 @@ func lookupIdentifier(id string) TokenType {
 		return TableIdentifier
 	case "TABLES":
 		return TablesIdentifier
-	case "INDEX":
+	case "INDEX", "INDEXES":
 		return IndexIdentifier
 	case "SHOW":
 		return Show

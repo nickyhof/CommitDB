@@ -62,13 +62,15 @@ func (im *IndexManager) CreateIndex(name, database, table, column string, unique
 
 	im.indexes[key] = idx
 
-	// Persist the index definition
-	if err := im.saveIndex(idx); err != nil {
-		delete(im.indexes, key)
-		return nil, err
-	}
-
+	// Don't persist yet - caller will populate and then call SaveIndex
 	return idx, nil
+}
+
+// SaveIndex persists an index to storage (public wrapper)
+func (im *IndexManager) SaveIndex(idx *Index) error {
+	im.mu.Lock()
+	defer im.mu.Unlock()
+	return im.saveIndex(idx)
 }
 
 // GetIndex retrieves an existing index
