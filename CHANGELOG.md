@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-01-28
+
+### Added
+
+#### Index Population on CREATE INDEX
+- Indexes now automatically populate with existing table data on creation
+- `CREATE UNIQUE INDEX` validates uniqueness during index build
+- Failed unique constraint returns clear error message with duplicate value
+
+#### Index-Accelerated Queries
+- `SELECT` with equality `WHERE` conditions now use indexes when available
+- Significant performance improvement for filtered queries on indexed columns
+
+#### CLI Enhancements
+- `-name` flag for custom Git commit author name
+- `-email` flag for custom Git commit author email
+- `-sqlFile` flag for executing SQL files (non-interactive mode)
+
+#### Documentation
+- New [CLI & Server Reference](docs/cli-server.md) with comprehensive usage guide
+- Decision table for when to use CLI vs Server
+- All CLI and Server options documented with examples
+
+### Changed
+
+#### Renamed Python Driver to Python Client
+- `drivers/` directory renamed to `clients/`
+- All documentation updated to use "Python Client" terminology
+
+### Fixed
+
+#### File Persistence Fixes
+- Fixed `SHOW DATABASES` not listing databases after creation in file mode
+- Fixed symref HEAD resolution for initial repository state
+- Improved database discovery from Git tree structure
+
+#### COPY INTO Performance
+- Changed from per-row commits to batched atomic commits
+- Fast import of large CSV files (3000 rows in 1.1s)
+
+#### SHOW INDEXES Parsing
+- `SHOW INDEXES ON table` now works (previously only `SHOW INDEX` worked)
+
 ## [2.3.0] - 2026-01-28
 
 ### Added
@@ -431,6 +474,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests run with both memory and file persistence modes
 - Persistence reopen tests for data durability verification
 
+[2.4.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.4.0
 [2.3.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.3.0
 [2.2.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.2.0
 [2.1.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.1.0
