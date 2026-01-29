@@ -70,5 +70,5 @@ A Git-backed SQL database engine written in Go. Every transaction is a Git commi
 - [SQL Reference](sql-reference.md) – Full SQL syntax
 - [Branching & Merging](branching.md) – Version control features
 - [Shared Databases](shared-databases.md) – Cross-database queries
-- [Python Driver](python-driver.md) – Python client library
+- [Python Client](python-client.md) – Python client library
 - [Go API](go-api.md) – Embedding in Go applications

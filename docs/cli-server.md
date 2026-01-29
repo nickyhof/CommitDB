@@ -77,7 +77,7 @@ The CLI provides a REPL for direct database interaction.
 
 ## Server (`commitdb-server`)
 
-The server exposes a TCP protocol for network access, allowing connections from the Python driver and other clients.
+The server exposes a TCP protocol for network access, allowing connections from the Python Client and other clients.
 
 ### Options
 

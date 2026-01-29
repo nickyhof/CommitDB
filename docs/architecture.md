@@ -16,8 +16,8 @@ CommitDB/
 │   ├── plumbing.go     # Low-level Git operations
 │   └── batch.go        # Batch commit operations
 ├── bindings/         # C shared library bindings
-├── drivers/
-│   └── python/       # Python driver
+├── clients/
+│   └── python/       # Python client
 ├── tests/            # Tests and benchmarks
 └── scripts/          # Build and CI scripts
 ```

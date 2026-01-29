@@ -86,4 +86,4 @@ MERGE feature_x
 
 - [SQL Reference](sql-reference.md) - Full SQL syntax
 - [Branching & Merging](branching.md) - Version control features
-- [Python Driver](python-driver.md) - Python client library
+- [Python Client](python-client.md) - Python client library

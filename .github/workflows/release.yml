@@ -149,12 +149,12 @@ jobs:
         uses: actions/deploy-pages@v4
 
   pypi:
-    name: Publish Python Driver
+    name: Publish Python Client
     runs-on: ubuntu-latest
     needs: release
     defaults:
       run:
-        working-directory: drivers/python
+        working-directory: clients/python
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -168,9 +168,9 @@ jobs:
       - name: Build shared libraries
         working-directory: .
         run: |
-          mkdir -p drivers/python/commitdb/lib
+          mkdir -p clients/python/commitdb/lib
           # Build for Linux amd64
-          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -buildmode=c-shared -o drivers/python/commitdb/lib/libcommitdb-linux-amd64.so ./bindings
+          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -buildmode=c-shared -o clients/python/commitdb/lib/libcommitdb-linux-amd64.so ./bindings
 
       - name: Set up Python
         uses: actions/setup-python@v5

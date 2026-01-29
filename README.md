@@ -79,7 +79,7 @@ If you need sub-millisecond analytics, use DuckDB. If you need version control f
 - [SQL Reference](https://nickyhof.github.io/CommitDB/sql-reference/)
 - [Branching & Merging](https://nickyhof.github.io/CommitDB/branching/)
 - [Shared Databases](https://nickyhof.github.io/CommitDB/shared-databases/)
-- [Python Driver](https://nickyhof.github.io/CommitDB/python-driver/)
+- [Python Client](https://nickyhof.github.io/CommitDB/python-client/)
 - [Go API](https://nickyhof.github.io/CommitDB/go-api/)
 - [Benchmarks](https://nickyhof.github.io/CommitDB/benchmarks/)
 

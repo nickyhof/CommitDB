@@ -41,7 +41,7 @@ nav:
     - Remote Operations: remote-operations.md
     - Shared Databases: shared-databases.md
   - Drivers:
-    - Python Driver: python-driver.md
+    - Python Client: python-client.md
     - Go API: go-api.md
   - Performance:
     - Benchmarks: benchmarks.md

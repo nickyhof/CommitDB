@@ -103,7 +103,7 @@ SELECT * FROM public_data.census.population
 WHERE state = 'California';
 ```
 
-## Python Driver
+## Python Client
 
 ```python
 from commitdb import CommitDB
