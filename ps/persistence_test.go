@@ -253,3 +253,55 @@ func TestDropTable(t *testing.T) {
 		t.Error("Expected error getting dropped table")
 	}
 }
+
+func TestEmptyCommitPrevention(t *testing.T) {
+	persistence, err := NewMemoryPersistence()
+	if err != nil {
+		t.Fatalf("Failed to create persistence: %v", err)
+	}
+
+	identity := core.Identity{Name: "test", Email: "test@test.com"}
+
+	// Create database and table
+	persistence.CreateDatabase(core.Database{Name: "testdb"}, identity)
+	persistence.CreateTable(core.Table{Database: "testdb", Name: "users", Columns: []core.Column{{Name: "id"}}}, identity)
+
+	// Save initial record
+	records := map[string][]byte{"1": []byte(`{"id":"1","name":"Alice"}`)}
+	txn1, err := persistence.SaveRecord("testdb", "users", records, identity)
+	if err != nil {
+		t.Fatalf("Failed to save initial record: %v", err)
+	}
+	if txn1.Id == "" {
+		t.Error("Expected transaction ID for initial save")
+	}
+
+	// Save exact same record again - should NOT create a new commit
+	txn2, err := persistence.SaveRecord("testdb", "users", records, identity)
+	if err != nil {
+		t.Fatalf("Failed to save duplicate record: %v", err)
+	}
+	if txn2.Id != "" {
+		t.Error("Expected empty transaction ID when no changes are made (duplicate data)")
+	}
+
+	// Save different record - SHOULD create a new commit
+	records2 := map[string][]byte{"2": []byte(`{"id":"2","name":"Bob"}`)}
+	txn3, err := persistence.SaveRecord("testdb", "users", records2, identity)
+	if err != nil {
+		t.Fatalf("Failed to save new record: %v", err)
+	}
+	if txn3.Id == "" {
+		t.Error("Expected transaction ID for new data")
+	}
+
+	// Verify data integrity
+	_, exists := persistence.GetRecord("testdb", "users", "1")
+	if !exists {
+		t.Error("Expected record 1 to exist")
+	}
+	_, exists = persistence.GetRecord("testdb", "users", "2")
+	if !exists {
+		t.Error("Expected record 2 to exist")
+	}
+}

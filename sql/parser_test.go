@@ -420,6 +420,31 @@ func TestParser(t *testing.T) {
 				ViewName: "cached_data",
 			},
 		},
+		{
+			"select with as of",
+			"SELECT * FROM db.users AS OF 'abc1234'",
+			SelectStatement{
+				Database: "db",
+				Table:    "users",
+				Columns:  []string{},
+				AsOf:     "abc1234",
+			},
+		},
+		{
+			"select columns with as of",
+			"SELECT name, age FROM db.users AS OF 'def5678' WHERE age > 30",
+			SelectStatement{
+				Database: "db",
+				Table:    "users",
+				Columns:  []string{"name", "age"},
+				AsOf:     "def5678",
+				Where: WhereClause{
+					Conditions: []WhereCondition{
+						{Left: "age", Operator: GreaterThanOperator, Right: "30"},
+					},
+				},
+			},
+		},
 	}
 
 	for _, test := range tests {

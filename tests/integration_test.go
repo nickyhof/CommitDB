@@ -1953,3 +1953,320 @@ func TestIntegrationViewErrors(t *testing.T) {
 		}
 	})
 }
+
+// TestIntegrationTimeTravelQueries tests querying data at specific transactions
+func TestIntegrationTimeTravelQueries(t *testing.T) {
+	runWithBothPersistence(t, func(t *testing.T, engine *db.Engine) {
+		// Setup
+		engine.Execute("CREATE DATABASE ttdb")
+		engine.Execute("CREATE TABLE ttdb.users (id INT PRIMARY KEY, name STRING, status STRING)")
+
+		// Insert first record and capture transaction
+		result1, err := engine.Execute("INSERT INTO ttdb.users (id, name, status) VALUES (1, 'Alice', 'active')")
+		if err != nil {
+			t.Fatalf("First INSERT failed: %v", err)
+		}
+		txn1 := result1.(db.CommitResult).Transaction.Id
+		if txn1 == "" {
+			t.Fatal("Expected transaction ID from first INSERT")
+		}
+
+		// Insert second record and capture transaction
+		result2, err := engine.Execute("INSERT INTO ttdb.users (id, name, status) VALUES (2, 'Bob', 'active')")
+		if err != nil {
+			t.Fatalf("Second INSERT failed: %v", err)
+		}
+		txn2 := result2.(db.CommitResult).Transaction.Id
+
+		// Update Alice's status and capture transaction
+		result3, err := engine.Execute("UPDATE ttdb.users SET status = 'inactive' WHERE id = 1")
+		if err != nil {
+			t.Fatalf("UPDATE failed: %v", err)
+		}
+		txn3 := result3.(db.CommitResult).Transaction.Id
+
+		// Current state: Alice (inactive), Bob (active)
+		result, err := engine.Execute("SELECT * FROM ttdb.users ORDER BY id")
+		if err != nil {
+			t.Fatalf("Current SELECT failed: %v", err)
+		}
+		qr := result.(db.QueryResult)
+		if len(qr.Data) != 2 {
+			t.Errorf("Expected 2 rows in current state, got %d", len(qr.Data))
+		}
+
+		// Query at transaction 1: Only Alice (active)
+		result, err = engine.Execute("SELECT * FROM ttdb.users AS OF '" + txn1 + "'")
+		if err != nil {
+			t.Fatalf("Time-travel query to txn1 failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 {
+			t.Errorf("Expected 1 row at txn1, got %d", len(qr.Data))
+		}
+		if len(qr.Data) > 0 && qr.Data[0][1] != "Alice" {
+			t.Errorf("Expected Alice at txn1, got %s", qr.Data[0][1])
+		}
+
+		// Query at transaction 2: Alice and Bob (both active)
+		result, err = engine.Execute("SELECT * FROM ttdb.users AS OF '" + txn2 + "' ORDER BY id")
+		if err != nil {
+			t.Fatalf("Time-travel query to txn2 failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 2 {
+			t.Errorf("Expected 2 rows at txn2, got %d", len(qr.Data))
+		}
+		// At txn2, Alice should still be active
+		if len(qr.Data) > 0 {
+			// Find status column index
+			statusIdx := -1
+			for i, col := range qr.Columns {
+				if col == "status" {
+					statusIdx = i
+					break
+				}
+			}
+			if statusIdx >= 0 && qr.Data[0][statusIdx] != "active" {
+				t.Errorf("Expected Alice to be 'active' at txn2, got %s", qr.Data[0][statusIdx])
+			}
+		}
+
+		// Query at transaction 3: Alice (inactive), Bob (active)
+		result, err = engine.Execute("SELECT * FROM ttdb.users AS OF '" + txn3 + "' ORDER BY id")
+		if err != nil {
+			t.Fatalf("Time-travel query to txn3 failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 2 {
+			t.Errorf("Expected 2 rows at txn3, got %d", len(qr.Data))
+		}
+
+		// Test time-travel with WHERE clause
+		result, err = engine.Execute("SELECT name FROM ttdb.users AS OF '" + txn2 + "' WHERE id = 1")
+		if err != nil {
+			t.Fatalf("Time-travel query with WHERE failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 {
+			t.Errorf("Expected 1 row with WHERE, got %d", len(qr.Data))
+		}
+		if len(qr.Data) > 0 && qr.Data[0][0] != "Alice" {
+			t.Errorf("Expected name 'Alice', got %s", qr.Data[0][0])
+		}
+
+		// Test error for invalid transaction
+		_, err = engine.Execute("SELECT * FROM ttdb.users AS OF 'invalid_transaction_id'")
+		if err == nil {
+			t.Error("Expected error for invalid transaction ID")
+		}
+
+		// CRITICAL: Verify time-travel queries don't affect Git state
+		// Run a time-travel query, then insert new data, then verify current state
+		_, err = engine.Execute("SELECT * FROM ttdb.users AS OF '" + txn1 + "'")
+		if err != nil {
+			t.Fatalf("Time-travel before insert failed: %v", err)
+		}
+
+		// Insert new record AFTER time-travel query
+		result4, err := engine.Execute("INSERT INTO ttdb.users (id, name, status) VALUES (3, 'Charlie', 'active')")
+		if err != nil {
+			t.Fatalf("INSERT after time-travel failed: %v", err)
+		}
+		txn4 := result4.(db.CommitResult).Transaction.Id
+		if txn4 == "" {
+			t.Error("Expected transaction ID from INSERT after time-travel")
+		}
+
+		// Verify current state has all 3 rows
+		result, err = engine.Execute("SELECT * FROM ttdb.users ORDER BY id")
+		if err != nil {
+			t.Fatalf("SELECT after time-travel+insert failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 3 {
+			t.Errorf("Expected 3 rows after time-travel+insert, got %d", len(qr.Data))
+		}
+
+		// Verify we can still time-travel to old transactions
+		result, err = engine.Execute("SELECT * FROM ttdb.users AS OF '" + txn2 + "'")
+		if err != nil {
+			t.Fatalf("Time-travel after insert failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 2 {
+			t.Errorf("Expected 2 rows at txn2 after current inserts, got %d", len(qr.Data))
+		}
+
+		// Verify we can time-travel to the newest transaction too
+		result, err = engine.Execute("SELECT * FROM ttdb.users AS OF '" + txn4 + "'")
+		if err != nil {
+			t.Fatalf("Time-travel to new txn failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 3 {
+			t.Errorf("Expected 3 rows at txn4, got %d", len(qr.Data))
+		}
+	})
+}
+
+// TestIntegrationTimeTravelOnViews tests time-travel queries on views
+func TestIntegrationTimeTravelOnViews(t *testing.T) {
+	runWithBothPersistence(t, func(t *testing.T, engine *db.Engine) {
+		// Setup
+		engine.Execute("CREATE DATABASE viewttdb")
+		engine.Execute("CREATE TABLE viewttdb.orders (id INT PRIMARY KEY, product STRING, amount INT)")
+
+		// Insert initial data
+		engine.Execute("INSERT INTO viewttdb.orders (id, product, amount) VALUES (1, 'Widget', 100)")
+		engine.Execute("INSERT INTO viewttdb.orders (id, product, amount) VALUES (2, 'Gadget', 200)")
+
+		// Create a regular view
+		_, err := engine.Execute("CREATE VIEW viewttdb.all_orders AS SELECT * FROM viewttdb.orders")
+		if err != nil {
+			t.Fatalf("CREATE VIEW failed: %v", err)
+		}
+
+		// Capture transaction after view creation
+		result, err := engine.Execute("INSERT INTO viewttdb.orders (id, product, amount) VALUES (3, 'Gizmo', 300)")
+		if err != nil {
+			t.Fatalf("INSERT after view failed: %v", err)
+		}
+		txnAfterView := result.(db.CommitResult).Transaction.Id
+
+		// Add more data after
+		engine.Execute("INSERT INTO viewttdb.orders (id, product, amount) VALUES (4, 'Doodad', 400)")
+
+		// Current view should have 4 rows
+		result, err = engine.Execute("SELECT * FROM viewttdb.all_orders")
+		if err != nil {
+			t.Fatalf("SELECT from view failed: %v", err)
+		}
+		qr := result.(db.QueryResult)
+		if len(qr.Data) != 4 {
+			t.Errorf("Expected 4 rows in current view, got %d", len(qr.Data))
+		}
+
+		// Time-travel on view should show state at txnAfterView (3 rows)
+		result, err = engine.Execute("SELECT * FROM viewttdb.all_orders AS OF '" + txnAfterView + "'")
+		if err != nil {
+			t.Fatalf("Time-travel on view failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 3 {
+			t.Errorf("Expected 3 rows at txnAfterView, got %d", len(qr.Data))
+		}
+
+		// Test view with AS OF in its definition
+		result, err = engine.Execute("INSERT INTO viewttdb.orders (id, product, amount) VALUES (5, 'Thing', 500)")
+		if err != nil {
+			t.Fatalf("INSERT for snapshot view failed: %v", err)
+		}
+		txnForSnapshot := result.(db.CommitResult).Transaction.Id
+
+		// Create a view that captures data at a specific transaction
+		_, err = engine.Execute("CREATE VIEW viewttdb.snapshot_view AS SELECT * FROM viewttdb.orders AS OF '" + txnForSnapshot + "'")
+		if err != nil {
+			t.Fatalf("CREATE VIEW with AS OF failed: %v", err)
+		}
+
+		// Add more data after snapshot
+		engine.Execute("INSERT INTO viewttdb.orders (id, product, amount) VALUES (6, 'Stuff', 600)")
+
+		// Snapshot view should always return 5 rows (fixed at txnForSnapshot)
+		result, err = engine.Execute("SELECT * FROM viewttdb.snapshot_view")
+		if err != nil {
+			t.Fatalf("SELECT from snapshot view failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 5 {
+			t.Errorf("Expected 5 rows in snapshot view, got %d", len(qr.Data))
+		}
+
+		// Current table should have 6 rows
+		result, err = engine.Execute("SELECT * FROM viewttdb.orders")
+		if err != nil {
+			t.Fatalf("SELECT from table failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 6 {
+			t.Errorf("Expected 6 rows in current table, got %d", len(qr.Data))
+		}
+	})
+}
+
+// TestIntegrationTimeTravelOnMaterializedViews tests time-travel queries on materialized views
+func TestIntegrationTimeTravelOnMaterializedViews(t *testing.T) {
+	runWithBothPersistence(t, func(t *testing.T, engine *db.Engine) {
+		// Setup
+		engine.Execute("CREATE DATABASE matttdb")
+		engine.Execute("CREATE TABLE matttdb.sales (id INT PRIMARY KEY, region STRING, amount INT)")
+
+		// Insert initial data
+		engine.Execute("INSERT INTO matttdb.sales (id, region, amount) VALUES (1, 'East', 100)")
+		engine.Execute("INSERT INTO matttdb.sales (id, region, amount) VALUES (2, 'West', 200)")
+
+		// Create materialized view (creates view definition + caches initial data)
+		_, err := engine.Execute("CREATE MATERIALIZED VIEW matttdb.east_sales AS SELECT * FROM matttdb.sales WHERE region = 'East'")
+		if err != nil {
+			t.Fatalf("CREATE MATERIALIZED VIEW failed: %v", err)
+		}
+
+		// Verify materialized view has 1 row
+		result, err := engine.Execute("SELECT * FROM matttdb.east_sales")
+		if err != nil {
+			t.Fatalf("SELECT from materialized view failed: %v", err)
+		}
+		qr := result.(db.QueryResult)
+		if len(qr.Data) != 1 {
+			t.Errorf("Expected 1 row in materialized view, got %d", len(qr.Data))
+		}
+
+		// Insert a marker record to get a transaction that's AFTER the initial mat view population
+		result, err = engine.Execute("INSERT INTO matttdb.sales (id, region, amount) VALUES (99, 'Marker', 0)")
+		if err != nil {
+			t.Fatalf("INSERT marker failed: %v", err)
+		}
+		txnBeforeRefresh := result.(db.CommitResult).Transaction.Id
+
+		// Add more East region data
+		engine.Execute("INSERT INTO matttdb.sales (id, region, amount) VALUES (3, 'East', 300)")
+
+		// Refresh materialized view
+		result, err = engine.Execute("REFRESH VIEW matttdb.east_sales")
+		if err != nil {
+			t.Fatalf("REFRESH VIEW failed: %v", err)
+		}
+		txnAfterRefresh := result.(db.CommitResult).Transaction.Id
+
+		// Materialized view now has 2 rows
+		result, err = engine.Execute("SELECT * FROM matttdb.east_sales")
+		if err != nil {
+			t.Fatalf("SELECT after refresh failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 2 {
+			t.Errorf("Expected 2 rows after refresh, got %d", len(qr.Data))
+		}
+
+		// Time-travel to before refresh should show 1 row (the txnBeforeRefresh is AFTER initial mat view data was cached)
+		result, err = engine.Execute("SELECT * FROM matttdb.east_sales AS OF '" + txnBeforeRefresh + "'")
+		if err != nil {
+			t.Fatalf("Time-travel on materialized view failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 1 {
+			t.Errorf("Expected 1 row at txnBeforeRefresh, got %d", len(qr.Data))
+		}
+
+		// Time-travel to after refresh should show 2 rows
+		result, err = engine.Execute("SELECT * FROM matttdb.east_sales AS OF '" + txnAfterRefresh + "'")
+		if err != nil {
+			t.Fatalf("Time-travel to after refresh failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 2 {
+			t.Errorf("Expected 2 rows at txnAfterRefresh, got %d", len(qr.Data))
+		}
+	})
+}

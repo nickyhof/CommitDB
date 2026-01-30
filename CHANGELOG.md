@@ -17,6 +17,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `DROP VIEW [IF EXISTS]` works for both regular and materialized views
 - Views are resolved automatically in SELECT queries
 
+#### Time-Travel Queries
+- `SELECT ... FROM table AS OF 'transaction_id'` to query historical data
+- Supports full and abbreviated transaction IDs (Git commit hashes)
+- Works with WHERE, ORDER BY, LIMIT, and all standard SELECT clauses
+- Works on both tables and views (including materialized views)
+
+### Changed
+
+#### Persistence Layer Optimization
+- Empty commits are now avoided when there are no actual data changes
+- Tree hash comparison prevents redundant Git commits
+- Duplicate writes no longer create unnecessary commit history
+
 ## [2.4.0] - 2026-01-28
 
 ### Added

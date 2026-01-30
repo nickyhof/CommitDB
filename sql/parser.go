@@ -75,6 +75,7 @@ type SelectStatement struct {
 	OrderBy    []OrderByClause
 	Limit      int
 	Offset     int
+	AsOf       string // Transaction ID for time-travel queries
 }
 
 type JoinClause struct {
@@ -1031,14 +1032,26 @@ func ParseSelect(parser *Parser) (Statement, error) {
 
 	token = parser.lexer.NextToken()
 
-	// Check for table alias
+	// Check for table alias or AS OF clause for time-travel
 	if token.Type == As {
 		token = parser.lexer.NextToken()
-		if token.Type != Identifier {
-			return nil, errors.New("expected alias after AS")
+		if token.Type == Of {
+			// AS OF 'transaction' - time-travel query
+			token = parser.lexer.NextToken()
+			if token.Type != String {
+				return nil, errors.New("expected transaction ID after AS OF")
+			}
+			selectStatement.AsOf = token.Value
+			token = parser.lexer.NextToken()
+		} else if token.Type == Identifier {
+			// Regular alias: AS alias_name
+			selectStatement.TableAlias = token.Value
+			token = parser.lexer.NextToken()
+		} else if token.Type == String {
+			return nil, errors.New("expected OF after AS for time-travel, or identifier for alias")
+		} else {
+			return nil, errors.New("expected alias or OF after AS")
 		}
-		selectStatement.TableAlias = token.Value
-		token = parser.lexer.NextToken()
 	} else if token.Type == Identifier {
 		// Alias without AS keyword
 		selectStatement.TableAlias = token.Value
