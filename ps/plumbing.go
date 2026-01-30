@@ -320,7 +320,9 @@ func (p *Persistence) batchUpdateTree(rootTreeHash plumbing.Hash, changes []Tree
 	return p.buildTreeFromEntries(entrySlice)
 }
 
-// createCommitDirect creates a commit object directly without using worktree
+// createCommitDirect creates a commit object directly without using worktree.
+// If the new tree hash is identical to the current HEAD's tree hash, no commit
+// is created and an empty Transaction is returned (avoiding empty commits).
 func (p *Persistence) createCommitDirect(treeHash plumbing.Hash, identity core.Identity, message string) (Transaction, error) {
 	// Handle empty tree case - create an actual empty tree object
 	actualTreeHash := treeHash
@@ -337,11 +339,18 @@ func (p *Persistence) createCommitDirect(treeHash plumbing.Hash, identity core.I
 		}
 	}
 
-	// Get parent commit
+	// Get parent commit and check if tree has changed
 	var parentHashes []plumbing.Hash
 	headRef, err := p.repo.Head()
 	if err == nil {
 		parentHashes = []plumbing.Hash{headRef.Hash()}
+
+		// Compare with current tree - skip commit if no changes
+		currentTreeHash, err := p.getCurrentTree()
+		if err == nil && currentTreeHash == actualTreeHash {
+			// No changes - return empty transaction without creating commit
+			return Transaction{}, nil
+		}
 	}
 
 	sig := object.Signature{
