@@ -124,3 +124,42 @@ func (persistence *Persistence) DeleteMaterializedViewData(database, viewName st
 
 	return persistence.DeletePathDirect([]string{path}, identity, fmt.Sprintf("Deleting materialized view data %s.%s", database, viewName))
 }
+
+// GetMaterializedViewDataAtTransaction reads cached data for a materialized view at a specific transaction
+func (persistence *Persistence) GetMaterializedViewDataAtTransaction(database, viewName, transactionID string) ([]map[string]string, error) {
+	if !persistence.IsInitialized() {
+		return nil, fmt.Errorf("persistence not initialized")
+	}
+
+	persistence.mu.RLock()
+	defer persistence.mu.RUnlock()
+
+	commit, err := persistence.resolveTransaction(transactionID)
+	if err != nil {
+		return nil, err
+	}
+
+	tree, err := commit.Tree()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tree: %w", err)
+	}
+
+	// Read materialized view data at that transaction
+	dataPath := fmt.Sprintf(".commitdb/materialized/%s/%s/data.json", database, viewName)
+	file, err := tree.File(dataPath)
+	if err != nil {
+		return nil, fmt.Errorf("materialized view data not found at transaction %s", transactionID)
+	}
+
+	content, err := file.Contents()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read materialized view data: %w", err)
+	}
+
+	var rows []map[string]string
+	if err := json.Unmarshal([]byte(content), &rows); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal materialized view data: %w", err)
+	}
+
+	return rows, nil
+}

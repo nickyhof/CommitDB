@@ -149,6 +149,7 @@ const (
 	Refresh
 	If
 	Exists
+	Of
 	EOF
 	Unknown
 )
@@ -600,6 +601,8 @@ func lookupIdentifier(id string) TokenType {
 		return Materialized
 	case "REFRESH":
 		return Refresh
+	case "OF":
+		return Of
 	case "TOKEN":
 		return TokenKeyword
 	case "KEY":

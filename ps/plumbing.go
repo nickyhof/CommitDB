@@ -1,6 +1,7 @@
 package ps
 
 import (
+	"encoding/json"
 	"fmt"
 	"path"
 	"sort"
@@ -903,4 +904,149 @@ func (p *Persistence) ListEntriesDirect(dirPath string) ([]TreeEntry, error) {
 	}
 
 	return entries, nil
+}
+
+// resolveTransaction converts a transaction ID (commit hash) to a commit object.
+// Supports both full and abbreviated commit hashes.
+func (p *Persistence) resolveTransaction(transactionID string) (*object.Commit, error) {
+	hash := plumbing.NewHash(transactionID)
+
+	// Try exact hash first
+	commit, err := p.repo.CommitObject(hash)
+	if err == nil {
+		return commit, nil
+	}
+
+	// For short hashes, try to resolve by iterating commits
+	if len(transactionID) >= 4 && len(transactionID) < 40 {
+		iter, err := p.repo.Log(&git.LogOptions{All: true})
+		if err != nil {
+			return nil, fmt.Errorf("failed to iterate commits: %w", err)
+		}
+		defer iter.Close()
+
+		var found *object.Commit
+		err = iter.ForEach(func(c *object.Commit) error {
+			if strings.HasPrefix(c.Hash.String(), transactionID) {
+				found = c
+				return fmt.Errorf("found") // break iteration
+			}
+			return nil
+		})
+
+		if found != nil {
+			return found, nil
+		}
+	}
+
+	return nil, fmt.Errorf("transaction not found: %s", transactionID)
+}
+
+// GetRecordAtTransaction reads a record as it existed at a specific transaction (commit).
+func (p *Persistence) GetRecordAtTransaction(database, table, key, transactionID string) ([]byte, bool, error) {
+	if !p.IsInitialized() {
+		return nil, false, nil
+	}
+
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	commit, err := p.resolveTransaction(transactionID)
+	if err != nil {
+		return nil, false, err
+	}
+
+	tree, err := commit.Tree()
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to get tree: %w", err)
+	}
+
+	// Navigate to database/table/key
+	filePath := path.Join(database, table, key)
+	file, err := tree.File(filePath)
+	if err != nil {
+		return nil, false, nil // Record doesn't exist at this transaction
+	}
+
+	content, err := file.Contents()
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	return []byte(content), true, nil
+}
+
+// ListRecordsAtTransaction lists all records in a table as they existed at a specific transaction.
+func (p *Persistence) ListRecordsAtTransaction(database, table, transactionID string) ([]string, error) {
+	if !p.IsInitialized() {
+		return nil, nil
+	}
+
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	commit, err := p.resolveTransaction(transactionID)
+	if err != nil {
+		return nil, err
+	}
+
+	tree, err := commit.Tree()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tree: %w", err)
+	}
+
+	// Navigate to database/table directory
+	dirPath := path.Join(database, table)
+	tableTree, err := tree.Tree(dirPath)
+	if err != nil {
+		return nil, nil // Table doesn't exist at this transaction
+	}
+
+	var keys []string
+	for _, entry := range tableTree.Entries {
+		if entry.Mode.IsFile() {
+			keys = append(keys, entry.Name)
+		}
+	}
+
+	return keys, nil
+}
+
+// GetTableAtTransaction retrieves table metadata as it existed at a specific transaction.
+func (p *Persistence) GetTableAtTransaction(database, table, transactionID string) (*core.Table, error) {
+	if !p.IsInitialized() {
+		return nil, fmt.Errorf("persistence not initialized")
+	}
+
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	commit, err := p.resolveTransaction(transactionID)
+	if err != nil {
+		return nil, err
+	}
+
+	tree, err := commit.Tree()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tree: %w", err)
+	}
+
+	// Read table metadata from database/table.table (matches crud.go storage pattern)
+	metaPath := path.Join(database, table+".table")
+	file, err := tree.File(metaPath)
+	if err != nil {
+		return nil, fmt.Errorf("table not found at transaction %s", transactionID)
+	}
+
+	content, err := file.Contents()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read table metadata: %w", err)
+	}
+
+	var tbl core.Table
+	if err := json.Unmarshal([]byte(content), &tbl); err != nil {
+		return nil, fmt.Errorf("failed to parse table metadata: %w", err)
+	}
+
+	return &tbl, nil
 }

@@ -112,6 +112,27 @@ UPDATE mydb.users SET name = 'Bob' WHERE id = 1;
 DELETE FROM mydb.users WHERE id = 1;
 ```
 
+### Time-Travel Queries
+
+Query data as it existed at a specific transaction using the `AS OF` clause:
+
+```sql
+-- Query data at a specific transaction (commit hash)
+SELECT * FROM mydb.users AS OF 'abc1234';
+
+-- Works with all SELECT clauses
+SELECT name, email FROM mydb.users AS OF 'abc1234' WHERE active = 1;
+
+-- Use full or abbreviated transaction IDs
+SELECT * FROM mydb.users AS OF '93ef5b7512898a585dbc33881a2897b97bac4c05';
+SELECT * FROM mydb.users AS OF '93ef5b75';
+
+-- Works on views too
+SELECT * FROM mydb.myview AS OF 'abc1234';
+```
+
+Transaction IDs are returned by all data-modifying operations (INSERT, UPDATE, DELETE).
+
 ## Queries
 
 ### WHERE Clauses

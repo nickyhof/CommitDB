@@ -138,6 +138,11 @@ func (engine *Engine) executeSelectStatement(statement sql.SelectStatement) (Que
 		persistence = sharePersistence
 	}
 
+	// Handle time-travel queries (AS OF 'transaction')
+	if statement.AsOf != "" {
+		return engine.executeTimeTravelSelect(statement, persistence, startTime)
+	}
+
 	// Check if this is a view instead of a table
 	view, err := persistence.GetView(statement.Database, statement.Table)
 	if err == nil {
@@ -2690,5 +2695,167 @@ func (engine *Engine) executeMaterializedViewQuery(view *core.View, originalStat
 		Data:            data,
 		RecordsRead:     len(data),
 		ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
+	}, nil
+}
+
+// executeTimeTravelSelect executes a SELECT query against data as it existed at a specific transaction.
+func (engine *Engine) executeTimeTravelSelect(statement sql.SelectStatement, persistence *ps.Persistence, startTime time.Time) (QueryResult, error) {
+	transactionID := statement.AsOf
+
+	// Check if this is a view instead of a table
+	view, err := persistence.GetView(statement.Database, statement.Table)
+	if err == nil {
+		// This is a view - handle time-travel for views
+		if view.Materialized {
+			// For materialized views, get cached data at that transaction
+			return engine.executeTimeTravelMaterializedView(view, transactionID, startTime)
+		}
+		// For regular views, execute view query with AS OF propagated
+		return engine.executeTimeTravelRegularView(view, transactionID)
+	}
+
+	// Get table schema at that transaction
+	table, err := persistence.GetTableAtTransaction(statement.Database, statement.Table, transactionID)
+	if err != nil {
+		return QueryResult{}, fmt.Errorf("failed to get table at transaction %s: %w", transactionID, err)
+	}
+
+	// Determine columns to select
+	columns := []string{}
+	if len(statement.Columns) == 0 {
+		for _, column := range table.Columns {
+			columns = append(columns, column.Name)
+		}
+	} else {
+		columns = append(columns, statement.Columns...)
+	}
+
+	// Get all record keys at that transaction
+	keys, err := persistence.ListRecordsAtTransaction(statement.Database, statement.Table, transactionID)
+	if err != nil {
+		return QueryResult{}, fmt.Errorf("failed to list records at transaction %s: %w", transactionID, err)
+	}
+
+	// Read each record at that transaction
+	var results []map[string]string
+	for _, key := range keys {
+		rawData, exists, err := persistence.GetRecordAtTransaction(statement.Database, statement.Table, key, transactionID)
+		if err != nil {
+			return QueryResult{}, err
+		}
+		if !exists {
+			continue
+		}
+
+		var jsonData map[string]string
+		if err := json.Unmarshal(rawData, &jsonData); err != nil {
+			continue
+		}
+		results = append(results, jsonData)
+	}
+
+	// Apply WHERE filter
+	if len(statement.Where.Conditions) > 0 {
+		var filtered []map[string]string
+		for _, row := range results {
+			if matchesWhereClause(row, statement.Where) {
+				filtered = append(filtered, row)
+			}
+		}
+		results = filtered
+	}
+
+	// Apply ORDER BY
+	if len(statement.OrderBy) > 0 {
+		sortResults(results, statement.OrderBy)
+	}
+
+	// Apply LIMIT and OFFSET
+	if statement.Offset > 0 && statement.Offset < len(results) {
+		results = results[statement.Offset:]
+	} else if statement.Offset >= len(results) {
+		results = nil
+	}
+
+	if statement.Limit > 0 && statement.Limit < len(results) {
+		results = results[:statement.Limit]
+	}
+
+	// Build result data
+	var data [][]string
+	for _, row := range results {
+		rowData := make([]string, len(columns))
+		for i, col := range columns {
+			rowData[i] = row[col]
+		}
+		data = append(data, rowData)
+	}
+
+	return QueryResult{
+		Columns:         columns,
+		Data:            data,
+		RecordsRead:     len(results),
+		ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
+		Transaction:     ps.Transaction{Id: transactionID},
+	}, nil
+}
+
+// executeTimeTravelRegularView handles time-travel queries on regular (non-materialized) views.
+// It parses the view's underlying query and injects the AS OF clause.
+func (engine *Engine) executeTimeTravelRegularView(view *core.View, transactionID string) (QueryResult, error) {
+	// Parse the view's underlying query
+	parser := sql.NewParser(view.Query)
+	stmt, err := parser.Parse()
+	if err != nil {
+		return QueryResult{}, fmt.Errorf("failed to parse view query: %w", err)
+	}
+
+	selectStmt, ok := stmt.(sql.SelectStatement)
+	if !ok {
+		return QueryResult{}, fmt.Errorf("view query must be a SELECT statement")
+	}
+
+	// Inject the AS OF clause into the underlying query
+	selectStmt.AsOf = transactionID
+
+	// Execute the modified query
+	return engine.executeSelectStatement(selectStmt)
+}
+
+// executeTimeTravelMaterializedView handles time-travel queries on materialized views.
+// It reads the cached view data as it existed at the specified transaction.
+func (engine *Engine) executeTimeTravelMaterializedView(view *core.View, transactionID string, startTime time.Time) (QueryResult, error) {
+	// Read materialized view data at that transaction
+	rows, err := engine.Persistence.GetMaterializedViewDataAtTransaction(view.Database, view.Name, transactionID)
+	if err != nil {
+		return QueryResult{}, fmt.Errorf("failed to get materialized view data at transaction %s: %w", transactionID, err)
+	}
+
+	// Determine columns from the data
+	var columns []string
+	if len(rows) > 0 {
+		for col := range rows[0] {
+			columns = append(columns, col)
+		}
+		// Sort for consistent ordering
+		sort.Strings(columns)
+	}
+
+	// Convert rows to Data format
+	var data [][]string
+	for _, row := range rows {
+		rowData := make([]string, len(columns))
+		for i, col := range columns {
+			rowData[i] = row[col]
+		}
+		data = append(data, rowData)
+	}
+
+	return QueryResult{
+		Columns:         columns,
+		Data:            data,
+		RecordsRead:     len(data),
+		ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
+		Transaction:     ps.Transaction{Id: transactionID},
 	}, nil
 }
