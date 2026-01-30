@@ -48,6 +48,10 @@ const (
 	SyncShareStatementType
 	DropShareStatementType
 	ShowSharesStatementType
+	CreateViewStatementType
+	DropViewStatementType
+	ShowViewsStatementType
+	RefreshViewStatementType
 )
 
 type Statement interface {
@@ -473,6 +477,45 @@ func (s ShowSharesStatement) Type() StatementType {
 	return ShowSharesStatementType
 }
 
+// View statements
+type CreateViewStatement struct {
+	Database     string
+	ViewName     string
+	SelectQuery  string // Raw SQL for the view definition
+	Materialized bool
+}
+
+type DropViewStatement struct {
+	Database string
+	ViewName string
+	IfExists bool
+}
+
+type ShowViewsStatement struct {
+	Database string
+}
+
+type RefreshViewStatement struct {
+	Database string
+	ViewName string
+}
+
+func (s CreateViewStatement) Type() StatementType {
+	return CreateViewStatementType
+}
+
+func (s DropViewStatement) Type() StatementType {
+	return DropViewStatementType
+}
+
+func (s ShowViewsStatement) Type() StatementType {
+	return ShowViewsStatementType
+}
+
+func (s RefreshViewStatement) Type() StatementType {
+	return RefreshViewStatementType
+}
+
 type Parser struct {
 	lexer *Lexer
 }
@@ -533,6 +576,8 @@ func (parser *Parser) Parse() (Statement, error) {
 		return ParseCopy(parser)
 	case Sync:
 		return ParseSyncShare(parser)
+	case Refresh:
+		return ParseRefreshView(parser)
 	default:
 		return nil, errors.New("unknown statement type")
 	}
@@ -1568,8 +1613,17 @@ func ParseCreate(parser *Parser) (Statement, error) {
 		return ParseAddRemote(parser)
 	case Share:
 		return ParseCreateShare(parser)
+	case View:
+		return ParseCreateView(parser, false)
+	case Materialized:
+		// MATERIALIZED VIEW
+		token = parser.lexer.NextToken()
+		if token.Type != View {
+			return nil, errors.New("expected VIEW after MATERIALIZED")
+		}
+		return ParseCreateView(parser, true)
 	default:
-		return nil, errors.New("expected TABLE, DATABASE, INDEX, BRANCH, REMOTE, or SHARE after CREATE")
+		return nil, errors.New("expected TABLE, DATABASE, INDEX, BRANCH, REMOTE, SHARE, or VIEW after CREATE")
 	}
 }
 
@@ -1723,8 +1777,10 @@ func ParseDrop(parser *Parser) (Statement, error) {
 		return ParseDropRemote(parser)
 	case Share:
 		return ParseDropShare(parser)
+	case View:
+		return ParseDropView(parser)
 	default:
-		return nil, errors.New("expected TABLE, DATABASE, INDEX, REMOTE, or SHARE after DROP")
+		return nil, errors.New("expected TABLE, DATABASE, INDEX, REMOTE, SHARE, or VIEW after DROP")
 	}
 }
 
@@ -1874,8 +1930,19 @@ func ParseShow(parser *Parser) (Statement, error) {
 		return ShowRemotesStatement{}, nil
 	case Shares:
 		return ShowSharesStatement{}, nil
+	case Views:
+		// SHOW VIEWS IN database
+		token = parser.lexer.NextToken()
+		if token.Type != In {
+			return nil, errors.New("expected IN after VIEWS")
+		}
+		token = parser.lexer.NextToken()
+		if token.Type != Identifier {
+			return nil, errors.New("expected database name after IN")
+		}
+		return ShowViewsStatement{Database: token.Value}, nil
 	default:
-		return nil, errors.New("expected DATABASES, TABLES, INDEXES, BRANCHES, REMOTES, SHARES, or MERGE CONFLICTS after SHOW")
+		return nil, errors.New("expected DATABASES, TABLES, INDEXES, VIEWS, BRANCHES, REMOTES, SHARES, or MERGE CONFLICTS after SHOW")
 	}
 }
 
@@ -2554,4 +2621,108 @@ func ParseDropShare(parser *Parser) (Statement, error) {
 		return nil, errors.New("expected share name after SHARE")
 	}
 	return DropShareStatement{Name: token.Value}, nil
+}
+
+// ParseCreateView parses CREATE [MATERIALIZED] VIEW database.name AS SELECT ...
+func ParseCreateView(parser *Parser, materialized bool) (Statement, error) {
+	var stmt CreateViewStatement
+	stmt.Materialized = materialized
+
+	// Parse view name (database.viewname)
+	token := parser.lexer.NextToken()
+	if token.Type != Identifier {
+		return nil, errors.New("expected view name after VIEW")
+	}
+
+	viewParts := strings.Split(token.Value, ".")
+	if len(viewParts) == 2 {
+		stmt.Database = viewParts[0]
+		stmt.ViewName = viewParts[1]
+	} else {
+		return nil, errors.New("view name must be in format database.viewname")
+	}
+
+	// Expect AS
+	token = parser.lexer.NextToken()
+	if token.Type != As {
+		return nil, errors.New("expected AS after view name")
+	}
+
+	// Capture the rest as raw SELECT query
+	// We need to capture everything after AS until end of statement
+	var queryParts []string
+	for {
+		token = parser.lexer.NextToken()
+		if token.Type == EOF || token.Type == Unknown {
+			break
+		}
+		if token.Type == String {
+			queryParts = append(queryParts, "'"+token.Value+"'")
+		} else {
+			queryParts = append(queryParts, token.Value)
+		}
+	}
+
+	if len(queryParts) == 0 {
+		return nil, errors.New("expected SELECT query after AS")
+	}
+
+	stmt.SelectQuery = strings.Join(queryParts, " ")
+	return stmt, nil
+}
+
+// ParseDropView parses DROP [MATERIALIZED] VIEW [IF EXISTS] database.name
+func ParseDropView(parser *Parser) (Statement, error) {
+	var stmt DropViewStatement
+
+	token := parser.lexer.NextToken()
+
+	// Check for IF EXISTS
+	if token.Type == If {
+		token = parser.lexer.NextToken()
+		if token.Type != Exists {
+			return nil, errors.New("expected EXISTS after IF")
+		}
+		stmt.IfExists = true
+		token = parser.lexer.NextToken()
+	}
+
+	if token.Type != Identifier {
+		return nil, errors.New("expected view name")
+	}
+
+	viewParts := strings.Split(token.Value, ".")
+	if len(viewParts) == 2 {
+		stmt.Database = viewParts[0]
+		stmt.ViewName = viewParts[1]
+	} else {
+		return nil, errors.New("view name must be in format database.viewname")
+	}
+
+	return stmt, nil
+}
+
+// ParseRefreshView parses REFRESH VIEW database.name
+func ParseRefreshView(parser *Parser) (Statement, error) {
+	// Expect VIEW
+	token := parser.lexer.NextToken()
+	if token.Type != View {
+		return nil, errors.New("expected VIEW after REFRESH")
+	}
+
+	// Parse view name
+	token = parser.lexer.NextToken()
+	if token.Type != Identifier {
+		return nil, errors.New("expected view name after VIEW")
+	}
+
+	viewParts := strings.Split(token.Value, ".")
+	if len(viewParts) != 2 {
+		return nil, errors.New("view name must be in format database.viewname")
+	}
+
+	return RefreshViewStatement{
+		Database: viewParts[0],
+		ViewName: viewParts[1],
+	}, nil
 }

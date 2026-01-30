@@ -143,6 +143,10 @@ const (
 	Share
 	Shares
 	Sync
+	View
+	Views
+	Materialized
+	Refresh
 	If
 	Exists
 	EOF
@@ -588,6 +592,14 @@ func lookupIdentifier(id string) TokenType {
 		return Shares
 	case "SYNC":
 		return Sync
+	case "VIEW":
+		return View
+	case "VIEWS":
+		return Views
+	case "MATERIALIZED":
+		return Materialized
+	case "REFRESH":
+		return Refresh
 	case "TOKEN":
 		return TokenKeyword
 	case "KEY":

@@ -111,6 +111,14 @@ func (engine *Engine) Execute(query string) (Result, error) {
 		return engine.executeDropShareStatement(statement.(sql.DropShareStatement))
 	case sql.ShowSharesStatementType:
 		return engine.executeShowSharesStatement()
+	case sql.CreateViewStatementType:
+		return engine.executeCreateViewStatement(statement.(sql.CreateViewStatement))
+	case sql.DropViewStatementType:
+		return engine.executeDropViewStatement(statement.(sql.DropViewStatement))
+	case sql.ShowViewsStatementType:
+		return engine.executeShowViewsStatement(statement.(sql.ShowViewsStatement))
+	case sql.RefreshViewStatementType:
+		return engine.executeRefreshViewStatement(statement.(sql.RefreshViewStatement))
 	default:
 		return nil, fmt.Errorf("unsupported statement type: %v", statement.Type())
 	}
@@ -128,6 +136,19 @@ func (engine *Engine) executeSelectStatement(statement sql.SelectStatement) (Que
 			return QueryResult{}, fmt.Errorf("failed to access share '%s': %w", statement.Share, err)
 		}
 		persistence = sharePersistence
+	}
+
+	// Check if this is a view instead of a table
+	view, err := persistence.GetView(statement.Database, statement.Table)
+	if err == nil {
+		// This is a view - redirect the query
+		if view.Materialized {
+			// For materialized views, read cached data
+			return engine.executeMaterializedViewQuery(view, statement, startTime)
+		}
+		// For regular views, execute the underlying query
+		// Note: This creates a new query based on the view definition
+		return engine.executeViewQuery(view, statement, startTime)
 	}
 
 	tableOp, err := op.GetTable(statement.Database, statement.Table, persistence)
@@ -2464,6 +2485,210 @@ func (engine *Engine) executeCopyIntoFile(statement sql.CopyStatement, startTime
 
 	return CommitResult{
 		RecordsWritten:  recordsWritten,
+		ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
+	}, nil
+}
+
+// View execution methods
+
+func (engine *Engine) executeCreateViewStatement(statement sql.CreateViewStatement) (Result, error) {
+	startTime := time.Now()
+
+	// Create view definition
+	view := core.View{
+		Database:     statement.Database,
+		Name:         statement.ViewName,
+		Query:        statement.SelectQuery,
+		Materialized: statement.Materialized,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+
+	// Store the view definition
+	txn, err := engine.Persistence.CreateView(view, engine.Identity)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create view: %w", err)
+	}
+
+	// If materialized, run the query and cache results
+	if statement.Materialized {
+		if err := engine.refreshMaterializedView(statement.Database, statement.ViewName, statement.SelectQuery); err != nil {
+			return nil, fmt.Errorf("failed to populate materialized view: %w", err)
+		}
+	}
+
+	return CommitResult{
+		Transaction:     txn,
+		ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
+	}, nil
+}
+
+func (engine *Engine) executeDropViewStatement(statement sql.DropViewStatement) (Result, error) {
+	startTime := time.Now()
+
+	// Check if view exists
+	view, err := engine.Persistence.GetView(statement.Database, statement.ViewName)
+	if err != nil {
+		if statement.IfExists {
+			return CommitResult{
+				ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
+			}, nil
+		}
+		return nil, fmt.Errorf("view %s.%s does not exist", statement.Database, statement.ViewName)
+	}
+
+	// Drop view definition
+	txn, err := engine.Persistence.DropView(statement.Database, statement.ViewName, engine.Identity)
+	if err != nil {
+		return nil, fmt.Errorf("failed to drop view: %w", err)
+	}
+
+	// If materialized, also delete cached data
+	if view.Materialized {
+		engine.Persistence.DeleteMaterializedViewData(statement.Database, statement.ViewName, engine.Identity)
+	}
+
+	return CommitResult{
+		Transaction:     txn,
+		ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
+	}, nil
+}
+
+func (engine *Engine) executeShowViewsStatement(statement sql.ShowViewsStatement) (QueryResult, error) {
+	startTime := time.Now()
+
+	views, err := engine.Persistence.ListViews(statement.Database)
+	if err != nil {
+		return QueryResult{}, err
+	}
+
+	columns := []string{"name", "materialized", "query"}
+	var data [][]string
+
+	for _, view := range views {
+		materialized := "NO"
+		if view.Materialized {
+			materialized = "YES"
+		}
+		data = append(data, []string{view.Name, materialized, view.Query})
+	}
+
+	return QueryResult{
+		Columns:         columns,
+		Data:            data,
+		RecordsRead:     len(data),
+		ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
+	}, nil
+}
+
+func (engine *Engine) executeRefreshViewStatement(statement sql.RefreshViewStatement) (Result, error) {
+	startTime := time.Now()
+
+	// Get view definition
+	view, err := engine.Persistence.GetView(statement.Database, statement.ViewName)
+	if err != nil {
+		return nil, fmt.Errorf("view %s.%s does not exist", statement.Database, statement.ViewName)
+	}
+
+	if !view.Materialized {
+		return nil, fmt.Errorf("view %s.%s is not a materialized view", statement.Database, statement.ViewName)
+	}
+
+	// Refresh the cached data
+	if err := engine.refreshMaterializedView(statement.Database, statement.ViewName, view.Query); err != nil {
+		return nil, err
+	}
+
+	// Update view timestamp
+	view.UpdatedAt = time.Now()
+	engine.Persistence.UpdateView(*view, engine.Identity)
+
+	return CommitResult{
+		ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
+	}, nil
+}
+
+func (engine *Engine) refreshMaterializedView(database, viewName, query string) error {
+	// Execute the query
+	result, err := engine.Execute(query)
+	if err != nil {
+		return fmt.Errorf("failed to execute view query: %w", err)
+	}
+
+	queryResult, ok := result.(QueryResult)
+	if !ok {
+		return fmt.Errorf("view query must be a SELECT statement")
+	}
+
+	// Convert Data ([][]string) to rows ([]map[string]string) for storage
+	rows := make([]map[string]string, len(queryResult.Data))
+	for i, row := range queryResult.Data {
+		rowMap := make(map[string]string)
+		for j, col := range queryResult.Columns {
+			if j < len(row) {
+				rowMap[col] = row[j]
+			}
+		}
+		rows[i] = rowMap
+	}
+
+	// Store cached data
+	_, err = engine.Persistence.WriteMaterializedViewData(database, viewName, rows, engine.Identity)
+	if err != nil {
+		return fmt.Errorf("failed to store materialized view data: %w", err)
+	}
+
+	return nil
+}
+
+// executeViewQuery executes a query against a regular (non-materialized) view
+func (engine *Engine) executeViewQuery(view *core.View, originalStatement sql.SelectStatement, startTime time.Time) (QueryResult, error) {
+	// Execute the view's underlying query
+	result, err := engine.Execute(view.Query)
+	if err != nil {
+		return QueryResult{}, fmt.Errorf("failed to execute view query: %w", err)
+	}
+
+	queryResult, ok := result.(QueryResult)
+	if !ok {
+		return QueryResult{}, fmt.Errorf("view query must be a SELECT statement")
+	}
+
+	// Update timing
+	queryResult.ExecutionTimeMs = float64(time.Since(startTime).Milliseconds())
+	return queryResult, nil
+}
+
+// executeMaterializedViewQuery reads from cached materialized view data
+func (engine *Engine) executeMaterializedViewQuery(view *core.View, originalStatement sql.SelectStatement, startTime time.Time) (QueryResult, error) {
+	// Read cached data
+	rows, err := engine.Persistence.ReadMaterializedViewData(view.Database, view.Name)
+	if err != nil {
+		return QueryResult{}, fmt.Errorf("failed to read materialized view data: %w", err)
+	}
+
+	// Determine columns (from first row or view definition)
+	var columns []string
+	if len(rows) > 0 {
+		for col := range rows[0] {
+			columns = append(columns, col)
+		}
+	}
+
+	// Convert rows to Data format
+	var data [][]string
+	for _, row := range rows {
+		rowData := make([]string, len(columns))
+		for i, col := range columns {
+			rowData[i] = row[col]
+		}
+		data = append(data, rowData)
+	}
+
+	return QueryResult{
+		Columns:         columns,
+		Data:            data,
+		RecordsRead:     len(data),
 		ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
 	}, nil
 }

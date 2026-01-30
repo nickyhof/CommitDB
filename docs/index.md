@@ -55,7 +55,7 @@ A Git-backed SQL database engine written in Go. Every transaction is a Git commi
 
 | Category | Features |
 |----------|----------|
-| **SQL** | SELECT, INSERT, UPDATE, DELETE, CREATE/DROP TABLE/DATABASE/INDEX |
+| **SQL** | SELECT, INSERT, UPDATE, DELETE, CREATE/DROP TABLE/DATABASE/INDEX, VIEWS |
 | **Queries** | WHERE, ORDER BY, LIMIT, OFFSET, DISTINCT, GROUP BY, HAVING |
 | **Aggregates** | SUM, AVG, MIN, MAX, COUNT |
 | **JOINs** | INNER, LEFT, RIGHT |

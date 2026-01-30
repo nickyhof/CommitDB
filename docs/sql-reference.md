@@ -51,6 +51,33 @@ ALTER TABLE mydb.users MODIFY COLUMN name TEXT;
 ALTER TABLE mydb.users RENAME COLUMN name TO username;
 ```
 
+### Views
+
+Views are virtual tables defined by a SELECT query. Materialized views cache the query results for faster access.
+
+```sql
+-- Create a view
+CREATE VIEW mydb.active_users AS SELECT * FROM mydb.users WHERE active = 1;
+
+-- Create a materialized view (caches results)
+CREATE MATERIALIZED VIEW mydb.user_stats AS 
+    SELECT city, COUNT(*) AS count FROM mydb.users GROUP BY city;
+
+-- Query views like tables
+SELECT * FROM mydb.active_users;
+SELECT * FROM mydb.user_stats;
+
+-- Refresh materialized view after underlying data changes
+REFRESH VIEW mydb.user_stats;
+
+-- Show views in database
+SHOW VIEWS IN mydb;
+
+-- Drop views (works for both regular and materialized)
+DROP VIEW mydb.active_users;
+DROP VIEW IF EXISTS mydb.user_stats;
+```
+
 ## Data Manipulation
 
 ### Insert

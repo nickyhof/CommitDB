@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-01-29
+
+### Added
+
+#### Views and Materialized Views
+- `CREATE VIEW database.name AS SELECT ...` for virtual views
+- `CREATE MATERIALIZED VIEW database.name AS SELECT ...` for cached query results
+- `REFRESH VIEW database.name` to update cached materialized view data
+- `SHOW VIEWS IN database` to list all views
+- `DROP VIEW [IF EXISTS]` works for both regular and materialized views
+- Views are resolved automatically in SELECT queries
+
 ## [2.4.0] - 2026-01-28
 
 ### Added
@@ -474,6 +486,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests run with both memory and file persistence modes
 - Persistence reopen tests for data durability verification
 
+[2.5.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.5.0
 [2.4.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.4.0
 [2.3.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.3.0
 [2.2.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.2.0

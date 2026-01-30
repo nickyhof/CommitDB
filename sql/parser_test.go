@@ -366,6 +366,60 @@ func TestParser(t *testing.T) {
 				GroupBy:    []string{"city"},
 			},
 		},
+		// View tests
+		{
+			"create view",
+			"CREATE VIEW db.active_users AS SELECT * FROM db.users WHERE active = 1",
+			CreateViewStatement{
+				Database:     "db",
+				ViewName:     "active_users",
+				SelectQuery:  "SELECT * FROM db.users WHERE active = 1",
+				Materialized: false,
+			},
+		},
+		{
+			"create materialized view",
+			"CREATE MATERIALIZED VIEW db.user_stats AS SELECT city, COUNT(*) FROM db.users GROUP BY city",
+			CreateViewStatement{
+				Database:     "db",
+				ViewName:     "user_stats",
+				SelectQuery:  "SELECT city , COUNT ( * ) FROM db.users GROUP BY city",
+				Materialized: true,
+			},
+		},
+		{
+			"drop view",
+			"DROP VIEW db.my_view",
+			DropViewStatement{
+				Database: "db",
+				ViewName: "my_view",
+				IfExists: false,
+			},
+		},
+		{
+			"drop view if exists",
+			"DROP VIEW IF EXISTS db.my_view",
+			DropViewStatement{
+				Database: "db",
+				ViewName: "my_view",
+				IfExists: true,
+			},
+		},
+		{
+			"show views",
+			"SHOW VIEWS IN mydb",
+			ShowViewsStatement{
+				Database: "mydb",
+			},
+		},
+		{
+			"refresh view",
+			"REFRESH VIEW db.cached_data",
+			RefreshViewStatement{
+				Database: "db",
+				ViewName: "cached_data",
+			},
+		},
 	}
 
 	for _, test := range tests {

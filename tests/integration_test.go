@@ -1766,3 +1766,190 @@ func TestShareManagementSQL(t *testing.T) {
 		}
 	})
 }
+
+// TestIntegrationViews tests regular (non-materialized) views
+func TestIntegrationViews(t *testing.T) {
+	runWithBothPersistence(t, func(t *testing.T, engine *db.Engine) {
+		// Setup: Create database and table with test data
+		engine.Execute("CREATE DATABASE viewdb")
+		engine.Execute("CREATE TABLE viewdb.users (id INT PRIMARY KEY, name STRING, active INT, city STRING)")
+		engine.Execute("INSERT INTO viewdb.users (id, name, active, city) VALUES (1, 'Alice', 1, 'NYC')")
+		engine.Execute("INSERT INTO viewdb.users (id, name, active, city) VALUES (2, 'Bob', 0, 'LA')")
+		engine.Execute("INSERT INTO viewdb.users (id, name, active, city) VALUES (3, 'Charlie', 1, 'NYC')")
+		engine.Execute("INSERT INTO viewdb.users (id, name, active, city) VALUES (4, 'Diana', 1, 'Chicago')")
+		engine.Execute("INSERT INTO viewdb.users (id, name, active, city) VALUES (5, 'Eve', 0, 'NYC')")
+
+		// Test CREATE VIEW
+		_, err := engine.Execute("CREATE VIEW viewdb.active_users AS SELECT * FROM viewdb.users WHERE active = 1")
+		if err != nil {
+			t.Fatalf("CREATE VIEW failed: %v", err)
+		}
+
+		// Test SHOW VIEWS
+		result, err := engine.Execute("SHOW VIEWS IN viewdb")
+		if err != nil {
+			t.Fatalf("SHOW VIEWS failed: %v", err)
+		}
+		qr := result.(db.QueryResult)
+		if len(qr.Data) != 1 {
+			t.Errorf("Expected 1 view, got %d", len(qr.Data))
+		}
+
+		// Test SELECT from view
+		result, err = engine.Execute("SELECT * FROM viewdb.active_users")
+		if err != nil {
+			t.Fatalf("SELECT from view failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 3 {
+			t.Errorf("Expected 3 active users, got %d", len(qr.Data))
+		}
+
+		// View should update when underlying data changes
+		engine.Execute("INSERT INTO viewdb.users (id, name, active, city) VALUES (6, 'Frank', 1, 'LA')")
+		result, err = engine.Execute("SELECT * FROM viewdb.active_users")
+		if err != nil {
+			t.Fatalf("SELECT from view after INSERT failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 4 {
+			t.Errorf("Expected 4 active users after INSERT, got %d", len(qr.Data))
+		}
+
+		// Test DROP VIEW
+		_, err = engine.Execute("DROP VIEW viewdb.active_users")
+		if err != nil {
+			t.Fatalf("DROP VIEW failed: %v", err)
+		}
+
+		// Verify view is gone
+		result, err = engine.Execute("SHOW VIEWS IN viewdb")
+		if err != nil {
+			t.Fatalf("SHOW VIEWS after DROP failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 0 {
+			t.Errorf("Expected 0 views after DROP, got %d", len(qr.Data))
+		}
+
+		// Test DROP VIEW IF EXISTS (no error on non-existent view)
+		_, err = engine.Execute("DROP VIEW IF EXISTS viewdb.nonexistent")
+		if err != nil {
+			t.Errorf("DROP VIEW IF EXISTS should not error: %v", err)
+		}
+	})
+}
+
+// TestIntegrationMaterializedViews tests materialized views with caching
+func TestIntegrationMaterializedViews(t *testing.T) {
+	runWithBothPersistence(t, func(t *testing.T, engine *db.Engine) {
+		// Setup
+		engine.Execute("CREATE DATABASE matdb")
+		engine.Execute("CREATE TABLE matdb.orders (id INT PRIMARY KEY, product STRING, amount INT, region STRING)")
+		engine.Execute("INSERT INTO matdb.orders (id, product, amount, region) VALUES (1, 'Widget', 100, 'East')")
+		engine.Execute("INSERT INTO matdb.orders (id, product, amount, region) VALUES (2, 'Gadget', 200, 'West')")
+		engine.Execute("INSERT INTO matdb.orders (id, product, amount, region) VALUES (3, 'Widget', 150, 'East')")
+
+		// Create materialized view
+		_, err := engine.Execute("CREATE MATERIALIZED VIEW matdb.east_orders AS SELECT * FROM matdb.orders WHERE region = 'East'")
+		if err != nil {
+			t.Fatalf("CREATE MATERIALIZED VIEW failed: %v", err)
+		}
+
+		// SHOW VIEWS should show it as materialized
+		result, err := engine.Execute("SHOW VIEWS IN matdb")
+		if err != nil {
+			t.Fatalf("SHOW VIEWS failed: %v", err)
+		}
+		qr := result.(db.QueryResult)
+		if len(qr.Data) != 1 {
+			t.Fatalf("Expected 1 view, got %d", len(qr.Data))
+		}
+		// Check materialized column
+		matIdx := -1
+		for i, col := range qr.Columns {
+			if col == "materialized" {
+				matIdx = i
+			}
+		}
+		if matIdx >= 0 && qr.Data[0][matIdx] != "YES" {
+			t.Errorf("Expected materialized=YES, got %s", qr.Data[0][matIdx])
+		}
+
+		// Query materialized view - should return cached data
+		result, err = engine.Execute("SELECT * FROM matdb.east_orders")
+		if err != nil {
+			t.Fatalf("SELECT from materialized view failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 2 {
+			t.Errorf("Expected 2 east orders, got %d", len(qr.Data))
+		}
+
+		// Add new data - materialized view should NOT update automatically
+		engine.Execute("INSERT INTO matdb.orders (id, product, amount, region) VALUES (4, 'Gizmo', 300, 'East')")
+
+		// Query again - should still show old cached data (2 rows)
+		result, err = engine.Execute("SELECT * FROM matdb.east_orders")
+		if err != nil {
+			t.Fatalf("SELECT from materialized view after INSERT failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 2 {
+			t.Errorf("Materialized view should still have 2 rows before REFRESH, got %d", len(qr.Data))
+		}
+
+		// REFRESH VIEW to update cached data
+		_, err = engine.Execute("REFRESH VIEW matdb.east_orders")
+		if err != nil {
+			t.Fatalf("REFRESH VIEW failed: %v", err)
+		}
+
+		// Now should show updated data
+		result, err = engine.Execute("SELECT * FROM matdb.east_orders")
+		if err != nil {
+			t.Fatalf("SELECT from materialized view after REFRESH failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 3 {
+			t.Errorf("Expected 3 east orders after REFRESH, got %d", len(qr.Data))
+		}
+
+		// DROP VIEW should work for materialized views too
+		_, err = engine.Execute("DROP VIEW matdb.east_orders")
+		if err != nil {
+			t.Fatalf("DROP VIEW (materialized) failed: %v", err)
+		}
+
+		// Verify it's gone
+		result, err = engine.Execute("SHOW VIEWS IN matdb")
+		if err != nil {
+			t.Fatalf("SHOW VIEWS after DROP failed: %v", err)
+		}
+		qr = result.(db.QueryResult)
+		if len(qr.Data) != 0 {
+			t.Errorf("Expected 0 views after DROP, got %d", len(qr.Data))
+		}
+	})
+}
+
+// TestIntegrationViewErrors tests error handling for views
+func TestIntegrationViewErrors(t *testing.T) {
+	runWithBothPersistence(t, func(t *testing.T, engine *db.Engine) {
+		engine.Execute("CREATE DATABASE errdb")
+		engine.Execute("CREATE TABLE errdb.data (id INT PRIMARY KEY, value INT)")
+		engine.Execute("CREATE VIEW errdb.myview AS SELECT * FROM errdb.data")
+
+		// REFRESH VIEW on non-materialized view should fail
+		_, err := engine.Execute("REFRESH VIEW errdb.myview")
+		if err == nil {
+			t.Error("REFRESH VIEW on non-materialized view should error")
+		}
+
+		// DROP VIEW without IF EXISTS on non-existent view should fail
+		_, err = engine.Execute("DROP VIEW errdb.nonexistent")
+		if err == nil {
+			t.Error("DROP VIEW on non-existent view should error")
+		}
+	})
+}

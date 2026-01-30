@@ -349,3 +349,69 @@ func BenchmarkStringFunctions(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkView benchmarks regular view query vs direct query
+func BenchmarkView(b *testing.B) {
+	engine := setupBenchmarkDB(b)
+
+	// Create a regular view
+	engine.Execute("CREATE VIEW bench.senior_users AS SELECT * FROM bench.users WHERE age > 40")
+
+	b.Run("DirectQuery", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, err := engine.Execute("SELECT * FROM bench.users WHERE age > 40")
+			if err != nil {
+				b.Fatalf("Execute error: %v", err)
+			}
+		}
+	})
+
+	b.Run("ViewQuery", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, err := engine.Execute("SELECT * FROM bench.senior_users")
+			if err != nil {
+				b.Fatalf("Execute error: %v", err)
+			}
+		}
+	})
+}
+
+// BenchmarkMaterializedView benchmarks materialized view performance
+func BenchmarkMaterializedView(b *testing.B) {
+	engine := setupBenchmarkDB(b)
+
+	// Create a materialized view with aggregation
+	engine.Execute("CREATE MATERIALIZED VIEW bench.city_stats AS SELECT city, COUNT(*), AVG(age) FROM bench.users GROUP BY city")
+
+	b.Run("DirectAggregate", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, err := engine.Execute("SELECT city, COUNT(*), AVG(age) FROM bench.users GROUP BY city")
+			if err != nil {
+				b.Fatalf("Execute error: %v", err)
+			}
+		}
+	})
+
+	b.Run("MaterializedQuery", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, err := engine.Execute("SELECT * FROM bench.city_stats")
+			if err != nil {
+				b.Fatalf("Execute error: %v", err)
+			}
+		}
+	})
+
+	b.Run("RefreshView", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, err := engine.Execute("REFRESH VIEW bench.city_stats")
+			if err != nil {
+				b.Fatalf("Execute error: %v", err)
+			}
+		}
+	})
+}
