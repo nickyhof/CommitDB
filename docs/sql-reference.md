@@ -224,17 +224,61 @@ SELECT DATE_FORMAT(created_at, '%Y-%m-%d') FROM mydb.events;
 
 ## JSON Functions
 
-| Function | Description |
-|----------|-------------|
-| `JSON_EXTRACT(json, path)` | Extract value using path (`$.key.nested`) |
-| `JSON_KEYS(json)` | Get comma-separated keys |
-| `JSON_LENGTH(json)` | Number of elements |
-| `JSON_TYPE(json)` | Type (object, array, string, number, boolean, null) |
-| `JSON_CONTAINS(json, value)` | Returns 1 if value exists |
+CommitDB supports storing and querying JSON data.
+
+### Working with JSON Data
 
 ```sql
+-- Create table with JSON column
+CREATE TABLE mydb.documents (
+    id INT PRIMARY KEY,
+    data JSON
+);
+
+-- Insert JSON data (must be valid JSON string)
+INSERT INTO mydb.documents (id, data) VALUES (1, '{"name": "Alice", "age": 30}');
+INSERT INTO mydb.documents (id, data) VALUES (2, '{"name": "Bob", "tags": ["admin", "user"]}');
+INSERT INTO mydb.documents (id, data) VALUES (3, '{"name": "Charlie", "address": {"city": "NYC", "zip": "10001"}}');
+```
+
+### JSON Functions Reference
+
+| Function | Description |
+|----------|-------------|
+| `JSON_EXTRACT(json, path)` | Extract value using JSON path |
+| `JSON_KEYS(json)` | Get comma-separated list of keys |
+| `JSON_LENGTH(json)` | Number of elements in array/object |
+| `JSON_TYPE(json)` | Type: object, array, string, number, boolean, null |
+| `JSON_CONTAINS(json, value)` | Returns 1 if value exists, 0 otherwise |
+
+### JSON Path Syntax
+
+```sql
+-- Simple key access
 SELECT JSON_EXTRACT(data, '$.name') FROM mydb.documents;
+
+-- Nested object access
+SELECT JSON_EXTRACT(data, '$.address.city') FROM mydb.documents;
+
+-- Array element access
+SELECT JSON_EXTRACT(data, '$.tags[0]') FROM mydb.documents;
+```
+
+### JSON in Queries
+
+```sql
+-- Get all keys from JSON column
 SELECT JSON_KEYS(data) FROM mydb.documents;
+
+-- Check JSON type
+SELECT JSON_TYPE(data) FROM mydb.documents;
+
+-- Count array/object elements
+SELECT JSON_LENGTH(data) FROM mydb.documents;
+
+-- Filter by JSON content
+SELECT * FROM mydb.documents WHERE JSON_CONTAINS(data, '"admin"');
+SELECT * FROM mydb.documents WHERE JSON_EXTRACT(data, '$.age') = '30';
 ```
 
 ## Bulk Import/Export
@@ -302,6 +346,20 @@ SHOW SHARES;
 -- Remove a share
 DROP SHARE external;
 ```
+
+## Branch Operations
+
+See [Branching](branching.md) for full documentation on:
+- `CREATE BRANCH`, `CHECKOUT`, `SHOW BRANCHES`
+- `MERGE`, `SHOW MERGE CONFLICTS`, `RESOLVE CONFLICT`
+- `COMMIT MERGE`, `ABORT MERGE`
+
+## Remote Operations
+
+See [Remote Operations](remote-operations.md) for full documentation on:
+- `ADD REMOTE`, `SHOW REMOTES`, `DROP REMOTE`
+- `PUSH TO`, `PULL FROM`, `FETCH FROM`
+- Authentication with tokens and SSH keys
 
 ## Transactions
 
