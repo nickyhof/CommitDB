@@ -17,16 +17,16 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/nickyhof/CommitDB"
-	"github.com/nickyhof/CommitDB/core"
-	"github.com/nickyhof/CommitDB/ps"
+	"github.com/nickyhof/CommitDB/internal/core"
+	"github.com/nickyhof/CommitDB/internal/persistence"
 )
 
 func setupTestServer(t *testing.T) (*Server, func()) {
-	persistence, err := ps.NewMemoryPersistence()
+	persistence, err := persistence.NewMemoryPersistence()
 	if err != nil {
 		t.Fatalf("Failed to create persistence: %v", err)
 	}
-	instance := CommitDB.Open(&persistence)
+	instance := commitdb.Open(&persistence)
 	identity := core.Identity{Name: "test", Email: "test@test.com"}
 
 	server := NewServer(instance, identity)
@@ -228,11 +228,11 @@ func TestServerPersistentConnection(t *testing.T) {
 
 // setupAuthTestServer creates a server with authentication enabled
 func setupAuthTestServer(t *testing.T, secret string) (*Server, func()) {
-	persistence, err := ps.NewMemoryPersistence()
+	persistence, err := persistence.NewMemoryPersistence()
 	if err != nil {
 		t.Fatalf("Failed to create persistence: %v", err)
 	}
-	instance := CommitDB.Open(&persistence)
+	instance := commitdb.Open(&persistence)
 
 	authConfig := &AuthConfig{
 		Enabled:   true,
@@ -396,11 +396,11 @@ func containsString(s, substr string) bool {
 // TestIdentityInCommitsUnauthenticated verifies the default identity is used in Git commits
 // when auth is disabled
 func TestIdentityInCommitsUnauthenticated(t *testing.T) {
-	persistence, err := ps.NewMemoryPersistence()
+	persistence, err := persistence.NewMemoryPersistence()
 	if err != nil {
 		t.Fatalf("Failed to create persistence: %v", err)
 	}
-	instance := CommitDB.Open(&persistence)
+	instance := commitdb.Open(&persistence)
 	defaultIdentity := core.Identity{Name: "Default User", Email: "default@test.com"}
 
 	server := NewServer(instance, defaultIdentity)
@@ -427,11 +427,11 @@ func TestIdentityInCommitsUnauthenticated(t *testing.T) {
 func TestIdentityInCommitsAuthenticated(t *testing.T) {
 	secret := "test-secret-for-identity"
 
-	persistence, err := ps.NewMemoryPersistence()
+	persistence, err := persistence.NewMemoryPersistence()
 	if err != nil {
 		t.Fatalf("Failed to create persistence: %v", err)
 	}
-	instance := CommitDB.Open(&persistence)
+	instance := commitdb.Open(&persistence)
 
 	authConfig := &AuthConfig{
 		Enabled:   true,
@@ -508,11 +508,11 @@ func setupTLSTestServer(t *testing.T) (*Server, string, string, func()) {
 	// Generate self-signed test certificate
 	generateTestCertificate(t, certFile, keyFile)
 
-	persistence, err := ps.NewMemoryPersistence()
+	persistence, err := persistence.NewMemoryPersistence()
 	if err != nil {
 		t.Fatalf("Failed to create persistence: %v", err)
 	}
-	instance := CommitDB.Open(&persistence)
+	instance := commitdb.Open(&persistence)
 	identity := core.Identity{Name: "test", Email: "test@test.com"}
 
 	server := NewServer(instance, identity)

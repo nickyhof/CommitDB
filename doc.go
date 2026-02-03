@@ -1,4 +1,4 @@
-// Package CommitDB provides a Git-backed SQL database engine.
+// Package commitdb provides a Git-backed SQL database engine.
 //
 // CommitDB stores data using Git as the underlying storage mechanism,
 // making every transaction a Git commit. This provides built-in version
@@ -8,15 +8,15 @@
 //
 // Create an in-memory database:
 //
-//	persistence, _ := ps.NewMemoryPersistence()
-//	db := CommitDB.Open(&persistence)
-//	engine := db.Engine(core.Identity{Name: "App", Email: "app@example.com"})
+//	p, _ := persistence.NewMemoryPersistence()
+//	db := commitdb.Open(&p)
+//	e := db.Engine(core.Identity{Name: "App", Email: "app@example.com"})
 //
-//	engine.Execute("CREATE DATABASE mydb")
-//	engine.Execute("CREATE TABLE mydb.users (id INT PRIMARY KEY, name STRING)")
-//	engine.Execute("INSERT INTO mydb.users (id, name) VALUES (1, 'Alice')")
+//	e.Execute("CREATE DATABASE mydb")
+//	e.Execute("CREATE TABLE mydb.users (id INT PRIMARY KEY, name STRING)")
+//	e.Execute("INSERT INTO mydb.users (id, name) VALUES (1, 'Alice')")
 //
-//	result, _ := engine.Execute("SELECT * FROM mydb.users")
+//	result, _ := e.Execute("SELECT * FROM mydb.users")
 //	result.Display()
 //
 // # Supported SQL
@@ -33,4 +33,4 @@
 //   - JOINs: INNER, LEFT, RIGHT
 //   - DISTINCT
 //   - Transactions: BEGIN, COMMIT, ROLLBACK
-package CommitDB
+package commitdb

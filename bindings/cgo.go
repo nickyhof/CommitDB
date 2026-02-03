@@ -9,15 +9,15 @@ import (
 	"unsafe"
 
 	"github.com/nickyhof/CommitDB"
-	"github.com/nickyhof/CommitDB/core"
-	"github.com/nickyhof/CommitDB/db"
-	"github.com/nickyhof/CommitDB/ps"
+	"github.com/nickyhof/CommitDB/internal/core"
+	"github.com/nickyhof/CommitDB/internal/engine"
+	"github.com/nickyhof/CommitDB/internal/persistence"
 )
 
 // Handle represents an open database instance
 type Handle struct {
-	instance *CommitDB.Instance
-	engine   *db.Engine
+	instance *commitdb.Instance
+	engine   *engine.Engine
 }
 
 // Global handle storage (simplified - in production use a map with mutex)
@@ -53,12 +53,12 @@ type CommitResponse struct {
 
 //export commitdb_open_memory
 func commitdb_open_memory() C.int {
-	persistence, err := ps.NewMemoryPersistence()
+	persistence, err := persistence.NewMemoryPersistence()
 	if err != nil {
 		return -1
 	}
 
-	instance := CommitDB.Open(&persistence)
+	instance := commitdb.Open(&persistence)
 	engine := instance.Engine(core.Identity{
 		Name:  "CommitDB Python",
 		Email: "python@commitdb.local",
@@ -78,12 +78,12 @@ func commitdb_open_memory() C.int {
 func commitdb_open_file(path *C.char) C.int {
 	goPath := C.GoString(path)
 
-	persistence, err := ps.NewFilePersistence(goPath, nil)
+	persistence, err := persistence.NewFilePersistence(goPath, nil)
 	if err != nil {
 		return -1
 	}
 
-	instance := CommitDB.Open(&persistence)
+	instance := commitdb.Open(&persistence)
 	engine := instance.Engine(core.Identity{
 		Name:  "CommitDB Python",
 		Email: "python@commitdb.local",
@@ -121,7 +121,7 @@ func commitdb_execute(handle C.int, query *C.char) *C.char {
 	var resp Response
 
 	switch r := result.(type) {
-	case db.QueryResult:
+	case engine.QueryResult:
 		qr := QueryResponse{
 			Columns:         r.Columns,
 			Data:            r.Data,
@@ -136,7 +136,7 @@ func commitdb_execute(handle C.int, query *C.char) *C.char {
 			Result:  data,
 		}
 
-	case db.CommitResult:
+	case engine.CommitResult:
 		cr := CommitResponse{
 			DatabasesCreated: r.DatabasesCreated,
 			DatabasesDeleted: r.DatabasesDeleted,
