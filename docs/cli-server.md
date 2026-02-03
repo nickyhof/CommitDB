@@ -20,9 +20,11 @@ CommitDB provides two ways to interact with your database: the **CLI** for direc
 
 ## CLI (`commitdb-cli`)
 
-The CLI provides a REPL for direct database interaction.
+The CLI provides a REPL for direct database interaction. It can run in **embedded mode** (local database) or **server mode** (connect to a remote server).
 
 ### Options
+
+**Embedded Mode:**
 
 | Flag | Description | Default |
 |------|-------------|---------|
@@ -31,6 +33,14 @@ The CLI provides a REPL for direct database interaction.
 | `-name` | User name for Git commits | `CommitDB` |
 | `-email` | User email for Git commits | `cli@commitdb.local` |
 | `-sqlFile` | SQL file to execute (non-interactive) | *(none)* |
+
+**Server Mode:**
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `-server` | Server address (e.g., `localhost:3306`) | *(none)* |
+| `-tls` | Enable TLS encryption | `false` |
+| `-token` | JWT token for authentication | *(none)* |
 
 ### Examples
 
@@ -42,6 +52,21 @@ The CLI provides a REPL for direct database interaction.
 **File persistence** (data stored in Git repo):
 ```bash
 ./commitdb-cli -baseDir=/path/to/data
+```
+
+**Connect to a server**:
+```bash
+./commitdb-cli -server localhost:3306
+```
+
+**Connect with TLS**:
+```bash
+./commitdb-cli -server localhost:3306 -tls
+```
+
+**Connect with authentication**:
+```bash
+./commitdb-cli -server localhost:3306 -token "eyJhbG..."
 ```
 
 **With custom identity** (for Git commits):

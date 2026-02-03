@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-02-03
+
+### Added
+
+#### CLI Server Connection Mode
+- `-server` flag to connect CLI to a remote CommitDB server
+- `-tls` flag for TLS encryption when connecting to server
+- `-token` flag for JWT authentication with server
+- CLI now supports both embedded mode (local) and server mode (remote)
+
+#### Transaction History
+- `SHOW TRANSACTIONS [LIMIT n]` - View transaction history (default 100)
+
+### Changed
+
+#### Repository Restructure (Go Conventions)
+- Moved internal packages to `internal/` directory:
+  - `core/` → `internal/core/`
+  - `db/` → `internal/engine/`
+  - `op/` → `internal/ops/`
+  - `ps/` → `internal/persistence/`
+  - `sql/` → `internal/sql/`
+- Renamed packages for clarity:
+  - `db` → `engine`
+  - `op` → `ops`
+  - `ps` → `persistence`
+- Root package renamed to lowercase `commitdb` per Go conventions
+
 ## [2.5.0] - 2026-01-29
 
 ### Added
@@ -499,6 +527,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests run with both memory and file persistence modes
 - Persistence reopen tests for data durability verification
 
+[2.6.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.6.0
 [2.5.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.5.0
 [2.4.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.4.0
 [2.3.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.3.0
