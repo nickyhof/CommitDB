@@ -10,9 +10,10 @@ import (
 )
 
 type Transaction struct {
-	Id     string
-	When   time.Time
-	Author string // "Name <email>" format
+	Id      string
+	When    time.Time
+	Author  string // "Name <email>" format
+	Message string // Commit message
 }
 
 func (transaction Transaction) String() string {
@@ -77,4 +78,47 @@ func (persistence *Persistence) TransactionsFrom(asof string) []Transaction {
 	})
 
 	return transactions
+}
+
+// ListTransactions returns the most recent transactions (commits)
+func (persistence *Persistence) ListTransactions(limit int) ([]Transaction, error) {
+	if err := persistence.ensureInitialized(); err != nil {
+		return nil, err
+	}
+
+	headRef, err := persistence.repo.Head()
+	if err != nil {
+		// No commits yet
+		return []Transaction{}, nil
+	}
+
+	var transactions []Transaction
+
+	cIter, err := persistence.repo.Log(&git.LogOptions{
+		From: headRef.Hash(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	count := 0
+	cIter.ForEach(func(c *object.Commit) error {
+		if count >= limit {
+			return fmt.Errorf("stop")
+		}
+		author := ""
+		if c.Author.Name != "" || c.Author.Email != "" {
+			author = fmt.Sprintf("%s <%s>", c.Author.Name, c.Author.Email)
+		}
+		transactions = append(transactions, Transaction{
+			Id:      c.Hash.String(),
+			When:    c.Committer.When,
+			Author:  author,
+			Message: c.Message,
+		})
+		count++
+		return nil
+	})
+
+	return transactions, nil
 }

@@ -142,6 +142,7 @@ const (
 	AwsRegion
 	Share
 	Shares
+	Transactions
 	Sync
 	View
 	Views
@@ -591,6 +592,8 @@ func lookupIdentifier(id string) TokenType {
 		return Share
 	case "SHARES":
 		return Shares
+	case "TRANSACTIONS":
+		return Transactions
 	case "SYNC":
 		return Sync
 	case "VIEW":
