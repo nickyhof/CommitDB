@@ -1,6 +1,10 @@
 # Go API
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/nickyhof/CommitDB.svg)](https://pkg.go.dev/github.com/nickyhof/CommitDB)
+
 Use CommitDB as an embedded library in your Go applications.
+
+**[📖 Full API Reference on pkg.go.dev](https://pkg.go.dev/github.com/nickyhof/CommitDB)**
 
 ## Installation
 
@@ -15,106 +19,104 @@ package main
 
 import (
     "fmt"
-    "github.com/nickyhof/CommitDB/op"
+    
+    "github.com/nickyhof/CommitDB"
+    "github.com/nickyhof/CommitDB/internal/core"
+    "github.com/nickyhof/CommitDB/internal/persistence"
 )
 
 func main() {
-    // Create an in-memory engine
-    engine := op.NewEngine(op.Memory, "")
+    // Create in-memory persistence
+    p, _ := persistence.NewMemoryPersistence()
     
     // Or file-based persistence
-    // engine := op.NewEngine(op.FileMode, "/path/to/data")
+    // p, _ := persistence.NewFilePersistence("/path/to/data", nil)
+    
+    // Open CommitDB instance
+    instance := commitdb.Open(&p)
+    
+    // Create engine with identity (for Git commits)
+    engine := instance.Engine(core.Identity{
+        Name:  "MyApp",
+        Email: "app@example.com",
+    })
     
     // Execute queries
-    engine.Query("CREATE DATABASE myapp")
-    engine.Query("CREATE TABLE myapp.users (id INT, name STRING)")
-    engine.Query("INSERT INTO myapp.users VALUES (1, 'Alice')")
+    engine.Execute("CREATE DATABASE myapp")
+    engine.Execute("CREATE TABLE myapp.users (id INT PRIMARY KEY, name STRING)")
+    engine.Execute("INSERT INTO myapp.users (id, name) VALUES (1, 'Alice')")
     
     // Query data
-    result, err := engine.Query("SELECT * FROM myapp.users")
+    result, err := engine.Execute("SELECT * FROM myapp.users")
     if err != nil {
         panic(err)
     }
     
-    fmt.Println(result.Columns) // [id name]
-    fmt.Println(result.Rows)    // [[1 Alice]]
+    // Display results
+    result.Display()
 }
 ```
 
-## Engine Modes
+## Persistence Options
 
 ```go
-// In-memory (no persistence)
-engine := op.NewEngine(op.Memory, "")
+import "github.com/nickyhof/CommitDB/internal/persistence"
+
+// In-memory (no file persistence)
+p, _ := persistence.NewMemoryPersistence()
 
 // File-based with Git persistence
-engine := op.NewEngine(op.FileMode, "/path/to/data")
+p, _ := persistence.NewFilePersistence("/path/to/data", nil)
+
+// Clone from remote Git repository
+gitUrl := "https://github.com/user/repo.git"
+p, _ := persistence.NewFilePersistence("/path/to/data", &gitUrl)
 ```
 
 ## Working with Results
 
 ```go
-result, err := engine.Query("SELECT id, name FROM myapp.users")
+result, err := engine.Execute("SELECT id, name FROM myapp.users")
 if err != nil {
     // Handle error
 }
 
-// Column names
-for _, col := range result.Columns {
-    fmt.Println(col)
+// Check result type
+switch r := result.(type) {
+case engine.QueryResult:
+    // Column names
+    for _, col := range r.Columns {
+        fmt.Println(col)
+    }
+    
+    // Row data (each row is []string)
+    for _, row := range r.Data {
+        fmt.Printf("ID: %s, Name: %s\n", row[0], row[1])
+    }
+    
+    fmt.Printf("Read %d records in %.2fms\n", r.RecordsRead, r.ExecutionTimeMs)
+    
+case engine.CommitResult:
+    fmt.Printf("Written: %d, Deleted: %d\n", r.RecordsWritten, r.RecordsDeleted)
 }
-
-// Row data
-for _, row := range result.Rows {
-    id := row[0].(int64)
-    name := row[1].(string)
-    fmt.Printf("User %d: %s\n", id, name)
-}
-
-// Affected rows (for INSERT/UPDATE/DELETE)
-fmt.Println(result.AffectedRows)
-```
-
-## Persistence Layer
-
-For direct access to Git-backed storage:
-
-```go
-import "github.com/nickyhof/CommitDB/ps"
-
-// Create persistence
-persistence := ps.NewPersistence("/path/to/data")
-
-// Branching
-persistence.CreateBranch("feature-x")
-persistence.Checkout("feature-x")
-
-// Snapshots
-persistence.Snapshot("v1.0.0", nil)
-persistence.Recover("v1.0.0")
-
-// Remotes
-persistence.AddRemote("origin", "https://github.com/user/repo.git", &ps.RemoteAuth{
-    Token: "ghp_xxx",
-})
-persistence.Push("origin", "master")
-persistence.Pull("origin", "master")
 ```
 
 ## Thread Safety
 
-The engine is thread-safe using RWMutex:
+The engine is thread-safe. Each connection should create its own engine instance from the shared persistence:
 
 ```go
-engine := op.NewEngine(op.FileMode, "/path/to/data")
+instance := commitdb.Open(&p)
 
-// Safe for concurrent reads
+// Safe for concurrent use - each goroutine gets its own engine
 go func() {
-    result, _ := engine.Query("SELECT * FROM myapp.users")
+    e := instance.Engine(core.Identity{Name: "Worker1", Email: "w1@example.com"})
+    result, _ := e.Execute("SELECT * FROM myapp.users")
 }()
 
 go func() {
-    result, _ := engine.Query("SELECT * FROM myapp.orders")
+    e := instance.Engine(core.Identity{Name: "Worker2", Email: "w2@example.com"})
+    result, _ := e.Execute("SELECT * FROM myapp.orders")
 }()
 ```
 
@@ -122,13 +124,28 @@ go func() {
 
 ```go
 // Start transaction
-engine.Query("BEGIN")
+engine.Execute("BEGIN")
 
-// Operations
-engine.Query("INSERT INTO myapp.users VALUES (1, 'Alice')")
-engine.Query("INSERT INTO myapp.orders VALUES (100, 1)")
+// Operations within transaction
+engine.Execute("INSERT INTO myapp.users (id, name) VALUES (1, 'Alice')")
+engine.Execute("INSERT INTO myapp.orders (id, user_id) VALUES (100, 1)")
 
 // Commit or rollback
-engine.Query("COMMIT")
-// or: engine.Query("ROLLBACK")
+engine.Execute("COMMIT")
+// or: engine.Execute("ROLLBACK")
+```
+
+## Branching
+
+```go
+// Create and switch to a new branch
+engine.Execute("CREATE BRANCH feature-x")
+engine.Execute("SWITCH BRANCH feature-x")
+
+// Make changes on the branch
+engine.Execute("INSERT INTO myapp.users (id, name) VALUES (2, 'Bob')")
+
+// Switch back and merge
+engine.Execute("SWITCH BRANCH main")
+engine.Execute("MERGE BRANCH feature-x")
 ```

@@ -1,6 +1,11 @@
 # Python Driver
 
+[![PyPI version](https://badge.fury.io/py/commitdb.svg)](https://pypi.org/project/commitdb/)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+
 The CommitDB Python driver provides a native Python interface for connecting to CommitDB servers or running embedded in-process.
+
+**[📦 View on PyPI](https://pypi.org/project/commitdb/)**
 
 ## Installation
 

@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/nickyhof/CommitDB"
-	"github.com/nickyhof/CommitDB/core"
-	"github.com/nickyhof/CommitDB/db"
-	"github.com/nickyhof/CommitDB/ps"
+	commitdb "github.com/nickyhof/CommitDB"
+	"github.com/nickyhof/CommitDB/internal/core"
+	"github.com/nickyhof/CommitDB/internal/engine"
+	"github.com/nickyhof/CommitDB/internal/persistence"
 )
 
 const (
@@ -27,7 +27,7 @@ var Version = "dev"
 
 // CLI holds the CLI state
 type CLI struct {
-	engine      *db.Engine
+	engine      *engine.Engine
 	history     []string
 	historyFile string
 	database    string // current database context
@@ -43,28 +43,28 @@ func main() {
 
 	printBanner()
 
-	var Instance CommitDB.Instance
+	var Instance commitdb.Instance
 
 	if *baseDir == "" {
 		fmt.Printf("%sUsing memory persistence%s\n", SuccessColor, ResetColor)
-		persistence, err := ps.NewMemoryPersistence()
+		p, err := persistence.NewMemoryPersistence()
 		if err != nil {
 			fmt.Printf("%sError: %v%s\n", ErrorColor, err, ResetColor)
 			return
 		}
-		Instance = *CommitDB.Open(&persistence)
+		Instance = *commitdb.Open(&p)
 	} else {
 		fmt.Printf("%sUsing file persistence: %s%s\n", SuccessColor, *baseDir, ResetColor)
 		var gitUrlPtr *string
 		if *gitUrl != "" {
 			gitUrlPtr = gitUrl
 		}
-		persistence, err := ps.NewFilePersistence(*baseDir, gitUrlPtr)
+		p, err := persistence.NewFilePersistence(*baseDir, gitUrlPtr)
 		if err != nil {
 			fmt.Printf("%sError: %v%s\n", ErrorColor, err, ResetColor)
 			return
 		}
-		Instance = *CommitDB.Open(&persistence)
+		Instance = *commitdb.Open(&p)
 	}
 
 	engine := Instance.Engine(core.Identity{
@@ -404,7 +404,7 @@ func (cli *CLI) importFile(filename string) error {
 			successCount++
 			// Compact output based on result type
 			switch r := result.(type) {
-			case db.CommitResult:
+			case engine.CommitResult:
 				var details []string
 				if r.DatabasesCreated > 0 {
 					details = append(details, fmt.Sprintf("%d db created", r.DatabasesCreated))
@@ -429,7 +429,7 @@ func (cli *CLI) importFile(filename string) error {
 					detailStr = " (" + strings.Join(details, ", ") + ")"
 				}
 				fmt.Printf("%s[%d] ✓ %s%s%s\n", SuccessColor, i+1, truncate(stmt, 50), detailStr, ResetColor)
-			case db.QueryResult:
+			case engine.QueryResult:
 				fmt.Printf("%s[%d] ✓ %s (%d rows)%s\n", SuccessColor, i+1, truncate(stmt, 50), r.RecordsRead, ResetColor)
 			default:
 				fmt.Printf("%s[%d] ✓ %s%s\n", SuccessColor, i+1, truncate(stmt, 50), ResetColor)

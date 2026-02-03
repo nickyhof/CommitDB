@@ -11,15 +11,15 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/nickyhof/CommitDB"
-	"github.com/nickyhof/CommitDB/core"
-	"github.com/nickyhof/CommitDB/db"
+	commitdb "github.com/nickyhof/CommitDB"
+	"github.com/nickyhof/CommitDB/internal/core"
+	"github.com/nickyhof/CommitDB/internal/engine"
 )
 
 // Server is a TCP SQL server that exposes the CommitDB engine.
 type Server struct {
 	listener        net.Listener
-	instance        *CommitDB.Instance
+	instance        *commitdb.Instance
 	defaultIdentity core.Identity
 	authConfig      *AuthConfig
 	tlsEnabled      bool
@@ -29,7 +29,7 @@ type Server struct {
 
 // NewServer creates a new SQL server with the given CommitDB instance.
 // The defaultIdentity is used when auth is disabled or for anonymous connections.
-func NewServer(instance *CommitDB.Instance, identity core.Identity) *Server {
+func NewServer(instance *commitdb.Instance, identity core.Identity) *Server {
 	return &Server{
 		instance:        instance,
 		defaultIdentity: identity,
@@ -38,7 +38,7 @@ func NewServer(instance *CommitDB.Instance, identity core.Identity) *Server {
 }
 
 // NewServerWithAuth creates a new SQL server with authentication enabled.
-func NewServerWithAuth(instance *CommitDB.Instance, authConfig *AuthConfig) *Server {
+func NewServerWithAuth(instance *commitdb.Instance, authConfig *AuthConfig) *Server {
 	return &Server{
 		instance:   instance,
 		authConfig: authConfig,
@@ -139,7 +139,7 @@ func (s *Server) acceptLoop() {
 // connContext holds per-connection state including auth and engine.
 type connContext struct {
 	state  *ConnectionState
-	engine *db.Engine
+	engine *engine.Engine
 	mu     sync.Mutex
 }
 
@@ -248,8 +248,8 @@ func (s *Server) sendResponse(conn net.Conn, response Response) {
 	}
 }
 
-func (s *Server) executeQueryWithEngine(query string, engine *db.Engine) Response {
-	result, err := engine.Execute(query)
+func (s *Server) executeQueryWithEngine(query string, e *engine.Engine) Response {
+	result, err := e.Execute(query)
 	if err != nil {
 		return Response{
 			Success: false,
@@ -258,7 +258,7 @@ func (s *Server) executeQueryWithEngine(query string, engine *db.Engine) Respons
 	}
 
 	switch r := result.(type) {
-	case db.QueryResult:
+	case engine.QueryResult:
 		qr := QueryResponse{
 			Columns:         r.Columns,
 			Data:            r.Data,
@@ -273,7 +273,7 @@ func (s *Server) executeQueryWithEngine(query string, engine *db.Engine) Respons
 			Result:  data,
 		}
 
-	case db.CommitResult:
+	case engine.CommitResult:
 		cr := CommitResponse{
 			DatabasesCreated: r.DatabasesCreated,
 			DatabasesDeleted: r.DatabasesDeleted,

@@ -23,9 +23,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nickyhof/CommitDB"
-	"github.com/nickyhof/CommitDB/core"
-	"github.com/nickyhof/CommitDB/ps"
+	commitdb "github.com/nickyhof/CommitDB"
+	"github.com/nickyhof/CommitDB/internal/core"
+	"github.com/nickyhof/CommitDB/internal/persistence"
 )
 
 // =============================================================================
@@ -175,7 +175,7 @@ func (m *PerfMetrics) Print(t *testing.T, clientCount int, duration time.Duratio
 
 // perfServer wraps a CommitDB server for performance testing
 type perfServer struct {
-	instance *CommitDB.Instance
+	instance *commitdb.Instance
 	listener net.Listener
 	addr     string
 	done     chan struct{}
@@ -187,20 +187,20 @@ type perfServer struct {
 }
 
 func newPerfServer(t *testing.T) *perfServer {
-	persistence, err := ps.NewMemoryPersistence()
+	p, err := persistence.NewMemoryPersistence()
 	if err != nil {
 		t.Fatalf("Failed to create persistence: %v", err)
 	}
-	instance := CommitDB.Open(&persistence)
+	instance := commitdb.Open(&p)
 
 	// Setup test database
-	engine := instance.Engine(core.Identity{Name: "perf", Email: "perf@test.com"})
-	engine.Execute("CREATE DATABASE perf")
-	engine.Execute("CREATE TABLE perf.users (id INT PRIMARY KEY, name STRING, age INT)")
+	e := instance.Engine(core.Identity{Name: "perf", Email: "perf@test.com"})
+	e.Execute("CREATE DATABASE perf")
+	e.Execute("CREATE TABLE perf.users (id INT PRIMARY KEY, name STRING, age INT)")
 
 	// Insert seed data
 	for i := 1; i <= 100; i++ {
-		engine.Execute(fmt.Sprintf("INSERT INTO perf.users (id, name, age) VALUES (%d, 'User%d', %d)", i, i, 20+i%50))
+		e.Execute(fmt.Sprintf("INSERT INTO perf.users (id, name, age) VALUES (%d, 'User%d', %d)", i, i, 20+i%50))
 	}
 
 	s := &perfServer{
@@ -271,7 +271,7 @@ func (s *perfServer) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
 	// Each connection gets its own engine - thread-safety handled at persistence layer
-	engine := s.instance.Engine(core.Identity{Name: "perf", Email: "perf@test.com"})
+	e := s.instance.Engine(core.Identity{Name: "perf", Email: "perf@test.com"})
 	reader := bufio.NewReader(conn)
 
 	for {
@@ -291,7 +291,7 @@ func (s *perfServer) handleConnection(conn net.Conn) {
 			return
 		}
 
-		result, execErr := engine.Execute(query)
+		result, execErr := e.Execute(query)
 		resp := s.buildResponse(result, execErr)
 
 		data, _ := json.Marshal(resp)

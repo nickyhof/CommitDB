@@ -6,18 +6,18 @@ import (
 	"testing"
 
 	"github.com/nickyhof/CommitDB"
-	"github.com/nickyhof/CommitDB/core"
-	"github.com/nickyhof/CommitDB/db"
-	"github.com/nickyhof/CommitDB/ps"
+	"github.com/nickyhof/CommitDB/internal/core"
+	"github.com/nickyhof/CommitDB/internal/engine"
+	"github.com/nickyhof/CommitDB/internal/persistence"
 )
 
 func setupTestCLI(t *testing.T) *CLI {
-	persistence, err := ps.NewMemoryPersistence()
+	persistence, err := persistence.NewMemoryPersistence()
 	if err != nil {
 		t.Fatalf("Failed to create persistence: %v", err)
 	}
 
-	instance := CommitDB.Open(&persistence)
+	instance := commitdb.Open(&persistence)
 	engine := instance.Engine(core.Identity{
 		Name:  "test",
 		Email: "test@test.com",
@@ -246,14 +246,14 @@ func TestImportFile(t *testing.T) {
 	}
 
 	// We inserted 5 products
-	qr := result.(db.QueryResult)
+	qr := result.(engine.QueryResult)
 	if qr.Data[0][0] != "5" {
 		t.Errorf("Expected 5 products, got %s", qr.Data[0][0])
 	}
 
 	// Verify customers
 	result, _ = cli.engine.Execute("SELECT COUNT(*) FROM shop.customers")
-	qr = result.(db.QueryResult)
+	qr = result.(engine.QueryResult)
 	if qr.Data[0][0] != "3" {
 		t.Errorf("Expected 3 customers, got %s", qr.Data[0][0])
 	}

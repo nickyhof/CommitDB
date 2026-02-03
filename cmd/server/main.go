@@ -9,8 +9,8 @@ import (
 	"syscall"
 
 	"github.com/nickyhof/CommitDB"
-	"github.com/nickyhof/CommitDB/core"
-	"github.com/nickyhof/CommitDB/ps"
+	"github.com/nickyhof/CommitDB/internal/core"
+	"github.com/nickyhof/CommitDB/internal/persistence"
 )
 
 // Version is set at build time via -ldflags
@@ -41,25 +41,25 @@ func main() {
 	}
 
 	// Initialize persistence
-	var instance *CommitDB.Instance
+	var instance *commitdb.Instance
 	if *baseDir == "" {
 		log.Println("Using memory persistence")
-		persistence, err := ps.NewMemoryPersistence()
+		persistence, err := persistence.NewMemoryPersistence()
 		if err != nil {
 			log.Fatalf("Failed to initialize memory persistence: %v", err)
 		}
-		instance = CommitDB.Open(&persistence)
+		instance = commitdb.Open(&persistence)
 	} else {
 		log.Printf("Using file persistence: %s", *baseDir)
 		var gitUrlPtr *string
 		if *gitUrl != "" {
 			gitUrlPtr = gitUrl
 		}
-		persistence, err := ps.NewFilePersistence(*baseDir, gitUrlPtr)
+		persistence, err := persistence.NewFilePersistence(*baseDir, gitUrlPtr)
 		if err != nil {
 			log.Fatalf("Failed to initialize file persistence: %v", err)
 		}
-		instance = CommitDB.Open(&persistence)
+		instance = commitdb.Open(&persistence)
 	}
 
 	// Create server with or without auth
