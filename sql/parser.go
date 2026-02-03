@@ -33,6 +33,7 @@ const (
 	CheckoutStatementType
 	MergeStatementType
 	ShowBranchesStatementType
+	ShowTransactionsStatementType
 	ShowMergeConflictsStatementType
 	ResolveConflictStatementType
 	CommitMergeStatementType
@@ -262,6 +263,10 @@ type MergeStatement struct {
 
 type ShowBranchesStatement struct{}
 
+type ShowTransactionsStatement struct {
+	Limit int
+}
+
 type ShowMergeConflictsStatement struct{}
 
 type ResolveConflictStatement struct {
@@ -398,6 +403,10 @@ func (s MergeStatement) Type() StatementType {
 
 func (s ShowBranchesStatement) Type() StatementType {
 	return ShowBranchesStatementType
+}
+
+func (s ShowTransactionsStatement) Type() StatementType {
+	return ShowTransactionsStatementType
 }
 
 func (s ShowMergeConflictsStatement) Type() StatementType {
@@ -1954,8 +1963,21 @@ func ParseShow(parser *Parser) (Statement, error) {
 			return nil, errors.New("expected database name after IN")
 		}
 		return ShowViewsStatement{Database: token.Value}, nil
+	case Transactions:
+		// SHOW TRANSACTIONS [LIMIT n]
+		stmt := ShowTransactionsStatement{Limit: 100} // Default limit
+		token = parser.lexer.NextToken()
+		if token.Type == Limit {
+			token = parser.lexer.NextToken()
+			if token.Type != Int {
+				return nil, errors.New("expected number after LIMIT")
+			}
+			limit, _ := strconv.Atoi(token.Value)
+			stmt.Limit = limit
+		}
+		return stmt, nil
 	default:
-		return nil, errors.New("expected DATABASES, TABLES, INDEXES, VIEWS, BRANCHES, REMOTES, SHARES, or MERGE CONFLICTS after SHOW")
+		return nil, errors.New("expected DATABASES, TABLES, INDEXES, VIEWS, BRANCHES, TRANSACTIONS, REMOTES, SHARES, or MERGE CONFLICTS after SHOW")
 	}
 }
 

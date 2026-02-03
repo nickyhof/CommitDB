@@ -81,6 +81,8 @@ func (engine *Engine) Execute(query string) (Result, error) {
 		return engine.executeMergeStatement(statement.(sql.MergeStatement))
 	case sql.ShowBranchesStatementType:
 		return engine.executeShowBranchesStatement(statement.(sql.ShowBranchesStatement))
+	case sql.ShowTransactionsStatementType:
+		return engine.executeShowTransactionsStatement(statement.(sql.ShowTransactionsStatement))
 	case sql.ShowMergeConflictsStatementType:
 		return engine.executeShowMergeConflictsStatement()
 	case sql.ResolveConflictStatementType:
@@ -1959,6 +1961,34 @@ func (engine *Engine) executeShowBranchesStatement(statement sql.ShowBranchesSta
 	return QueryResult{
 		Transaction:     engine.Persistence.LatestTransaction(),
 		Columns:         []string{"Branch", "Current"},
+		Data:            data,
+		RecordsRead:     len(data),
+		ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
+		ExecutionOps:    len(data),
+	}, nil
+}
+
+func (engine *Engine) executeShowTransactionsStatement(statement sql.ShowTransactionsStatement) (QueryResult, error) {
+	startTime := time.Now()
+
+	transactions, err := engine.Persistence.ListTransactions(statement.Limit)
+	if err != nil {
+		return QueryResult{}, err
+	}
+
+	data := make([][]string, len(transactions))
+	for i, txn := range transactions {
+		data[i] = []string{
+			txn.Id,
+			txn.When.Format(time.RFC3339),
+			txn.Message,
+			txn.Author,
+		}
+	}
+
+	return QueryResult{
+		Transaction:     engine.Persistence.LatestTransaction(),
+		Columns:         []string{"ID", "Timestamp", "Message", "Author"},
 		Data:            data,
 		RecordsRead:     len(data),
 		ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
