@@ -11,9 +11,9 @@ import (
 	"github.com/go-git/go-git/v6/plumbing/cache"
 	"github.com/go-git/go-git/v6/storage/filesystem"
 	"github.com/nickyhof/CommitDB/v2"
-	"github.com/nickyhof/CommitDB/v2/internal/core"
-	"github.com/nickyhof/CommitDB/v2/internal/engine"
-	"github.com/nickyhof/CommitDB/v2/internal/persistence"
+	"github.com/nickyhof/CommitDB/v2/core"
+	"github.com/nickyhof/CommitDB/v2/engine"
+	"github.com/nickyhof/CommitDB/v2/persistence"
 )
 
 // TestFunc is the signature for test functions that work with any persistence

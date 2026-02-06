@@ -24,8 +24,8 @@ import (
 	"time"
 
 	commitdb "github.com/nickyhof/CommitDB/v2"
-	"github.com/nickyhof/CommitDB/v2/internal/core"
-	"github.com/nickyhof/CommitDB/v2/internal/persistence"
+	"github.com/nickyhof/CommitDB/v2/core"
+	"github.com/nickyhof/CommitDB/v2/persistence"
 )
 
 // =============================================================================

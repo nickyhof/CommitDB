@@ -19,8 +19,8 @@ import (
     "fmt"
     
     "github.com/nickyhof/CommitDB/v2"
-    "github.com/nickyhof/CommitDB/v2/internal/core"
-    "github.com/nickyhof/CommitDB/v2/internal/persistence"
+    "github.com/nickyhof/CommitDB/v2/core"
+    "github.com/nickyhof/CommitDB/v2/persistence"
 )
 
 func main() {
@@ -58,7 +58,7 @@ func main() {
 ## Persistence Options
 
 ```go
-import "github.com/nickyhof/CommitDB/v2/internal/persistence"
+import "github.com/nickyhof/CommitDB/v2/persistence"
 
 // In-memory (no file persistence)
 p, _ := persistence.NewMemoryPersistence()

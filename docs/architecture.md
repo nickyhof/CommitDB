@@ -5,26 +5,31 @@
 ```
 CommitDB/
 ├── cmd/
-│   ├── cli/          # Interactive CLI application
-│   └── server/       # TCP server
-├── op/               # SQL operations engine
-│   ├── engine.go     # Main query executor
-│   ├── parser.go     # SQL parser
-│   └── planner.go    # Query planner
-├── ps/               # Persistence layer
-│   ├── persistence.go  # Git-backed storage
-│   ├── plumbing.go     # Low-level Git operations
-│   └── batch.go        # Batch commit operations
-├── bindings/         # C shared library bindings
+│   ├── cli/              # Interactive CLI application
+│   └── server/           # TCP server
+├── core/                 # Public: Domain types (Identity)
+├── engine/               # Public: SQL execution engine
+│   ├── engine.go         # Core router
+│   ├── select.go         # SELECT, aggregates, functions
+│   ├── dml.go            # INSERT, UPDATE, DELETE
+│   ├── ddl.go            # CREATE/DROP TABLE/DB
+│   ├── branch.go         # Branching/merge
+│   └── view.go           # Views, time-travel
+├── persistence/          # Public: Git-backed storage
+├── internal/
+│   ├── sql/              # SQL parser (internal)
+│   ├── ops/              # Table operations (internal)
+│   └── compare/          # Value comparison (internal)
+├── bindings/             # C shared library bindings
 ├── clients/
-│   └── python/       # Python client
-├── tests/            # Tests and benchmarks
-└── scripts/          # Build and CI scripts
+│   └── python/           # Python client
+├── tests/                # Integration tests
+└── docs/                 # Documentation
 ```
 
 ## Components
 
-### Engine (`op/`)
+### Engine (`engine/`)
 
 The SQL engine handles:
 
@@ -33,7 +38,7 @@ The SQL engine handles:
 - Execution against storage
 - Result formatting
 
-### Persistence (`ps/`)
+### Persistence (`persistence/`)
 
 Git-backed storage with:
 
