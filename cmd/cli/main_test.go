@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nickyhof/CommitDB"
-	"github.com/nickyhof/CommitDB/internal/core"
-	"github.com/nickyhof/CommitDB/internal/engine"
-	"github.com/nickyhof/CommitDB/internal/persistence"
+	"github.com/nickyhof/CommitDB/v2"
+	"github.com/nickyhof/CommitDB/v2/internal/core"
+	"github.com/nickyhof/CommitDB/v2/internal/engine"
+	"github.com/nickyhof/CommitDB/v2/internal/persistence"
 )
 
 func setupTestCLI(t *testing.T) *CLI {

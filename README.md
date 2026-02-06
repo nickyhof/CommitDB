@@ -1,7 +1,7 @@
 # CommitDB
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/nickyhof/CommitDB.svg)](https://pkg.go.dev/github.com/nickyhof/CommitDB)
-[![Go Report Card](https://goreportcard.com/badge/github.com/nickyhof/CommitDB)](https://goreportcard.com/report/github.com/nickyhof/CommitDB)
+[![Go Reference](https://pkg.go.dev/badge/github.com/nickyhof/CommitDB/v2.svg)](https://pkg.go.dev/github.com/nickyhof/CommitDB/v2)
+[![Go Report Card](https://goreportcard.com/badge/github.com/nickyhof/CommitDB/v2)](https://goreportcard.com/report/github.com/nickyhof/CommitDB/v2)
 
 A Git-backed SQL database engine. Every transaction is a Git commit.
 
@@ -35,7 +35,7 @@ Traditional databases lose history. Once you UPDATE or DELETE, the old data is g
 docker run -p 3306:3306 ghcr.io/nickyhof/commitdb:latest
 
 # Go
-go install github.com/nickyhof/CommitDB/cmd/cli@latest
+go install github.com/nickyhof/CommitDB/v2/cmd/cli@latest
 
 # Python
 pip install commitdb

@@ -3,8 +3,8 @@ package engine
 import (
 	"testing"
 
-	"github.com/nickyhof/CommitDB/internal/core"
-	"github.com/nickyhof/CommitDB/internal/persistence"
+	"github.com/nickyhof/CommitDB/v2/internal/core"
+	"github.com/nickyhof/CommitDB/v2/internal/persistence"
 )
 
 func setupTestEngine(t *testing.T) *Engine {

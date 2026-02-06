@@ -3,7 +3,7 @@ package persistence
 import (
 	"testing"
 
-	"github.com/nickyhof/CommitDB/internal/core"
+	"github.com/nickyhof/CommitDB/v2/internal/core"
 )
 
 func TestTransactionBuilder(t *testing.T) {

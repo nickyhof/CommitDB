@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/nickyhof/CommitDB/internal/core"
+	"github.com/nickyhof/CommitDB/v2/internal/core"
 )
 
 // AuthConfig configures server authentication.

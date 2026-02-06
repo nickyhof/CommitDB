@@ -6,7 +6,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/nickyhof/CommitDB/internal/core"
+	"github.com/nickyhof/CommitDB/v2/internal/core"
 )
 
 // Index represents a B-tree index on a column

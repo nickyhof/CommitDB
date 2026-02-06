@@ -1,15 +1,13 @@
 # Go API
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/nickyhof/CommitDB.svg)](https://pkg.go.dev/github.com/nickyhof/CommitDB)
+[![Go Reference](https://pkg.go.dev/badge/github.com/nickyhof/CommitDB/v2.svg)](https://pkg.go.dev/github.com/nickyhof/CommitDB/v2)
 
 Use CommitDB as an embedded library in your Go applications.
-
-**[📖 Full API Reference on pkg.go.dev](https://pkg.go.dev/github.com/nickyhof/CommitDB)**
 
 ## Installation
 
 ```bash
-go get github.com/nickyhof/CommitDB
+go get github.com/nickyhof/CommitDB/v2
 ```
 
 ## Quick Start
@@ -20,9 +18,9 @@ package main
 import (
     "fmt"
     
-    "github.com/nickyhof/CommitDB"
-    "github.com/nickyhof/CommitDB/internal/core"
-    "github.com/nickyhof/CommitDB/internal/persistence"
+    "github.com/nickyhof/CommitDB/v2"
+    "github.com/nickyhof/CommitDB/v2/internal/core"
+    "github.com/nickyhof/CommitDB/v2/internal/persistence"
 )
 
 func main() {
@@ -60,7 +58,7 @@ func main() {
 ## Persistence Options
 
 ```go
-import "github.com/nickyhof/CommitDB/internal/persistence"
+import "github.com/nickyhof/CommitDB/v2/internal/persistence"
 
 // In-memory (no file persistence)
 p, _ := persistence.NewMemoryPersistence()

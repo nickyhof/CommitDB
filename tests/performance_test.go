@@ -23,9 +23,9 @@ import (
 	"testing"
 	"time"
 
-	commitdb "github.com/nickyhof/CommitDB"
-	"github.com/nickyhof/CommitDB/internal/core"
-	"github.com/nickyhof/CommitDB/internal/persistence"
+	commitdb "github.com/nickyhof/CommitDB/v2"
+	"github.com/nickyhof/CommitDB/v2/internal/core"
+	"github.com/nickyhof/CommitDB/v2/internal/persistence"
 )
 
 // =============================================================================

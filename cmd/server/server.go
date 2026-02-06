@@ -11,9 +11,9 @@ import (
 	"strings"
 	"sync"
 
-	commitdb "github.com/nickyhof/CommitDB"
-	"github.com/nickyhof/CommitDB/internal/core"
-	"github.com/nickyhof/CommitDB/internal/engine"
+	commitdb "github.com/nickyhof/CommitDB/v2"
+	"github.com/nickyhof/CommitDB/v2/internal/core"
+	"github.com/nickyhof/CommitDB/v2/internal/engine"
 )
 
 // Server is a TCP SQL server that exposes the CommitDB engine.

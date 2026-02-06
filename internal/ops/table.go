@@ -5,8 +5,8 @@ import (
 	"iter"
 	"strconv"
 
-	"github.com/nickyhof/CommitDB/internal/core"
-	"github.com/nickyhof/CommitDB/internal/persistence"
+	"github.com/nickyhof/CommitDB/v2/internal/core"
+	"github.com/nickyhof/CommitDB/v2/internal/persistence"
 )
 
 type TableOp struct {

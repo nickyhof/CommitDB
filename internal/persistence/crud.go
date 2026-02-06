@@ -6,7 +6,7 @@ import (
 	"iter"
 	"strings"
 
-	"github.com/nickyhof/CommitDB/internal/core"
+	"github.com/nickyhof/CommitDB/v2/internal/core"
 )
 
 func (persistence *Persistence) CreateDatabase(database core.Database, identity core.Identity) (txn Transaction, err error) {

@@ -19,8 +19,8 @@ go build -o commitdb-server ./cmd/server
 ### Using Go Install
 
 ```bash
-go install github.com/nickyhof/CommitDB/cmd/cli@latest
-go install github.com/nickyhof/CommitDB/cmd/server@latest
+go install github.com/nickyhof/CommitDB/v2/cmd/cli@latest
+go install github.com/nickyhof/CommitDB/v2/cmd/server@latest
 ```
 
 ## Docker
@@ -64,7 +64,7 @@ See [Python Client](python-client.md) for usage.
 ## Go Library
 
 ```bash
-go get github.com/nickyhof/CommitDB
+go get github.com/nickyhof/CommitDB/v2
 ```
 
 See [Go API](go-api.md) for usage.

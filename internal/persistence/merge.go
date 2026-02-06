@@ -9,7 +9,7 @@ import (
 	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/go-git/go-git/v6/plumbing/filemode"
 	"github.com/go-git/go-git/v6/plumbing/object"
-	"github.com/nickyhof/CommitDB/internal/core"
+	"github.com/nickyhof/CommitDB/v2/internal/core"
 )
 
 // MergeStrategy defines how to handle merge

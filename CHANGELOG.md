@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.1] - 2026-02-06
+
+### Changed
+
+#### Go Module Path Migration
+- Module path updated from `github.com/nickyhof/CommitDB` to `github.com/nickyhof/CommitDB/v2`
+- Required for Go semantic import versioning (v2+ modules must include `/v2` suffix)
+- Enables proper indexing on pkg.go.dev
+- **Breaking Change**: Consumers must update imports to use the `/v2` path
+
 ## [2.6.0] - 2026-02-03
 
 ### Added
@@ -527,6 +537,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests run with both memory and file persistence modes
 - Persistence reopen tests for data durability verification
 
+[2.6.1]: https://github.com/nickyhof/CommitDB/releases/tag/v2.6.1
 [2.6.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.6.0
 [2.5.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.5.0
 [2.4.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.4.0

@@ -3,7 +3,7 @@ package persistence
 import (
 	"fmt"
 
-	"github.com/nickyhof/CommitDB/internal/core"
+	"github.com/nickyhof/CommitDB/v2/internal/core"
 )
 
 // Operation represents a single write operation in a transaction

@@ -14,7 +14,7 @@ A Git-backed SQL database engine written in Go. Every transaction is a Git commi
 
     ```bash
     # Install
-    go install github.com/nickyhof/CommitDB/cmd/cli@latest
+    go install github.com/nickyhof/CommitDB/v2/cmd/cli@latest
     
     # Run with in-memory storage
     commitdb-cli
@@ -32,7 +32,7 @@ A Git-backed SQL database engine written in Go. Every transaction is a Git commi
 === "Go Library"
 
     ```go
-    import "github.com/nickyhof/CommitDB/op"
+    import "github.com/nickyhof/CommitDB/v2/internal/ops"
     
     engine := op.NewEngine(op.FileMode, "/path/to/data")
     engine.Query("CREATE DATABASE myapp")
