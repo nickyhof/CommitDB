@@ -22,6 +22,7 @@ type Server struct {
 	instance        *commitdb.Instance
 	defaultIdentity core.Identity
 	authConfig      *AuthConfig
+	jwksClient      *JWKSClient // For RS256/ES256 JWT validation
 	tlsEnabled      bool
 	done            chan struct{}
 	wg              sync.WaitGroup
@@ -39,11 +40,18 @@ func NewServer(instance *commitdb.Instance, identity core.Identity) *Server {
 
 // NewServerWithAuth creates a new SQL server with authentication enabled.
 func NewServerWithAuth(instance *commitdb.Instance, authConfig *AuthConfig) *Server {
-	return &Server{
+	s := &Server{
 		instance:   instance,
 		authConfig: authConfig,
 		done:       make(chan struct{}),
 	}
+
+	// Initialize JWKS client if URL is configured
+	if authConfig != nil && authConfig.JWKSUrl != "" {
+		s.jwksClient = NewJWKSClient(authConfig.JWKSUrl)
+	}
+
+	return s
 }
 
 // Start begins listening for connections on the specified address.
