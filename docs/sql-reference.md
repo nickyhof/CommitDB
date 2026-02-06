@@ -363,10 +363,29 @@ See [Remote Operations](remote-operations.md) for full documentation on:
 
 ## Transactions
 
+Every data-modifying operation (INSERT, UPDATE, DELETE) is automatically committed as a Git commit. CommitDB provides commands to work with transaction history.
+
+### Transaction History
+
+```sql
+-- View recent transactions (default 100)
+SHOW TRANSACTIONS;
+
+-- View specific number of transactions
+SHOW TRANSACTIONS LIMIT 20;
+```
+
+Returns columns: `TransactionId`, `Message`, `Author`, `Timestamp`
+
+### Explicit Transactions
+
 ```sql
 BEGIN;
--- ... operations ...
+-- ... multiple operations ...
 COMMIT;
--- or
+
+-- Or rollback
+BEGIN;
+-- ... operations ...
 ROLLBACK;
 ```

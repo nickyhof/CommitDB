@@ -41,6 +41,8 @@ go install github.com/nickyhof/CommitDB/v2/cmd/cli@latest
 pip install commitdb
 ```
 
+**Python example:**
+
 ```python
 from commitdb import CommitDB
 
@@ -70,8 +72,6 @@ CommitDB vs [DuckDB](https://duckdb.org/) (1000 rows, Apple M1 Pro):
 - **Git-native storage** - Every row is a Git blob, enabling branching, merging, and time travel
 - **Full audit trail** - Query any table at any point in history
 - **Standard Git tooling** - Push/pull to GitHub, diff changes, bisect bugs
-
-If you need sub-millisecond analytics, use DuckDB. If you need version control for your data, use CommitDB.
 
 ## Documentation
 
