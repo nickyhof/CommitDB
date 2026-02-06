@@ -10,8 +10,8 @@ import (
 
 	"github.com/nickyhof/CommitDB/v2/core"
 	"github.com/nickyhof/CommitDB/v2/internal/ops"
-	"github.com/nickyhof/CommitDB/v2/persistence"
 	"github.com/nickyhof/CommitDB/v2/internal/sql"
+	"github.com/nickyhof/CommitDB/v2/persistence"
 )
 
 func (engine *Engine) executeInsertStatement(statement sql.InsertStatement) (CommitResult, error) {
@@ -127,6 +127,15 @@ func isValidDateFormat(s string) bool {
 	return false
 }
 
+// isPrimaryKeyEquality checks if WHERE is a single pk = value condition
+func isPrimaryKeyEquality(where sql.WhereClause, pk string) bool {
+	if len(where.Conditions) != 1 {
+		return false
+	}
+	cond := where.Conditions[0]
+	return cond.Left == pk && cond.Operator == sql.EqualsOperator && !cond.Negated
+}
+
 func (engine *Engine) executeUpdateStatement(statement sql.UpdateStatement) (CommitResult, error) {
 	startTime := time.Now()
 
@@ -140,16 +149,15 @@ func (engine *Engine) executeUpdateStatement(statement sql.UpdateStatement) (Com
 		return CommitResult{}, err
 	}
 
-	// TODO: Add support for multiple conditions in the WHERE clause including non-PK columns
+	if len(statement.Where.Conditions) == 0 {
+		return CommitResult{}, fmt.Errorf("no WHERE clause provided in the UPDATE statement")
+	}
 
-	if len(statement.Where.Conditions) > 0 {
-		where := statement.Where.Conditions[0]
+	// Fast path: single PK equality condition
+	if isPrimaryKeyEquality(statement.Where, *pk) {
+		pkValue := statement.Where.Conditions[0].Right
 
-		if where.Left != *pk {
-			return CommitResult{}, fmt.Errorf("currently only support primary key updates")
-		}
-
-		rawData, exists := tableOp.GetString(where.Right)
+		rawData, exists := tableOp.GetString(pkValue)
 		if !exists {
 			return CommitResult{}, errors.New("record not found")
 		}
@@ -169,30 +177,61 @@ func (engine *Engine) executeUpdateStatement(statement sql.UpdateStatement) (Com
 			return CommitResult{}, err
 		}
 
-		txn, err := tableOp.Put(where.Right, newData, engine.Identity)
+		txn, err := tableOp.Put(pkValue, newData, engine.Identity)
 		if err != nil {
 			return CommitResult{}, err
 		}
 
 		return CommitResult{
-			Transaction:      txn,
-			DatabasesCreated: 0,
-			DatabasesDeleted: 0,
-			TablesCreated:    0,
-			TablesDeleted:    0,
-			RecordsWritten:   1,
-			RecordsDeleted:   0,
-			ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
-			ExecutionOps:     1,
+			Transaction:     txn,
+			RecordsWritten:  1,
+			ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
+			ExecutionOps:    1,
 		}, nil
-	} else {
-		return CommitResult{}, fmt.Errorf("no WHERE clause provided in the UPDATE statement")
 	}
+
+	// Slow path: scan and filter
+	var txn persistence.Transaction
+	recordsUpdated := 0
+
+	for _, rawData := range tableOp.Scan() {
+		var row map[string]string
+		if err := json.Unmarshal(rawData, &row); err != nil {
+			continue
+		}
+
+		if !matchesWhereClause(row, statement.Where) {
+			continue
+		}
+
+		// Apply updates
+		for _, update := range statement.Updates {
+			row[update.Column] = update.Value
+		}
+
+		newData, err := json.Marshal(row)
+		if err != nil {
+			return CommitResult{}, err
+		}
+
+		pkValue := row[*pk]
+		txn, err = tableOp.Put(pkValue, newData, engine.Identity)
+		if err != nil {
+			return CommitResult{}, err
+		}
+		recordsUpdated++
+	}
+
+	return CommitResult{
+		Transaction:     txn,
+		RecordsWritten:  recordsUpdated,
+		ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
+		ExecutionOps:    recordsUpdated,
+	}, nil
 }
 
 func (engine *Engine) executeDeleteStatement(statement sql.DeleteStatement) (CommitResult, error) {
 	startTime := time.Now()
-	opCount := 1
 
 	tableOp, err := ops.GetTable(statement.Database, statement.Table, engine.Persistence)
 	if err != nil {
@@ -204,33 +243,53 @@ func (engine *Engine) executeDeleteStatement(statement sql.DeleteStatement) (Com
 		return CommitResult{}, err
 	}
 
-	// TODO: Add support for multiple conditions in the WHERE clause including non-PK columns
+	if len(statement.Where.Conditions) == 0 {
+		return CommitResult{}, fmt.Errorf("no WHERE clause provided in the DELETE statement")
+	}
 
-	if len(statement.Where.Conditions) > 0 {
-		where := statement.Where.Conditions[0]
+	// Fast path: single PK equality condition
+	if isPrimaryKeyEquality(statement.Where, *pk) {
+		pkValue := statement.Where.Conditions[0].Right
 
-		if where.Left != *pk {
-			return CommitResult{}, fmt.Errorf("currently only support primary key deletes")
-		}
-
-		opCount++
-		txn, err := tableOp.Delete(where.Right, engine.Identity)
+		txn, err := tableOp.Delete(pkValue, engine.Identity)
 		if err != nil {
 			return CommitResult{}, err
 		}
 
 		return CommitResult{
-			Transaction:      txn,
-			DatabasesCreated: 0,
-			DatabasesDeleted: 0,
-			TablesCreated:    0,
-			TablesDeleted:    0,
-			RecordsWritten:   0,
-			RecordsDeleted:   1,
-			ExecutionTimeMs:  float64(time.Since(startTime).Milliseconds()),
-			ExecutionOps:     1,
+			Transaction:     txn,
+			RecordsDeleted:  1,
+			ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
+			ExecutionOps:    1,
 		}, nil
-	} else {
-		return CommitResult{}, fmt.Errorf("no WHERE clause provided in the DELETE statement")
 	}
+
+	// Slow path: scan and filter
+	var txn persistence.Transaction
+	recordsDeleted := 0
+
+	for _, rawData := range tableOp.Scan() {
+		var row map[string]string
+		if err := json.Unmarshal(rawData, &row); err != nil {
+			continue
+		}
+
+		if !matchesWhereClause(row, statement.Where) {
+			continue
+		}
+
+		pkValue := row[*pk]
+		txn, err = tableOp.Delete(pkValue, engine.Identity)
+		if err != nil {
+			return CommitResult{}, err
+		}
+		recordsDeleted++
+	}
+
+	return CommitResult{
+		Transaction:     txn,
+		RecordsDeleted:  recordsDeleted,
+		ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
+		ExecutionOps:    recordsDeleted,
+	}, nil
 }

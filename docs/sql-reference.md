@@ -108,8 +108,19 @@ SELECT DISTINCT city FROM mydb.users;
 ### Update & Delete
 
 ```sql
+-- Update by primary key (fast path)
 UPDATE mydb.users SET name = 'Bob' WHERE id = 1;
+
+-- Update multiple rows by any column
+UPDATE mydb.users SET status = 'inactive' WHERE age > 30;
+UPDATE mydb.users SET verified = true WHERE email LIKE '%@company.com';
+
+-- Delete by primary key (fast path)
 DELETE FROM mydb.users WHERE id = 1;
+
+-- Delete multiple rows by any column
+DELETE FROM mydb.logs WHERE level = 'debug';
+DELETE FROM mydb.sessions WHERE created < '2024-01-01';
 ```
 
 ### Time-Travel Queries

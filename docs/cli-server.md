@@ -124,11 +124,14 @@ The server exposes a TCP protocol for network access, allowing connections from 
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `-jwt-secret` | JWT shared secret for HS256 (enables auth) | *(none)* |
+| `-jwt-secret` | JWT shared secret for HS256 | *(none)* |
+| `-jwks-url` | JWKS endpoint URL for RS256/ES256 | *(none)* |
 | `-jwt-issuer` | Expected JWT issuer claim | *(any)* |
 | `-jwt-audience` | Expected JWT audience claim | *(any)* |
 | `-jwt-name-claim` | JWT claim for user name | `name` |
 | `-jwt-email-claim` | JWT claim for user email | `email` |
+
+> **Note:** Use either `-jwt-secret` (for HS256) OR `-jwks-url` (for RS256/ES256 with IdPs like Auth0, Okta).
 
 ### Examples
 
