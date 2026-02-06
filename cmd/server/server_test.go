@@ -17,8 +17,8 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/nickyhof/CommitDB/v2"
-	"github.com/nickyhof/CommitDB/v2/internal/core"
-	"github.com/nickyhof/CommitDB/v2/internal/persistence"
+	"github.com/nickyhof/CommitDB/v2/core"
+	"github.com/nickyhof/CommitDB/v2/persistence"
 )
 
 func setupTestServer(t *testing.T) (*Server, func()) {

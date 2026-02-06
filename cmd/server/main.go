@@ -9,8 +9,8 @@ import (
 	"syscall"
 
 	"github.com/nickyhof/CommitDB/v2"
-	"github.com/nickyhof/CommitDB/v2/internal/core"
-	"github.com/nickyhof/CommitDB/v2/internal/persistence"
+	"github.com/nickyhof/CommitDB/v2/core"
+	"github.com/nickyhof/CommitDB/v2/persistence"
 )
 
 // Version is set at build time via -ldflags

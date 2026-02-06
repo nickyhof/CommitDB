@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/nickyhof/CommitDB/v2/internal/core"
+	"github.com/nickyhof/CommitDB/v2/core"
 )
 
 // CreateView stores a view definition

@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/nickyhof/CommitDB/v2/internal/core"
+	"github.com/nickyhof/CommitDB/v2/core"
 )
 
 func TestParser(t *testing.T) {

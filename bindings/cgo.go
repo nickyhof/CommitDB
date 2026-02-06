@@ -9,9 +9,9 @@ import (
 	"unsafe"
 
 	"github.com/nickyhof/CommitDB/v2"
-	"github.com/nickyhof/CommitDB/v2/internal/core"
-	"github.com/nickyhof/CommitDB/v2/internal/engine"
-	"github.com/nickyhof/CommitDB/v2/internal/persistence"
+	"github.com/nickyhof/CommitDB/v2/core"
+	"github.com/nickyhof/CommitDB/v2/engine"
+	"github.com/nickyhof/CommitDB/v2/persistence"
 )
 
 // Handle represents an open database instance

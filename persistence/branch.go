@@ -5,7 +5,7 @@ import (
 
 	"github.com/go-git/go-git/v6"
 	"github.com/go-git/go-git/v6/plumbing"
-	"github.com/nickyhof/CommitDB/v2/internal/core"
+	"github.com/nickyhof/CommitDB/v2/core"
 )
 
 // Branch creates a new branch at current HEAD or at a specific transaction

@@ -6,7 +6,8 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/nickyhof/CommitDB/v2/internal/core"
+	"github.com/nickyhof/CommitDB/v2/internal/compare"
+	"github.com/nickyhof/CommitDB/v2/core"
 )
 
 // Index represents a B-tree index on a column
@@ -146,15 +147,18 @@ func (idx *Index) Lookup(columnValue string) []string {
 func (idx *Index) LookupRange(minValue, maxValue string) []string {
 	var results []string
 
-	// Get sorted keys for range scan
+	// Get sorted keys for range scan using compare.Values for consistent ordering
 	var sortedKeys []string
 	for k := range idx.Entries {
 		sortedKeys = append(sortedKeys, k)
 	}
-	sort.Strings(sortedKeys)
+	sort.Slice(sortedKeys, func(i, j int) bool {
+		return compare.Values(sortedKeys[i], sortedKeys[j]) < 0
+	})
 
 	for _, k := range sortedKeys {
-		if k >= minValue && k <= maxValue {
+		// Use compare.Values for consistent range matching with WHERE clause
+		if compare.Values(k, minValue) >= 0 && compare.Values(k, maxValue) <= 0 {
 			results = append(results, idx.Entries[k]...)
 		}
 	}

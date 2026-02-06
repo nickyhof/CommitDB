@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/nickyhof/CommitDB/v2/internal/persistence"
+	"github.com/nickyhof/CommitDB/v2/persistence"
 )
 
 type ResultType int
