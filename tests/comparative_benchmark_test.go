@@ -7,9 +7,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/nickyhof/CommitDB/v2"
+	commitdb "github.com/nickyhof/CommitDB/v2"
 	"github.com/nickyhof/CommitDB/v2/core"
-	"github.com/nickyhof/CommitDB/v2/engine"
 	"github.com/nickyhof/CommitDB/v2/persistence"
 
 	_ "github.com/duckdb/duckdb-go/v2"
@@ -20,7 +19,7 @@ import (
 // ============================================================================
 
 // setupCommitDB creates a CommitDB instance with test data
-func setupCommitDB(b *testing.B) *engine.Engine {
+func setupCommitDB(b *testing.B) *commitdb.Instance {
 	p, err := persistence.NewMemoryPersistence()
 	if err != nil {
 		b.Fatalf("Failed to initialize persistence: %v", err)
@@ -36,7 +35,7 @@ func setupCommitDB(b *testing.B) *engine.Engine {
 			strconv.Itoa(i) + ", 'User" + strconv.Itoa(i) + "', " + strconv.Itoa(20+i%50) + ", 'City" + strconv.Itoa(i%10) + "')")
 	}
 
-	return e
+	return instance
 }
 
 // setupDuckDB creates a DuckDB instance with identical test data
@@ -46,14 +45,14 @@ func setupDuckDB(b *testing.B) *sql.DB {
 		b.Fatalf("Failed to open DuckDB: %v", err)
 	}
 
-	_, err = engine.Exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name VARCHAR, age INTEGER, city VARCHAR)")
+	_, err = db.Exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name VARCHAR, age INTEGER, city VARCHAR)")
 	if err != nil {
 		b.Fatalf("Failed to create table: %v", err)
 	}
 
 	// Insert 1000 records
 	for i := 1; i <= 1000; i++ {
-		_, err = engine.Exec("INSERT INTO users VALUES (?, ?, ?, ?)",
+		_, err = db.Exec("INSERT INTO users VALUES (?, ?, ?, ?)",
 			i, "User"+strconv.Itoa(i), 20+i%50, "City"+strconv.Itoa(i%10))
 		if err != nil {
 			b.Fatalf("Failed to insert: %v", err)
@@ -68,7 +67,8 @@ func setupDuckDB(b *testing.B) *sql.DB {
 // ============================================================================
 
 func BenchmarkCommitDB_SelectAll(b *testing.B) {
-	engine := setupCommitDB(b)
+	instance := setupCommitDB(b)
+	e := instance.Engine(core.Identity{Name: "benchmark", Email: "bench@test.com"})
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -81,11 +81,11 @@ func BenchmarkCommitDB_SelectAll(b *testing.B) {
 
 func BenchmarkDuckDB_SelectAll(b *testing.B) {
 	db := setupDuckDB(b)
-	defer engine.Close()
+	defer db.Close()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		rows, err := engine.Query("SELECT * FROM users")
+		rows, err := db.Query("SELECT * FROM users")
 		if err != nil {
 			b.Fatalf("Query error: %v", err)
 		}
@@ -104,7 +104,8 @@ func BenchmarkDuckDB_SelectAll(b *testing.B) {
 // ============================================================================
 
 func BenchmarkCommitDB_SelectWhere(b *testing.B) {
-	engine := setupCommitDB(b)
+	instance := setupCommitDB(b)
+	e := instance.Engine(core.Identity{Name: "benchmark", Email: "bench@test.com"})
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -117,11 +118,11 @@ func BenchmarkCommitDB_SelectWhere(b *testing.B) {
 
 func BenchmarkDuckDB_SelectWhere(b *testing.B) {
 	db := setupDuckDB(b)
-	defer engine.Close()
+	defer db.Close()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		rows, err := engine.Query("SELECT * FROM users WHERE age > 40")
+		rows, err := db.Query("SELECT * FROM users WHERE age > 40")
 		if err != nil {
 			b.Fatalf("Query error: %v", err)
 		}
@@ -139,7 +140,8 @@ func BenchmarkDuckDB_SelectWhere(b *testing.B) {
 // ============================================================================
 
 func BenchmarkCommitDB_OrderBy(b *testing.B) {
-	engine := setupCommitDB(b)
+	instance := setupCommitDB(b)
+	e := instance.Engine(core.Identity{Name: "benchmark", Email: "bench@test.com"})
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -152,11 +154,11 @@ func BenchmarkCommitDB_OrderBy(b *testing.B) {
 
 func BenchmarkDuckDB_OrderBy(b *testing.B) {
 	db := setupDuckDB(b)
-	defer engine.Close()
+	defer db.Close()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		rows, err := engine.Query("SELECT * FROM users ORDER BY age DESC")
+		rows, err := db.Query("SELECT * FROM users ORDER BY age DESC")
 		if err != nil {
 			b.Fatalf("Query error: %v", err)
 		}
@@ -174,7 +176,8 @@ func BenchmarkDuckDB_OrderBy(b *testing.B) {
 // ============================================================================
 
 func BenchmarkCommitDB_Count(b *testing.B) {
-	engine := setupCommitDB(b)
+	instance := setupCommitDB(b)
+	e := instance.Engine(core.Identity{Name: "benchmark", Email: "bench@test.com"})
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -187,12 +190,12 @@ func BenchmarkCommitDB_Count(b *testing.B) {
 
 func BenchmarkDuckDB_Count(b *testing.B) {
 	db := setupDuckDB(b)
-	defer engine.Close()
+	defer db.Close()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
 		var count int
-		err := engine.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
+		err := db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
 		if err != nil {
 			b.Fatalf("Query error: %v", err)
 		}
@@ -200,7 +203,8 @@ func BenchmarkDuckDB_Count(b *testing.B) {
 }
 
 func BenchmarkCommitDB_Sum(b *testing.B) {
-	engine := setupCommitDB(b)
+	instance := setupCommitDB(b)
+	e := instance.Engine(core.Identity{Name: "benchmark", Email: "bench@test.com"})
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -213,12 +217,12 @@ func BenchmarkCommitDB_Sum(b *testing.B) {
 
 func BenchmarkDuckDB_Sum(b *testing.B) {
 	db := setupDuckDB(b)
-	defer engine.Close()
+	defer db.Close()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
 		var sum int
-		err := engine.QueryRow("SELECT SUM(age) FROM users").Scan(&sum)
+		err := db.QueryRow("SELECT SUM(age) FROM users").Scan(&sum)
 		if err != nil {
 			b.Fatalf("Query error: %v", err)
 		}
@@ -226,7 +230,8 @@ func BenchmarkDuckDB_Sum(b *testing.B) {
 }
 
 func BenchmarkCommitDB_Avg(b *testing.B) {
-	engine := setupCommitDB(b)
+	instance := setupCommitDB(b)
+	e := instance.Engine(core.Identity{Name: "benchmark", Email: "bench@test.com"})
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -239,12 +244,12 @@ func BenchmarkCommitDB_Avg(b *testing.B) {
 
 func BenchmarkDuckDB_Avg(b *testing.B) {
 	db := setupDuckDB(b)
-	defer engine.Close()
+	defer db.Close()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
 		var avg float64
-		err := engine.QueryRow("SELECT AVG(age) FROM users").Scan(&avg)
+		err := db.QueryRow("SELECT AVG(age) FROM users").Scan(&avg)
 		if err != nil {
 			b.Fatalf("Query error: %v", err)
 		}
@@ -256,7 +261,8 @@ func BenchmarkDuckDB_Avg(b *testing.B) {
 // ============================================================================
 
 func BenchmarkCommitDB_GroupBy(b *testing.B) {
-	engine := setupCommitDB(b)
+	instance := setupCommitDB(b)
+	e := instance.Engine(core.Identity{Name: "benchmark", Email: "bench@test.com"})
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -269,11 +275,11 @@ func BenchmarkCommitDB_GroupBy(b *testing.B) {
 
 func BenchmarkDuckDB_GroupBy(b *testing.B) {
 	db := setupDuckDB(b)
-	defer engine.Close()
+	defer db.Close()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		rows, err := engine.Query("SELECT city, COUNT(*), AVG(age) FROM users GROUP BY city")
+		rows, err := db.Query("SELECT city, COUNT(*), AVG(age) FROM users GROUP BY city")
 		if err != nil {
 			b.Fatalf("Query error: %v", err)
 		}
@@ -311,13 +317,13 @@ func BenchmarkCommitDB_Insert(b *testing.B) {
 
 func BenchmarkDuckDB_Insert(b *testing.B) {
 	db, _ := sql.Open("duckdb", "")
-	defer engine.Close()
+	defer db.Close()
 	db.Exec("CREATE TABLE items (id INTEGER PRIMARY KEY, value VARCHAR)")
 
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := engine.Exec("INSERT INTO items VALUES (?, ?)", i, "value"+strconv.Itoa(i))
+		_, err := db.Exec("INSERT INTO items VALUES (?, ?)", i, "value"+strconv.Itoa(i))
 		if err != nil {
 			b.Fatalf("Insert error: %v", err)
 		}
@@ -329,7 +335,8 @@ func BenchmarkDuckDB_Insert(b *testing.B) {
 // ============================================================================
 
 func BenchmarkCommitDB_Limit(b *testing.B) {
-	engine := setupCommitDB(b)
+	instance := setupCommitDB(b)
+	e := instance.Engine(core.Identity{Name: "benchmark", Email: "bench@test.com"})
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -342,11 +349,11 @@ func BenchmarkCommitDB_Limit(b *testing.B) {
 
 func BenchmarkDuckDB_Limit(b *testing.B) {
 	db := setupDuckDB(b)
-	defer engine.Close()
+	defer db.Close()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		rows, err := engine.Query("SELECT * FROM users LIMIT 10")
+		rows, err := db.Query("SELECT * FROM users LIMIT 10")
 		if err != nil {
 			b.Fatalf("Query error: %v", err)
 		}
@@ -364,7 +371,8 @@ func BenchmarkDuckDB_Limit(b *testing.B) {
 // ============================================================================
 
 func BenchmarkCommitDB_Complex(b *testing.B) {
-	engine := setupCommitDB(b)
+	instance := setupCommitDB(b)
+	e := instance.Engine(core.Identity{Name: "benchmark", Email: "bench@test.com"})
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -377,11 +385,11 @@ func BenchmarkCommitDB_Complex(b *testing.B) {
 
 func BenchmarkDuckDB_Complex(b *testing.B) {
 	db := setupDuckDB(b)
-	defer engine.Close()
+	defer db.Close()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		rows, err := engine.Query("SELECT * FROM users WHERE age > 30 AND city = 'City5' ORDER BY age DESC LIMIT 20")
+		rows, err := db.Query("SELECT * FROM users WHERE age > 30 AND city = 'City5' ORDER BY age DESC LIMIT 20")
 		if err != nil {
 			b.Fatalf("Query error: %v", err)
 		}

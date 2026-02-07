@@ -7,6 +7,8 @@ A Git-backed SQL database engine. Every transaction is a Git commit.
 
 **[📚 Full Documentation](https://nickyhof.github.io/CommitDB)**
 
+> ⚠️ **Experimental Project** - This is a hobby project and should not be used in any production environment.
+
 ## Why CommitDB?
 
 Traditional databases lose history. Once you UPDATE or DELETE, the old data is gone. CommitDB stores every change as a Git commit, giving you:
@@ -16,8 +18,6 @@ Traditional databases lose history. Once you UPDATE or DELETE, the old data is g
 - **Safe experimentation** - Create a branch, try risky changes, merge if it works
 - **Built-in backup** - Push your entire database to GitHub/GitLab as a remote
 - **No migration headaches** - Branch your schema, test changes, merge when ready
-
-> ⚠️ **Experimental Project** - This is a hobby project and should not be used in any production environment.
 
 ## Features
 
@@ -74,24 +74,6 @@ for row in &result {
 }
 ```
 
-## Performance
-
-CommitDB vs [DuckDB](https://duckdb.org/) (1000 rows, Apple M1 Pro):
-
-| Operation | CommitDB | DuckDB | Winner |
-|-----------|----------|--------|--------|
-| INSERT | 52 µs | 227 µs | **CommitDB 4x** |
-| SELECT * | 161 ms | 0.6 ms | DuckDB |
-| WHERE | 164 ms | 0.5 ms | DuckDB |
-| COUNT(*) | 163 ms | 0.1 ms | DuckDB |
-| GROUP BY | 163 ms | 0.5 ms | DuckDB |
-
-**Why is DuckDB faster on reads?** DuckDB is an OLAP-optimized columnar database built for analytics. CommitDB uses a row-based Git object model that trades raw query speed for:
-
-- **Git-native storage** - Every row is a Git blob, enabling branching, merging, and time travel
-- **Full audit trail** - Query any table at any point in history
-- **Standard Git tooling** - Push/pull to GitHub, diff changes, bisect bugs
-
 ## Documentation
 
 - [Installation](https://nickyhof.github.io/CommitDB/installation/)
@@ -102,6 +84,29 @@ CommitDB vs [DuckDB](https://duckdb.org/) (1000 rows, Apple M1 Pro):
 - [Rust Client](https://nickyhof.github.io/CommitDB/rust-client/)
 - [Go API](https://nickyhof.github.io/CommitDB/go-api/)
 - [Benchmarks](https://nickyhof.github.io/CommitDB/benchmarks/)
+
+## Performance
+
+CommitDB vs [DuckDB](https://duckdb.org/) (1,000 rows, Apple M1 Pro):
+
+| Operation | CommitDB | DuckDB | Ratio |
+|-----------|----------|--------|-------|
+| INSERT | 2.66 ms | 0.19 ms | 14x |
+| SELECT * | 1.39 ms | 0.61 ms | 2.3x |
+| WHERE | 1.42 ms | 0.43 ms | 3.3x |
+| ORDER BY | 2.07 ms | 0.74 ms | 2.8x |
+| COUNT(*) | 1.32 ms | 0.11 ms | 11.6x |
+| SUM | 1.36 ms | 0.13 ms | 10.3x |
+| AVG | 1.35 ms | 0.13 ms | 10.5x |
+| GROUP BY | 1.37 ms | 0.43 ms | 3.2x |
+| LIMIT | 1.32 ms | 0.13 ms | 10.5x |
+| Complex | 1.44 ms | 0.53 ms | 2.7x |
+
+> **Why is DuckDB faster?** DuckDB is an OLAP-optimized columnar database built for analytics. CommitDB uses a row-based Git object model that trades raw query speed for:
+>
+> - **Git-native storage** - Every row is a Git blob, enabling branching, merging, and time travel
+> - **Full audit trail** - Query any table at any point in history
+> - **Standard Git tooling** - Push/pull to GitHub, diff changes, bisect bugs
 
 ## License
 
