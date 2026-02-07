@@ -77,19 +77,41 @@ func (s *Server) validateJWT(tokenString string) authResult {
 		emailClaim = "email"
 	}
 
+	// Build list of valid methods based on configuration
+	validMethods := []string{}
+	if s.authConfig.JWTSecret != "" {
+		validMethods = append(validMethods, "HS256", "HS384", "HS512")
+	}
+	if s.jwksClient != nil {
+		validMethods = append(validMethods, "RS256", "RS384", "RS512", "ES256", "ES384", "ES512")
+	}
+
+	if len(validMethods) == 0 {
+		return authResult{err: errors.New("no JWT secret or JWKS URL configured")}
+	}
+
 	// Parse and validate the token
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		// Validate signing method
-		if s.authConfig.JWTSecret != "" {
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		// HMAC validation with shared secret
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); ok {
+			if s.authConfig.JWTSecret == "" {
+				return nil, errors.New("HMAC tokens not supported (no JWT secret configured)")
 			}
 			return []byte(s.authConfig.JWTSecret), nil
 		}
 
-		// TODO: JWKS-based validation for RS256/ES256
-		return nil, errors.New("no JWT secret configured")
-	}, jwt.WithValidMethods([]string{"HS256", "HS384", "HS512"}))
+		// RSA validation with JWKS
+		if _, ok := token.Method.(*jwt.SigningMethodRSA); ok {
+			return s.getKeyFromJWKS(token)
+		}
+
+		// ECDSA validation with JWKS
+		if _, ok := token.Method.(*jwt.SigningMethodECDSA); ok {
+			return s.getKeyFromJWKS(token)
+		}
+
+		return nil, fmt.Errorf("unsupported signing method: %v", token.Header["alg"])
+	}, jwt.WithValidMethods(validMethods))
 
 	if err != nil {
 		return authResult{err: fmt.Errorf("invalid token: %w", err)}
@@ -148,6 +170,27 @@ func (s *Server) validateJWT(tokenString string) authResult {
 		},
 		expiresAt: expiresAt,
 	}
+}
+
+// getKeyFromJWKS retrieves the public key for a token from the JWKS client.
+func (s *Server) getKeyFromJWKS(token *jwt.Token) (interface{}, error) {
+	if s.jwksClient == nil {
+		return nil, errors.New("JWKS not configured")
+	}
+
+	// Get key ID from token header
+	kid, ok := token.Header["kid"].(string)
+	if !ok || kid == "" {
+		return nil, errors.New("token missing 'kid' header")
+	}
+
+	// Fetch key from JWKS
+	key, err := s.jwksClient.GetKey(kid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get key: %w", err)
+	}
+
+	return key, nil
 }
 
 // parseAuthCommand parses an AUTH command and returns the auth type and token.
