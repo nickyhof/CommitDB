@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.0] - 2026-02-06
+
+### Performance
+
+#### Storage Layer Optimizations
+- **Single-pass tree scanning** (`ScanDirect`) — resolves HEAD → commit → tree once per query instead of once per row, eliminating N+1 Git object reads
+- **WHERE pushdown** — filters rows during scan instead of after full deserialization, reducing memory allocations for selective queries
+- **Direct primary key lookup** — `WHERE pk = value` queries now use O(1) `Get()` instead of a full table scan, bypassing both index loading and scanning
+- **DuckDB comparison gap narrowed** — SELECT queries went from ~260x slower to ~2-3x slower vs DuckDB
+
+### Fixed
+
+- Fixed stale API references in `comparative_benchmark_test.go` (DuckDB benchmarks now compile and run correctly)
+
 ## [2.9.0] - 2026-02-06
 
 ### Added
@@ -607,6 +621,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests run with both memory and file persistence modes
 - Persistence reopen tests for data durability verification
 
+[2.10.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.10.0
+[2.9.1]: https://github.com/nickyhof/CommitDB/releases/tag/v2.9.1
+[2.9.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.9.0
+[2.8.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.8.0
+[2.7.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.7.0
 [2.6.1]: https://github.com/nickyhof/CommitDB/releases/tag/v2.6.1
 [2.6.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.6.0
 [2.5.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.5.0
