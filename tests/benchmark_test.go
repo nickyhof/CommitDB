@@ -5,11 +5,11 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/nickyhof/CommitDB/v2"
+	commitdb "github.com/nickyhof/CommitDB/v2"
 	"github.com/nickyhof/CommitDB/v2/core"
 	"github.com/nickyhof/CommitDB/v2/engine"
-	"github.com/nickyhof/CommitDB/v2/persistence"
 	"github.com/nickyhof/CommitDB/v2/internal/sql"
+	"github.com/nickyhof/CommitDB/v2/persistence"
 )
 
 // setupBenchmarkDB creates a database with test data for benchmarks
@@ -414,4 +414,73 @@ func BenchmarkMaterializedView(b *testing.B) {
 			}
 		}
 	})
+}
+
+// BenchmarkDeletePK benchmarks DELETE by primary key (fast path)
+func BenchmarkDeletePK(b *testing.B) {
+	p, _ := persistence.NewMemoryPersistence()
+	instance := commitdb.Open(&p)
+	e := instance.Engine(core.Identity{Name: "benchmark", Email: "bench@test.com"})
+
+	e.Execute("CREATE DATABASE bench")
+	e.Execute("CREATE TABLE bench.del_items (id INT PRIMARY KEY, value STRING)")
+
+	// Pre-insert enough rows for the benchmark
+	for i := 0; i < b.N+1000; i++ {
+		e.Execute("INSERT INTO bench.del_items (id, value) VALUES (" +
+			strconv.Itoa(i) + ", 'val" + strconv.Itoa(i) + "')")
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := e.Execute("DELETE FROM bench.del_items WHERE id = " + strconv.Itoa(i))
+		if err != nil {
+			b.Fatalf("Delete error: %v", err)
+		}
+	}
+}
+
+// BenchmarkDeleteNonPK benchmarks DELETE by non-primary key (scan path)
+func BenchmarkDeleteNonPK(b *testing.B) {
+	// Each iteration needs fresh data, so we setup per iteration
+	p, _ := persistence.NewMemoryPersistence()
+	instance := commitdb.Open(&p)
+	e := instance.Engine(core.Identity{Name: "benchmark", Email: "bench@test.com"})
+
+	e.Execute("CREATE DATABASE bench")
+	e.Execute("CREATE TABLE bench.del_scan (id INT PRIMARY KEY, category STRING, value INT)")
+
+	// Insert 100 rows with 10 categories
+	for i := 0; i < 100; i++ {
+		e.Execute(fmt.Sprintf("INSERT INTO bench.del_scan (id, category, value) VALUES (%d, 'Cat%d', %d)", i, i%10, i))
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// Delete by non-PK column — deletes ~10 rows each time
+		cat := "Cat" + strconv.Itoa(i%10)
+		e.Execute("DELETE FROM bench.del_scan WHERE category = '" + cat + "'")
+
+		// Re-insert deleted rows so next iteration has data
+		b.StopTimer()
+		for j := i % 10; j < 100; j += 10 {
+			e.Execute(fmt.Sprintf("INSERT INTO bench.del_scan (id, category, value) VALUES (%d, 'Cat%d', %d)", j, j%10, j))
+		}
+		b.StartTimer()
+	}
+}
+
+// BenchmarkUpdateNonPK benchmarks UPDATE by non-primary key (scan path)
+func BenchmarkUpdateNonPK(b *testing.B) {
+	e := setupBenchmarkDB(b)
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		// Update all users in a city (scan path, ~100 rows per city)
+		city := "City" + strconv.Itoa(i%10)
+		_, err := e.Execute("UPDATE bench.users SET age = 99 WHERE city = '" + city + "'")
+		if err != nil {
+			b.Fatalf("Update error: %v", err)
+		}
+	}
 }

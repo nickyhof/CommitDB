@@ -1466,8 +1466,12 @@ func ParseInsert(parser *Parser) (Statement, error) {
 			var value string
 
 			switch token.Type {
-			case String, Int:
+			case String, Int, Float:
 				value = token.Value
+			case True:
+				value = "true"
+			case False:
+				value = "false"
 			case Now:
 				// Handle NOW() function
 				nextToken := parser.lexer.NextToken()
@@ -1546,10 +1550,18 @@ func ParseUpdate(parser *Parser) (Statement, error) {
 		}
 
 		token = parser.lexer.NextToken()
-		if token.Type != String && token.Type != Int {
+		if token.Type != String && token.Type != Int && token.Type != Float && token.Type != True && token.Type != False {
 			return nil, errors.New("expected value in SET clause")
 		}
-		value := token.Value
+		var value string
+		switch token.Type {
+		case True:
+			value = "true"
+		case False:
+			value = "false"
+		default:
+			value = token.Value
+		}
 
 		updateStatement.Updates = append(updateStatement.Updates, SetClause{
 			Column: column,

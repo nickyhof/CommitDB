@@ -10,7 +10,7 @@ import (
 	"github.com/go-git/go-git/v6"
 	"github.com/go-git/go-git/v6/plumbing/cache"
 	"github.com/go-git/go-git/v6/storage/filesystem"
-	"github.com/nickyhof/CommitDB/v2"
+	commitdb "github.com/nickyhof/CommitDB/v2"
 	"github.com/nickyhof/CommitDB/v2/core"
 	"github.com/nickyhof/CommitDB/v2/engine"
 	"github.com/nickyhof/CommitDB/v2/persistence"
@@ -2267,6 +2267,145 @@ func TestIntegrationTimeTravelOnMaterializedViews(t *testing.T) {
 		qr = result.(engine.QueryResult)
 		if len(qr.Data) != 2 {
 			t.Errorf("Expected 2 rows at txnAfterRefresh, got %d", len(qr.Data))
+		}
+	})
+}
+
+// TestIntegrationNonPKUpdate tests UPDATE with non-primary-key WHERE clauses
+func TestIntegrationNonPKUpdate(t *testing.T) {
+	runWithBothPersistence(t, func(t *testing.T, e *engine.Engine) {
+		// Setup
+		e.Execute("CREATE DATABASE dmldb")
+		e.Execute("CREATE TABLE dmldb.employees (id INT PRIMARY KEY, name STRING, dept STRING, salary INT)")
+		e.Execute("INSERT INTO dmldb.employees (id, name, dept, salary) VALUES (1, 'Alice', 'Engineering', 100)")
+		e.Execute("INSERT INTO dmldb.employees (id, name, dept, salary) VALUES (2, 'Bob', 'Engineering', 90)")
+		e.Execute("INSERT INTO dmldb.employees (id, name, dept, salary) VALUES (3, 'Charlie', 'Sales', 80)")
+		e.Execute("INSERT INTO dmldb.employees (id, name, dept, salary) VALUES (4, 'Diana', 'Sales', 85)")
+		e.Execute("INSERT INTO dmldb.employees (id, name, dept, salary) VALUES (5, 'Eve', 'Marketing', 75)")
+
+		// Test: Update multiple rows by non-PK column
+		result, err := e.Execute("UPDATE dmldb.employees SET salary = 95 WHERE dept = 'Engineering'")
+		if err != nil {
+			t.Fatalf("UPDATE by dept failed: %v", err)
+		}
+		cr := result.(engine.CommitResult)
+		if cr.RecordsWritten != 2 {
+			t.Errorf("Expected 2 records updated, got %d", cr.RecordsWritten)
+		}
+
+		// Verify
+		qr, _ := e.Execute("SELECT * FROM dmldb.employees WHERE salary = 95")
+		if qr.(engine.QueryResult).RecordsRead != 2 {
+			t.Errorf("Expected 2 rows with salary=95, got %d", qr.(engine.QueryResult).RecordsRead)
+		}
+
+		// Test: Update with greater-than operator
+		result, err = e.Execute("UPDATE dmldb.employees SET dept = 'Senior' WHERE salary > 90")
+		if err != nil {
+			t.Fatalf("UPDATE with > failed: %v", err)
+		}
+		cr = result.(engine.CommitResult)
+		if cr.RecordsWritten != 2 {
+			t.Errorf("Expected 2 records updated (salary 95, 95), got %d", cr.RecordsWritten)
+		}
+
+		// Test: Update with multi-condition WHERE
+		result, err = e.Execute("UPDATE dmldb.employees SET salary = 200 WHERE dept = 'Sales' AND salary > 80")
+		if err != nil {
+			t.Fatalf("UPDATE with AND failed: %v", err)
+		}
+		cr = result.(engine.CommitResult)
+		if cr.RecordsWritten != 1 {
+			t.Errorf("Expected 1 record updated (Diana salary=85), got %d", cr.RecordsWritten)
+		}
+
+		// Test: Update 0 rows (no match)
+		result, err = e.Execute("UPDATE dmldb.employees SET salary = 999 WHERE dept = 'NonExistent'")
+		if err != nil {
+			t.Fatalf("UPDATE with no match should not error: %v", err)
+		}
+		cr = result.(engine.CommitResult)
+		if cr.RecordsWritten != 0 {
+			t.Errorf("Expected 0 records updated for non-matching WHERE, got %d", cr.RecordsWritten)
+		}
+
+		// Test: PK fast path still works
+		result, err = e.Execute("UPDATE dmldb.employees SET name = 'Alice Updated' WHERE id = 1")
+		if err != nil {
+			t.Fatalf("PK UPDATE failed: %v", err)
+		}
+		cr = result.(engine.CommitResult)
+		if cr.RecordsWritten != 1 {
+			t.Errorf("Expected 1 record updated via PK, got %d", cr.RecordsWritten)
+		}
+	})
+}
+
+// TestIntegrationNonPKDelete tests DELETE with non-primary-key WHERE clauses
+func TestIntegrationNonPKDelete(t *testing.T) {
+	runWithBothPersistence(t, func(t *testing.T, e *engine.Engine) {
+		// Setup
+		e.Execute("CREATE DATABASE dmldb2")
+		e.Execute("CREATE TABLE dmldb2.logs (id INT PRIMARY KEY, level STRING, message STRING, code INT)")
+		e.Execute("INSERT INTO dmldb2.logs (id, level, message, code) VALUES (1, 'debug', 'Starting', 200)")
+		e.Execute("INSERT INTO dmldb2.logs (id, level, message, code) VALUES (2, 'info', 'Running', 200)")
+		e.Execute("INSERT INTO dmldb2.logs (id, level, message, code) VALUES (3, 'debug', 'Checking', 200)")
+		e.Execute("INSERT INTO dmldb2.logs (id, level, message, code) VALUES (4, 'error', 'Failed', 500)")
+		e.Execute("INSERT INTO dmldb2.logs (id, level, message, code) VALUES (5, 'debug', 'Retrying', 200)")
+		e.Execute("INSERT INTO dmldb2.logs (id, level, message, code) VALUES (6, 'error', 'Timeout', 408)")
+
+		// Test: Delete multiple rows by non-PK column
+		result, err := e.Execute("DELETE FROM dmldb2.logs WHERE level = 'debug'")
+		if err != nil {
+			t.Fatalf("DELETE by level failed: %v", err)
+		}
+		cr := result.(engine.CommitResult)
+		if cr.RecordsDeleted != 3 {
+			t.Errorf("Expected 3 debug logs deleted, got %d", cr.RecordsDeleted)
+		}
+
+		// Verify remaining rows
+		qr, _ := e.Execute("SELECT COUNT(*) FROM dmldb2.logs")
+		count := qr.(engine.QueryResult).Data[0][0]
+		if count != "3" {
+			t.Errorf("Expected 3 remaining rows, got %s", count)
+		}
+
+		// Test: Delete with comparison operator
+		result, err = e.Execute("DELETE FROM dmldb2.logs WHERE code > 400")
+		if err != nil {
+			t.Fatalf("DELETE with > failed: %v", err)
+		}
+		cr = result.(engine.CommitResult)
+		if cr.RecordsDeleted != 2 {
+			t.Errorf("Expected 2 records deleted (500, 408), got %d", cr.RecordsDeleted)
+		}
+
+		// Test: Delete 0 rows (no match)
+		result, err = e.Execute("DELETE FROM dmldb2.logs WHERE level = 'trace'")
+		if err != nil {
+			t.Fatalf("DELETE with no match should not error: %v", err)
+		}
+		cr = result.(engine.CommitResult)
+		if cr.RecordsDeleted != 0 {
+			t.Errorf("Expected 0 records deleted, got %d", cr.RecordsDeleted)
+		}
+
+		// Verify only 1 row remains (info, Running)
+		qr, _ = e.Execute("SELECT COUNT(*) FROM dmldb2.logs")
+		count = qr.(engine.QueryResult).Data[0][0]
+		if count != "1" {
+			t.Errorf("Expected 1 remaining row, got %s", count)
+		}
+
+		// Test: PK fast path still works
+		result, err = e.Execute("DELETE FROM dmldb2.logs WHERE id = 2")
+		if err != nil {
+			t.Fatalf("PK DELETE failed: %v", err)
+		}
+		cr = result.(engine.CommitResult)
+		if cr.RecordsDeleted != 1 {
+			t.Errorf("Expected 1 record deleted via PK, got %d", cr.RecordsDeleted)
 		}
 	})
 }

@@ -15,3 +15,6 @@ drivers/python/commitdb/*.so
 drivers/python/commitdb/*.dylib
 drivers/python/commitdb/*.h
 drivers/python/.venv/
+
+# Test coverage
+coverage.out

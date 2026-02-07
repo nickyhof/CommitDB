@@ -308,3 +308,430 @@ func TestEngineDeleteWithNonPKWhere(t *testing.T) {
 		t.Errorf("Expected 2 records after delete, got %s", qr.Data[0][0])
 	}
 }
+
+func TestEngineDropTable(t *testing.T) {
+	engine := setupTestEngine(t)
+
+	// Drop existing table
+	_, err := engine.Execute("DROP TABLE testdb.users")
+	if err != nil {
+		t.Fatalf("Failed to DROP TABLE: %v", err)
+	}
+
+	// Verify table is gone
+	result, _ := engine.Execute("SHOW TABLES IN testdb")
+	qr := result.(QueryResult)
+	found := false
+	for _, row := range qr.Data {
+		if row[0] == "users" {
+			found = true
+		}
+	}
+	if found {
+		t.Error("Table 'users' should not exist after DROP")
+	}
+}
+
+func TestEngineDropTableIfExists(t *testing.T) {
+	engine := setupTestEngine(t)
+
+	// Drop non-existent table with IF EXISTS should not error
+	_, err := engine.Execute("DROP TABLE IF EXISTS testdb.nonexistent")
+	if err != nil {
+		t.Errorf("DROP TABLE IF EXISTS should not error: %v", err)
+	}
+}
+
+func TestEngineDropDatabase(t *testing.T) {
+	engine := setupTestEngine(t)
+
+	// Create a second database to drop
+	_, _ = engine.Execute("CREATE DATABASE dropme")
+
+	_, err := engine.Execute("DROP DATABASE dropme")
+	if err != nil {
+		t.Fatalf("Failed to DROP DATABASE: %v", err)
+	}
+
+	// Verify database is gone
+	result, _ := engine.Execute("SHOW DATABASES")
+	qr := result.(QueryResult)
+	for _, row := range qr.Data {
+		if row[0] == "dropme" {
+			t.Error("Database 'dropme' should not exist after DROP")
+		}
+	}
+}
+
+func TestEngineDropDatabaseIfExists(t *testing.T) {
+	engine := setupTestEngine(t)
+
+	_, err := engine.Execute("DROP DATABASE IF EXISTS nonexistent")
+	if err != nil {
+		t.Errorf("DROP DATABASE IF EXISTS should not error: %v", err)
+	}
+}
+
+func TestEngineAlterTableAddColumn(t *testing.T) {
+	engine := setupTestEngine(t)
+	insertTestData(t, engine)
+
+	// Add a column
+	_, err := engine.Execute("ALTER TABLE testdb.users ADD COLUMN email STRING")
+	if err != nil {
+		t.Fatalf("Failed to ALTER TABLE ADD COLUMN: %v", err)
+	}
+
+	// Verify new column appears in DESCRIBE
+	result, _ := engine.Execute("DESCRIBE testdb.users")
+	qr := result.(QueryResult)
+	found := false
+	for _, row := range qr.Data {
+		if row[0] == "email" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("Expected 'email' column after ALTER TABLE ADD COLUMN")
+	}
+}
+
+func TestEngineAlterTableDropColumn(t *testing.T) {
+	engine := setupTestEngine(t)
+	insertTestData(t, engine)
+
+	// Drop a column
+	_, err := engine.Execute("ALTER TABLE testdb.users DROP COLUMN age")
+	if err != nil {
+		t.Fatalf("Failed to ALTER TABLE DROP COLUMN: %v", err)
+	}
+
+	// Verify column is gone
+	result, _ := engine.Execute("DESCRIBE testdb.users")
+	qr := result.(QueryResult)
+	for _, row := range qr.Data {
+		if row[0] == "age" {
+			t.Error("Column 'age' should not exist after DROP COLUMN")
+		}
+	}
+}
+
+func TestEngineAlterTableRenameColumn(t *testing.T) {
+	engine := setupTestEngine(t)
+	insertTestData(t, engine)
+
+	_, err := engine.Execute("ALTER TABLE testdb.users RENAME COLUMN name TO username")
+	if err != nil {
+		t.Fatalf("Failed to ALTER TABLE RENAME COLUMN: %v", err)
+	}
+
+	// Verify renamed column
+	result, _ := engine.Execute("DESCRIBE testdb.users")
+	qr := result.(QueryResult)
+	foundOld := false
+	foundNew := false
+	for _, row := range qr.Data {
+		if row[0] == "name" {
+			foundOld = true
+		}
+		if row[0] == "username" {
+			foundNew = true
+		}
+	}
+	if foundOld {
+		t.Error("Old column 'name' should not exist after RENAME")
+	}
+	if !foundNew {
+		t.Error("New column 'username' should exist after RENAME")
+	}
+}
+
+func TestEngineViews(t *testing.T) {
+	engine := setupTestEngine(t)
+	insertTestData(t, engine)
+
+	// Create a view
+	_, err := engine.Execute("CREATE VIEW testdb.adults AS SELECT * FROM testdb.users WHERE age > 28")
+	if err != nil {
+		t.Fatalf("Failed to CREATE VIEW: %v", err)
+	}
+
+	// Query the view
+	result, err := engine.Execute("SELECT * FROM testdb.adults")
+	if err != nil {
+		t.Fatalf("Failed to SELECT from view: %v", err)
+	}
+	qr := result.(QueryResult)
+	if qr.RecordsRead != 2 {
+		t.Errorf("Expected 2 adults (Alice=30, Charlie=35), got %d", qr.RecordsRead)
+	}
+
+	// SHOW VIEWS
+	result, err = engine.Execute("SHOW VIEWS IN testdb")
+	if err != nil {
+		t.Fatalf("Failed to SHOW VIEWS: %v", err)
+	}
+	qr = result.(QueryResult)
+	if len(qr.Data) != 1 {
+		t.Errorf("Expected 1 view, got %d", len(qr.Data))
+	}
+
+	// DROP VIEW
+	_, err = engine.Execute("DROP VIEW testdb.adults")
+	if err != nil {
+		t.Fatalf("Failed to DROP VIEW: %v", err)
+	}
+}
+
+func TestEngineMaterializedView(t *testing.T) {
+	engine := setupTestEngine(t)
+	insertTestData(t, engine)
+
+	// Create materialized view
+	_, err := engine.Execute("CREATE MATERIALIZED VIEW testdb.young AS SELECT * FROM testdb.users WHERE age < 35")
+	if err != nil {
+		t.Fatalf("Failed to CREATE MATERIALIZED VIEW: %v", err)
+	}
+
+	// Query it
+	result, err := engine.Execute("SELECT * FROM testdb.young")
+	if err != nil {
+		t.Fatalf("Failed to SELECT from materialized view: %v", err)
+	}
+	qr := result.(QueryResult)
+	if qr.RecordsRead != 2 {
+		t.Errorf("Expected 2 young users (Alice=30, Bob=25), got %d", qr.RecordsRead)
+	}
+
+	// Insert new data — materialized view should NOT auto-update
+	engine.Execute("INSERT INTO testdb.users (id, name, age) VALUES (4, 'Diana', 28)")
+
+	result, _ = engine.Execute("SELECT * FROM testdb.young")
+	qr = result.(QueryResult)
+	if qr.RecordsRead != 2 {
+		t.Errorf("Materialized view should still have 2 rows before REFRESH, got %d", qr.RecordsRead)
+	}
+
+	// REFRESH
+	_, err = engine.Execute("REFRESH VIEW testdb.young")
+	if err != nil {
+		t.Fatalf("Failed to REFRESH VIEW: %v", err)
+	}
+
+	result, _ = engine.Execute("SELECT * FROM testdb.young")
+	qr = result.(QueryResult)
+	if qr.RecordsRead != 3 {
+		t.Errorf("Expected 3 rows after REFRESH, got %d", qr.RecordsRead)
+	}
+
+	// Cleanup
+	engine.Execute("DROP VIEW testdb.young")
+}
+
+func TestEngineShowIndexes(t *testing.T) {
+	engine := setupTestEngine(t)
+
+	_, _ = engine.Execute("CREATE INDEX idx_name ON testdb.users(name)")
+
+	result, err := engine.Execute("SHOW INDEXES ON testdb.users")
+	if err != nil {
+		t.Fatalf("Failed to SHOW INDEXES: %v", err)
+	}
+	qr := result.(QueryResult)
+	if len(qr.Data) < 1 {
+		t.Error("Expected at least 1 index")
+	}
+}
+
+func TestEngineBranching(t *testing.T) {
+	engine := setupTestEngine(t)
+	insertTestData(t, engine)
+
+	// Create branch
+	_, err := engine.Execute("CREATE BRANCH feature")
+	if err != nil {
+		t.Fatalf("Failed to CREATE BRANCH: %v", err)
+	}
+
+	// Show branches
+	result, err := engine.Execute("SHOW BRANCHES")
+	if err != nil {
+		t.Fatalf("Failed to SHOW BRANCHES: %v", err)
+	}
+	qr := result.(QueryResult)
+	if len(qr.Data) < 2 {
+		t.Errorf("Expected at least 2 branches (main + feature), got %d", len(qr.Data))
+	}
+
+	// Checkout branch
+	_, err = engine.Execute("CHECKOUT feature")
+	if err != nil {
+		t.Fatalf("Failed to CHECKOUT: %v", err)
+	}
+
+	// Data should still be accessible on the new branch
+	result, err = engine.Execute("SELECT COUNT(*) FROM testdb.users")
+	if err != nil {
+		t.Fatalf("Failed to SELECT on feature branch: %v", err)
+	}
+	qr = result.(QueryResult)
+	if qr.Data[0][0] != "3" {
+		t.Errorf("Expected 3 rows on feature branch, got %s", qr.Data[0][0])
+	}
+}
+
+func TestEngineAllDataTypes(t *testing.T) {
+	engine := setupTestEngine(t)
+
+	// Create table with all supported data types
+	_, err := engine.Execute(`CREATE TABLE testdb.all_types (
+		id INT PRIMARY KEY,
+		str_col STRING,
+		int_col INT,
+		float_col FLOAT,
+		bool_col BOOL,
+		text_col TEXT,
+		date_col DATE,
+		ts_col TIMESTAMP,
+		json_col JSON
+	)`)
+	if err != nil {
+		t.Fatalf("Failed to create all-types table: %v", err)
+	}
+
+	// Verify schema has all types
+	result, _ := engine.Execute("DESCRIBE testdb.all_types")
+	qr := result.(QueryResult)
+	if len(qr.Data) != 9 {
+		t.Fatalf("Expected 9 columns, got %d", len(qr.Data))
+	}
+
+	// Insert a row with all types populated
+	_, err = engine.Execute(`INSERT INTO testdb.all_types (id, str_col, int_col, float_col, bool_col, text_col, date_col, ts_col, json_col) VALUES (
+		1,
+		'hello',
+		42,
+		3.14,
+		true,
+		'This is a long text field with lots of content.',
+		'2025-06-15',
+		'2025-06-15 10:30:00',
+		'{"key":"value","num":123}'
+	)`)
+	if err != nil {
+		t.Fatalf("Failed to INSERT all types: %v", err)
+	}
+
+	// Read it back and verify
+	result, err = engine.Execute("SELECT * FROM testdb.all_types WHERE id = 1")
+	if err != nil {
+		t.Fatalf("Failed to SELECT: %v", err)
+	}
+	qr = result.(QueryResult)
+	if qr.RecordsRead != 1 {
+		t.Fatalf("Expected 1 row, got %d", qr.RecordsRead)
+	}
+
+	// Verify each column value survived the roundtrip
+	row := qr.Data[0]
+	checks := []struct {
+		idx      int
+		name     string
+		expected string
+	}{
+		{0, "id", "1"},
+		{1, "str_col", "hello"},
+		{2, "int_col", "42"},
+		{3, "float_col", "3.14"},
+		{4, "bool_col", "true"},
+		{5, "text_col", "This is a long text field with lots of content."},
+		{6, "date_col", "2025-06-15"},
+		{7, "ts_col", "2025-06-15 10:30:00"},
+	}
+	for _, c := range checks {
+		if row[c.idx] != c.expected {
+			t.Errorf("Column %s: expected '%s', got '%s'", c.name, c.expected, row[c.idx])
+		}
+	}
+	// JSON column - just verify it's non-empty
+	if len(row[8]) == 0 {
+		t.Error("JSON column should be non-empty")
+	}
+}
+
+func TestEngineDataTypeValidation(t *testing.T) {
+	engine := setupTestEngine(t)
+
+	engine.Execute(`CREATE TABLE testdb.validated (
+		id INT PRIMARY KEY,
+		d DATE,
+		ts TIMESTAMP,
+		j JSON
+	)`)
+
+	// Invalid DATE format
+	_, err := engine.Execute("INSERT INTO testdb.validated (id, d, ts, j) VALUES (1, 'not-a-date', '2025-01-01 00:00:00', '{}')")
+	if err == nil {
+		t.Error("Expected error for invalid DATE format")
+	}
+
+	// Invalid TIMESTAMP format
+	_, err = engine.Execute("INSERT INTO testdb.validated (id, d, ts, j) VALUES (2, '2025-01-01', 'not-a-timestamp', '{}')")
+	if err == nil {
+		t.Error("Expected error for invalid TIMESTAMP format")
+	}
+
+	// Invalid JSON format
+	_, err = engine.Execute("INSERT INTO testdb.validated (id, d, ts, j) VALUES (3, '2025-01-01', '2025-01-01 00:00:00', 'not json')")
+	if err == nil {
+		t.Error("Expected error for invalid JSON format")
+	}
+
+	// Valid row should succeed
+	_, err = engine.Execute("INSERT INTO testdb.validated (id, d, ts, j) VALUES (4, '2025-01-01', '2025-01-01 12:00:00', '{\"ok\":true}')")
+	if err != nil {
+		t.Fatalf("Valid insert should succeed: %v", err)
+	}
+}
+
+func TestEngineDataTypeAliases(t *testing.T) {
+	engine := setupTestEngine(t)
+
+	// Test SQL type aliases: INTEGER, DOUBLE, REAL, BOOLEAN, DATETIME
+	_, err := engine.Execute(`CREATE TABLE testdb.aliases (
+		id INTEGER PRIMARY KEY,
+		name STRING,
+		score DOUBLE,
+		rating REAL,
+		active BOOLEAN,
+		created DATETIME
+	)`)
+	if err != nil {
+		t.Fatalf("Failed to create table with type aliases: %v", err)
+	}
+
+	// Insert and verify roundtrip
+	_, err = engine.Execute("INSERT INTO testdb.aliases (id, name, score, rating, active, created) VALUES (1, 'test', 9.5, 4.2, false, '2025-03-01 08:00:00')")
+	if err != nil {
+		t.Fatalf("Failed to INSERT with aliased types: %v", err)
+	}
+
+	result, _ := engine.Execute("SELECT * FROM testdb.aliases WHERE id = 1")
+	qr := result.(QueryResult)
+	if qr.RecordsRead != 1 {
+		t.Errorf("Expected 1 row, got %d", qr.RecordsRead)
+	}
+	row := qr.Data[0]
+	if row[1] != "test" {
+		t.Errorf("STRING: expected 'test', got '%s'", row[1])
+	}
+	if row[2] != "9.5" {
+		t.Errorf("DOUBLE: expected '9.5', got '%s'", row[2])
+	}
+	if row[3] != "4.2" {
+		t.Errorf("REAL: expected '4.2', got '%s'", row[3])
+	}
+	if row[4] != "false" {
+		t.Errorf("BOOLEAN: expected 'false', got '%s'", row[4])
+	}
+}

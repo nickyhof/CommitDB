@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0] - 2026-02-06
+
+### Added
+
+#### JWKS-based JWT Validation
+- RS256/ES256 JWT validation using JWKS (JSON Web Key Set) endpoints
+- `-jwks-url` flag on the server for specifying the JWKS endpoint
+- JWKS client with 1-hour key cache and automatic refresh
+- Supports both RSA and ECDSA public keys alongside existing HMAC
+
+#### Non-Primary Key WHERE Clauses for UPDATE/DELETE
+- UPDATE and DELETE now support WHERE clauses on any column, not just primary keys
+- **Fast path**: O(1) direct lookup for primary key equality (unchanged behavior)
+- **Slow path**: Table scan with filter for all other conditions
+- Multi-condition WHERE (`AND`) supported
+- Comparison operators (`>`, `<`, `>=`, `<=`, `!=`) supported
+
+#### Float and Boolean Literals in SQL
+- INSERT VALUES now accepts bare float literals (e.g., `3.14` without quotes)
+- INSERT VALUES and UPDATE SET now accept bare boolean literals (`true`, `false`)
+
+### Improved
+
+#### Test Coverage
+- Engine package coverage increased from 17.7% to 29.3%
+- Added `internal/ops` unit tests (23 tests, previously 0% coverage)
+- New integration tests for non-PK UPDATE/DELETE with both Memory and File persistence
+- New benchmarks: `BenchmarkDeletePK`, `BenchmarkDeleteNonPK`, `BenchmarkUpdateNonPK`
+- Data type coverage tests for all 8 types (STRING, INT, FLOAT, BOOL, TEXT, DATE, TIMESTAMP, JSON)
+- Type alias tests (INTEGER, DOUBLE, REAL, BOOLEAN, DATETIME)
+- Engine unit tests for DROP TABLE/DATABASE, ALTER TABLE, Views, Materialized Views, Branching
+
+### Documentation
+
+- Updated SQL reference with FLOAT and TEXT column types
+- Added INSERT example with bare float and boolean literals
+- Added `-jwks-url` flag to CLI/Server documentation
+- Added non-PK WHERE clause examples for UPDATE/DELETE
+
 ## [2.6.1] - 2026-02-06
 
 ### Changed

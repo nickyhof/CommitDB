@@ -21,6 +21,8 @@ CREATE TABLE mydb.users (
     name STRING,
     email STRING,
     age INT,
+    score FLOAT,
+    bio TEXT,
     active BOOL,
     birth_date DATE,       -- Date only (YYYY-MM-DD)
     created TIMESTAMP,     -- Date + time (YYYY-MM-DD HH:MM:SS)
@@ -89,9 +91,11 @@ INSERT INTO mydb.users (id, name, email) VALUES (1, 'Alice', 'alice@example.com'
 -- With timestamp
 INSERT INTO mydb.users (id, name, created) VALUES (2, 'Bob', NOW());
 
+-- Float and boolean literals (no quotes needed)
+INSERT INTO mydb.users (id, name, score, active) VALUES (3, 'Charlie', 4.5, true);
+
 -- Bulk insert (multiple rows)
 INSERT INTO mydb.users (id, name, email) VALUES 
-    (3, 'Charlie', 'charlie@example.com'),
     (4, 'Diana', 'diana@example.com'),
     (5, 'Eve', 'eve@example.com');
 ```
