@@ -251,12 +251,15 @@ impl CommitDB {
     /// Connect to a CommitDB server with full options.
     pub fn connect_with(opts: ConnectOptions) -> Result<Self> {
         let addr = format!("{}:{}", opts.host, opts.port);
-        let tcp = TcpStream::connect_timeout(
-            &addr.parse().map_err(|e: std::net::AddrParseError| {
-                std::io::Error::new(std::io::ErrorKind::InvalidInput, e)
-            })?,
-            opts.timeout,
-        )?;
+        use std::net::ToSocketAddrs;
+        let sock_addr = addr
+            .to_socket_addrs()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?
+            .next()
+            .ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::InvalidInput, "could not resolve address")
+            })?;
+        let tcp = TcpStream::connect_timeout(&sock_addr, opts.timeout)?;
         tcp.set_read_timeout(Some(opts.timeout))?;
         tcp.set_write_timeout(Some(opts.timeout))?;
 
