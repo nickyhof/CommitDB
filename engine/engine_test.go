@@ -262,3 +262,49 @@ func TestEngineCreateDropIndex(t *testing.T) {
 
 	_, _ = engine.Execute("DROP INDEX idx_name ON testdb.users")
 }
+
+func TestEngineUpdateWithNonPKWhere(t *testing.T) {
+	engine := setupTestEngine(t)
+	insertTestData(t, engine)
+
+	// Update by non-PK column
+	result, err := engine.Execute("UPDATE testdb.users SET name = 'Senior' WHERE age > 28")
+	if err != nil {
+		t.Fatalf("Failed to execute UPDATE with non-PK WHERE: %v", err)
+	}
+
+	cr := result.(CommitResult)
+	if cr.RecordsWritten != 2 {
+		t.Errorf("Expected 2 records updated (Alice=30, Charlie=35), got %d", cr.RecordsWritten)
+	}
+
+	// Verify updates
+	selectResult, _ := engine.Execute("SELECT * FROM testdb.users WHERE name = 'Senior'")
+	qr := selectResult.(QueryResult)
+	if qr.RecordsRead != 2 {
+		t.Errorf("Expected 2 records with name='Senior', got %d", qr.RecordsRead)
+	}
+}
+
+func TestEngineDeleteWithNonPKWhere(t *testing.T) {
+	engine := setupTestEngine(t)
+	insertTestData(t, engine)
+
+	// Delete by non-PK column
+	result, err := engine.Execute("DELETE FROM testdb.users WHERE age < 30")
+	if err != nil {
+		t.Fatalf("Failed to execute DELETE with non-PK WHERE: %v", err)
+	}
+
+	cr := result.(CommitResult)
+	if cr.RecordsDeleted != 1 {
+		t.Errorf("Expected 1 record deleted (Bob=25), got %d", cr.RecordsDeleted)
+	}
+
+	// Verify deletion
+	selectResult, _ := engine.Execute("SELECT COUNT(*) FROM testdb.users")
+	qr := selectResult.(QueryResult)
+	if qr.Data[0][0] != "2" {
+		t.Errorf("Expected 2 records after delete, got %s", qr.Data[0][0])
+	}
+}
