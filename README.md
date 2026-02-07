@@ -27,6 +27,7 @@ Traditional databases lose history. Once you UPDATE or DELETE, the old data is g
 - 🔗 **Remote sync** - Push/pull to GitHub, GitLab, or any Git remote
 - 📡 **Shared databases** - Query and JOIN across external repositories
 - 🐍 **Python support** - Native driver for Python applications
+- 🦀 **Rust support** - Native driver for Rust applications
 
 ## Quick Start
 
@@ -39,6 +40,9 @@ go install github.com/nickyhof/CommitDB/v2/cmd/cli@latest
 
 # Python
 pip install commitdb
+
+# Rust (Cargo.toml)
+commitdb = "2"
 ```
 
 **Python example:**
@@ -46,13 +50,28 @@ pip install commitdb
 ```python
 from commitdb import CommitDB
 
-db = CommitDB('localhost', 3306)
-db.connect()
-db.execute("CREATE DATABASE myapp")
-db.execute("CREATE TABLE myapp.users (id INT, name STRING)")
-db.execute("INSERT INTO myapp.users VALUES (1, 'Alice')")
-result = db.execute("SELECT * FROM myapp.users")
-print(result.rows)
+with CommitDB('localhost', 3306) as db:
+    db.execute("CREATE DATABASE myapp")
+    db.execute("CREATE TABLE myapp.users (id INT, name STRING)")
+    db.execute("INSERT INTO myapp.users VALUES (1, 'Alice')")
+    result = db.query("SELECT * FROM myapp.users")
+    for row in result:
+        print(row)
+```
+
+**Rust example:**
+
+```rust
+use commitdb::CommitDB;
+
+let mut db = CommitDB::connect("localhost", 3306)?;
+db.execute("CREATE DATABASE myapp")?;
+db.execute("CREATE TABLE myapp.users (id INT, name STRING)")?;
+db.execute("INSERT INTO myapp.users VALUES (1, 'Alice')")?;
+let result = db.query("SELECT * FROM myapp.users")?;
+for row in &result {
+    println!("{:?}", row);
+}
 ```
 
 ## Performance
@@ -80,6 +99,7 @@ CommitDB vs [DuckDB](https://duckdb.org/) (1000 rows, Apple M1 Pro):
 - [Branching & Merging](https://nickyhof.github.io/CommitDB/branching/)
 - [Shared Databases](https://nickyhof.github.io/CommitDB/shared-databases/)
 - [Python Client](https://nickyhof.github.io/CommitDB/python-client/)
+- [Rust Client](https://nickyhof.github.io/CommitDB/rust-client/)
 - [Go API](https://nickyhof.github.io/CommitDB/go-api/)
 - [Benchmarks](https://nickyhof.github.io/CommitDB/benchmarks/)
 

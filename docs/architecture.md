@@ -22,7 +22,8 @@ CommitDB/
 │   └── compare/          # Value comparison (internal)
 
 ├── clients/
-│   └── python/           # Python client
+│   ├── python/           # Python client
+│   └── rust/             # Rust client
 ├── tests/                # Integration tests
 └── docs/                 # Documentation
 ```

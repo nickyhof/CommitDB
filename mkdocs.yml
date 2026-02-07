@@ -42,6 +42,7 @@ nav:
     - Shared Databases: shared-databases.md
   - Drivers:
     - Python Client: python-client.md
+    - Rust Client: rust-client.md
     - Go API: go-api.md
   - Performance:
     - Benchmarks: benchmarks.md

@@ -9,12 +9,8 @@ __pycache__/
 dist/
 build/
 
-# Shared libraries
-lib/
-drivers/python/commitdb/*.so
-drivers/python/commitdb/*.dylib
-drivers/python/commitdb/*.h
-drivers/python/.venv/
+# Rust
+clients/rust/target/
 
 # Test coverage
 coverage.out
