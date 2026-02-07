@@ -22,22 +22,15 @@ Usage:
         print(row)
 
     db.close()
-
-Embedded mode (requires libcommitdb):
-    from commitdb import CommitDBLocal
-
-    with CommitDBLocal('/path/to/data') as db:
-        db.execute('CREATE DATABASE mydb')
 """
 
 from importlib.metadata import version, PackageNotFoundError
 
-from .client import CommitDB, CommitDBLocal, QueryResult, CommitResult, CommitDBError
+from .client import CommitDB, QueryResult, CommitResult, CommitDBError
 
 try:
     __version__ = version("commitdb")
 except PackageNotFoundError:
     __version__ = "0.0.0"  # Fallback for development/editable installs
 
-__all__ = ['CommitDB', 'CommitDBLocal', 'QueryResult', 'CommitResult', 'CommitDBError', '__version__']
-
+__all__ = ['CommitDB', 'QueryResult', 'CommitResult', 'CommitDBError', '__version__']

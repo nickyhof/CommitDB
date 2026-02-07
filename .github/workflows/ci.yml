@@ -49,16 +49,6 @@ jobs:
       - name: Build CLI
         run: go build -v -o commitdb ./cmd/cli
 
-      - name: Build shared library
-        run: make lib
-
-      - name: Upload shared library
-        uses: actions/upload-artifact@v4
-        with:
-          name: libcommitdb
-          path: lib/
-          retention-days: 1
-
 
   benchmark-pr:
     name: Benchmark (PR)
@@ -117,11 +107,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download shared library
-        uses: actions/download-artifact@v4
-        with:
-          name: libcommitdb
-          path: lib/
+
 
       - name: Set up Go
         uses: actions/setup-go@v5
