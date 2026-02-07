@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/nickyhof/CommitDB/v2/internal/ops"
-	"github.com/nickyhof/CommitDB/v2/persistence"
 	"github.com/nickyhof/CommitDB/v2/internal/sql"
+	"github.com/nickyhof/CommitDB/v2/persistence"
 )
 
 func (engine *Engine) executeSelectStatement(statement sql.SelectStatement) (QueryResult, error) {
@@ -66,30 +66,53 @@ func (engine *Engine) executeSelectStatement(statement sql.SelectStatement) (Que
 	indexUsed := false
 
 	if len(statement.Where.Conditions) > 0 && len(statement.Joins) == 0 {
-		// Load indexes for this table
-		indexManager := persistence.NewIndexManager(p, engine.Identity)
-		indexManager.LoadIndexes(statement.Database, statement.Table, tableOp.Table.Columns)
-
-		// Check if any WHERE condition can use an index (simple equality for now)
-		for _, cond := range statement.Where.Conditions {
-			if cond.Operator == sql.EqualsOperator {
-				if idx, found := indexManager.GetIndex(statement.Database, statement.Table, cond.Left); found {
-					// Use index lookup!
-					primaryKeys := idx.Lookup(cond.Right)
-					for _, pk := range primaryKeys {
-						rowsScanned++
-						rawData, exists := tableOp.Get(pk)
-						if !exists {
-							continue
-						}
+		// Fast path: direct PK lookup for simple WHERE pk = 'value' queries
+		pk, pkErr := tableOp.PrimaryKey()
+		if pkErr == nil {
+			for _, cond := range statement.Where.Conditions {
+				if cond.Operator == sql.EqualsOperator && cond.Left == *pk && !cond.Negated {
+					rowsScanned++
+					rawData, exists := tableOp.Get(cond.Right)
+					if exists {
 						var jsonData map[string]string
-						if err := json.Unmarshal(rawData, &jsonData); err != nil {
-							continue
+						if err := json.Unmarshal(rawData, &jsonData); err == nil {
+							// Verify all other WHERE conditions match
+							if matchesWhereClause(jsonData, statement.Where) {
+								results = append(results, jsonData)
+							}
 						}
-						results = append(results, jsonData)
 					}
 					indexUsed = true
-					break // Only use first matching index
+					break
+				}
+			}
+		}
+
+		// Try index lookup if PK fast path wasn't used
+		if !indexUsed {
+			indexManager := persistence.NewIndexManager(p, engine.Identity)
+			indexManager.LoadIndexes(statement.Database, statement.Table, tableOp.Table.Columns)
+
+			for _, cond := range statement.Where.Conditions {
+				if cond.Operator == sql.EqualsOperator {
+					if idx, found := indexManager.GetIndex(statement.Database, statement.Table, cond.Left); found {
+						// Use index lookup!
+						primaryKeys := idx.Lookup(cond.Right)
+						for _, pk := range primaryKeys {
+							rowsScanned++
+							rawData, exists := tableOp.Get(pk)
+							if !exists {
+								continue
+							}
+							var jsonData map[string]string
+							if err := json.Unmarshal(rawData, &jsonData); err != nil {
+								continue
+							}
+							results = append(results, jsonData)
+						}
+						indexUsed = true
+						break // Only use first matching index
+					}
 				}
 			}
 		}
@@ -97,6 +120,9 @@ func (engine *Engine) executeSelectStatement(statement sql.SelectStatement) (Que
 
 	// Fall back to full scan if no index was used
 	if !indexUsed {
+		hasWhere := len(statement.Where.Conditions) > 0
+		hasJoins := len(statement.Joins) > 0
+
 		for _, rawData := range tableOp.Scan() {
 			rowsScanned++
 
@@ -104,6 +130,12 @@ func (engine *Engine) executeSelectStatement(statement sql.SelectStatement) (Que
 			err := json.Unmarshal(rawData, &jsonData)
 			if err != nil {
 				return QueryResult{}, err
+			}
+
+			// WHERE pushdown: filter during scan for non-JOIN queries
+			// (JOIN queries need post-join filtering since WHERE may reference joined columns)
+			if hasWhere && !hasJoins && !matchesWhereClause(jsonData, statement.Where) {
+				continue
 			}
 
 			results = append(results, jsonData)
@@ -156,8 +188,8 @@ func (engine *Engine) executeSelectStatement(statement sql.SelectStatement) (Que
 		}
 	}
 
-	// Apply WHERE clause filtering (after joins)
-	if len(statement.Where.Conditions) > 0 {
+	// Apply WHERE clause filtering (only needed after joins, since non-join queries filter during scan)
+	if len(statement.Joins) > 0 && len(statement.Where.Conditions) > 0 {
 		var filtered []map[string]string
 		for _, row := range results {
 			if matchesWhereClause(row, statement.Where) {

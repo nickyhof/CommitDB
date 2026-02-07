@@ -3,6 +3,8 @@ package persistence
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"iter"
 	"path"
 	"sort"
 	"strings"
@@ -577,6 +579,128 @@ func (p *Persistence) GetRecordDirect(database, table, key string) ([]byte, bool
 	}
 
 	return []byte(content), true
+}
+
+// ScanDirect scans all records in a table using a single tree traversal.
+// This is significantly faster than listing keys and reading each record individually,
+// because it resolves HEAD → commit → tree only once, then reads all blob entries.
+// Data is read into memory under RLock, then yielded after the lock is released,
+// allowing callers to acquire write locks during iteration (e.g., UPDATE/DELETE).
+func (p *Persistence) ScanDirect(database, table string) iter.Seq2[string, []byte] {
+	type record struct {
+		key  string
+		data []byte
+	}
+
+	return func(yield func(key string, value []byte) bool) {
+		if !p.IsInitialized() {
+			return
+		}
+
+		// Read all records under RLock, then release before yielding
+		var records []record
+
+		func() {
+			p.mu.RLock()
+			defer p.mu.RUnlock()
+
+			headRef, err := p.repo.Head()
+			if err != nil {
+				return
+			}
+
+			commit, err := p.repo.CommitObject(headRef.Hash())
+			if err != nil {
+				return
+			}
+
+			tree, err := commit.Tree()
+			if err != nil {
+				return
+			}
+
+			// Navigate to database/table subtree
+			tablePath := path.Join(database, table)
+			tableTree, err := tree.Tree(tablePath)
+			if err != nil {
+				return // Table doesn't exist
+			}
+
+			// Read all blob entries in a single pass
+			records = make([]record, 0, len(tableTree.Entries))
+			for _, entry := range tableTree.Entries {
+				if entry.Mode == filemode.Dir {
+					continue // Skip subdirectories
+				}
+
+				blob, err := p.repo.BlobObject(entry.Hash)
+				if err != nil {
+					continue
+				}
+
+				reader, err := blob.Reader()
+				if err != nil {
+					continue
+				}
+
+				data, err := io.ReadAll(reader)
+				reader.Close()
+				if err != nil {
+					continue
+				}
+
+				records = append(records, record{key: entry.Name, data: data})
+			}
+		}()
+
+		// Yield records without holding any lock
+		for _, rec := range records {
+			if !yield(rec.key, rec.data) {
+				return
+			}
+		}
+	}
+}
+
+// ListRecordKeysDirect lists all record keys in a table using a single tree traversal.
+// More efficient than ListEntriesDirect because it avoids separate HEAD resolution.
+func (p *Persistence) ListRecordKeysDirect(database, table string) []string {
+	if !p.IsInitialized() {
+		return nil
+	}
+
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	headRef, err := p.repo.Head()
+	if err != nil {
+		return nil
+	}
+
+	commit, err := p.repo.CommitObject(headRef.Hash())
+	if err != nil {
+		return nil
+	}
+
+	tree, err := commit.Tree()
+	if err != nil {
+		return nil
+	}
+
+	tablePath := path.Join(database, table)
+	tableTree, err := tree.Tree(tablePath)
+	if err != nil {
+		return nil
+	}
+
+	keys := make([]string, 0, len(tableTree.Entries))
+	for _, entry := range tableTree.Entries {
+		if entry.Mode != filemode.Dir {
+			keys = append(keys, entry.Name)
+		}
+	}
+
+	return keys
 }
 
 // DeleteRecordDirect deletes a record using low-level plumbing API

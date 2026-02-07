@@ -201,4 +201,4 @@ jobs:
           sleep 2
 
       - name: Integration tests
-        run: cargo test --features integration --verbose
+        run: cargo test --features integration --verbose -- --test-threads=1

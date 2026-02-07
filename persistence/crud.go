@@ -154,35 +154,12 @@ func (persistence *Persistence) ListTables(database string) []string {
 }
 
 func (persistence *Persistence) ListRecordKeys(database string, table string) []string {
-	path := fmt.Sprintf("%s/%s", database, table)
-
-	entries, err := persistence.ListEntriesDirect(path)
-	if err != nil {
-		return nil
-	}
-
-	var keys []string
-	for _, entry := range entries {
-		if !entry.IsDir {
-			keys = append(keys, entry.Name)
-		}
-	}
-
-	return keys
+	return persistence.ListRecordKeysDirect(database, table)
 }
 
 func (persistence *Persistence) Scan(database string, table string, filterExpr *func(key string, value []byte) bool) iter.Seq2[string, []byte] {
-	keys := persistence.ListRecordKeys(database, table)
-
-	currentIndex := 0
-
 	return func(yield func(key string, value []byte) bool) {
-		for currentIndex < len(keys) {
-			key := keys[currentIndex]
-			value, _ := persistence.GetRecord(database, table, key)
-
-			currentIndex++
-
+		for key, value := range persistence.ScanDirect(database, table) {
 			if filterExpr != nil && !(*filterExpr)(key, value) {
 				continue
 			}
