@@ -3,7 +3,7 @@
 [![PyPI version](https://badge.fury.io/py/commitdb.svg)](https://pypi.org/project/commitdb/)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 
-The CommitDB Python client provides a native Python interface for connecting to CommitDB servers or running embedded in-process.
+The CommitDB Python client provides a native Python interface for connecting to CommitDB servers.
 
 ## Installation
 
@@ -11,62 +11,25 @@ The CommitDB Python client provides a native Python interface for connecting to 
 pip install commitdb
 ```
 
-## Embedded vs Server Mode
-
-| | **Embedded Mode** | **Server Mode** |
-|---|---|---|
-| **Class** | `CommitDBLocal` | `CommitDB` |
-| **Use when** | Single-process apps, testing, local tools | Multi-client access, production deployments |
-| **Setup** | No server needed | Requires running `commitdb-server` |
-| **Data location** | In-memory or local directory | Server-managed |
-| **Performance** | Fastest (no network) | Network overhead |
-
-**Choose Embedded Mode if:**
-- You're building a single-user CLI tool or script
-- You want zero-config local development
-- You need the fastest possible performance
-
-**Choose Server Mode if:**
-- Multiple processes/clients need concurrent access
-- You're deploying to production with auth/TLS
-- You want to separate the database from your application
 
 ## Quick Start
 
-=== "Server Mode (CommitDB)"
+```python
+from commitdb import CommitDB
 
-    ```python
-    from commitdb import CommitDB
+with CommitDB('localhost', 3306) as db:
+    db.execute('CREATE DATABASE mydb')
+    db.execute('CREATE TABLE mydb.users (id INT PRIMARY KEY, name STRING)')
+    db.execute("INSERT INTO mydb.users VALUES (1, 'Alice')")
     
-    with CommitDB('localhost', 3306) as db:
-        db.execute('CREATE DATABASE mydb')
-        db.execute('CREATE TABLE mydb.users (id INT PRIMARY KEY, name STRING)')
-        db.execute("INSERT INTO mydb.users VALUES (1, 'Alice')")
-        
-        result = db.query('SELECT * FROM mydb.users')
-        for row in result:
-            print(f"{row['id']}: {row['name']}")
-    ```
-
-=== "Embedded Mode (CommitDBLocal)"
-
-    ```python
-    from commitdb import CommitDBLocal
-    
-    # In-memory (data lost when process exits)
-    with CommitDBLocal() as db:
-        db.execute('CREATE DATABASE app')
-        db.execute('CREATE TABLE app.users (id INT, name STRING)')
-        result = db.query('SELECT * FROM app.users')
-    
-    # File-based (data persists)
-    with CommitDBLocal('/path/to/data') as db:
-        db.execute('CREATE DATABASE app')
-    ```
+    result = db.query('SELECT * FROM mydb.users')
+    for row in result:
+        print(f"{row['id']}: {row['name']}")
+```
 
 ## API Reference
 
-### CommitDB (Server Mode)
+### CommitDB
 
 ```python
 CommitDB(host='localhost', port=3306, use_ssl=False, ssl_verify=True, 
@@ -89,23 +52,6 @@ CommitDB(host='localhost', port=3306, use_ssl=False, ssl_verify=True,
 | `show_databases()` | List databases |
 | `show_tables(database)` | List tables |
 
-### CommitDBLocal (Embedded)
-
-```python
-CommitDBLocal(path=None, lib_path=None)
-```
-
-**Parameters:**
-
-- `path` - Directory for file persistence. `None` = in-memory
-- `lib_path` - Optional path to `libcommitdb` shared library
-
-**Methods:** Same as CommitDB, plus:
-
-| Method | Description |
-|--------|-------------|
-| `open()` | Open the database |
-| `close()` | Close the database |
 
 ### QueryResult
 
@@ -130,7 +76,7 @@ result.execution_time_ms  # 1.5
 result.execution_ops      # 1
 ```
 
-## SSL/TLS Encryption (Server Mode)
+## SSL/TLS Encryption
 
 ```python
 from commitdb import CommitDB
@@ -156,7 +102,7 @@ db.connect()
 | `ssl_verify` | `True` | Verify server certificate |
 | `ssl_ca_cert` | `None` | Path to CA certificate |
 
-## JWT Authentication (Server Mode)
+## JWT Authentication
 
 ```python
 from commitdb import CommitDB
@@ -175,12 +121,10 @@ print(f"Authenticated: {db.authenticated}")
 
 ## Branching & Merging
 
-> Works in both modes. Examples below use `CommitDBLocal` for simplicity.
-
 ```python
-from commitdb import CommitDBLocal
+from commitdb import CommitDB
 
-with CommitDBLocal() as db:
+with CommitDB('localhost', 3306) as db:
     db.execute('CREATE DATABASE mydb')
     db.execute('CREATE TABLE mydb.users (id INT, name STRING)')
     db.execute("INSERT INTO mydb.users VALUES (1, 'Alice')")
@@ -223,8 +167,6 @@ db.execute('COMMIT MERGE')
 
 ## Remote Operations
 
-> Works in both modes. Syncs your Git-backed data with remote repositories.
-
 ```python
 # Add a remote
 db.execute("CREATE REMOTE origin 'https://github.com/user/repo.git'")
@@ -238,8 +180,6 @@ db.execute("PULL FROM origin")
 ```
 
 ## Bulk Import/Export
-
-> Works in both modes. Server mode example shown below.
 
 ```python
 from commitdb import CommitDB
@@ -278,11 +218,3 @@ except ConnectionError as e:
     print(f"Connection failed: {e}")
 ```
 
-## Building the Shared Library
-
-For embedded mode, if the library isn't bundled:
-
-```bash
-# From CommitDB root
-make lib  # Creates lib/libcommitdb.dylib (macOS) or .so (Linux)
-```

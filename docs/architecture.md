@@ -20,7 +20,7 @@ CommitDB/
 │   ├── sql/              # SQL parser (internal)
 │   ├── ops/              # Table operations (internal)
 │   └── compare/          # Value comparison (internal)
-├── bindings/             # C shared library bindings
+
 ├── clients/
 │   └── python/           # Python client
 ├── tests/                # Integration tests

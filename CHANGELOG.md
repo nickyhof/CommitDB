@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0] - 2026-02-06
+
+### Removed
+
+#### C Shared Library Bindings
+- Removed `bindings/cgo.go` — the CGO shared library (`libcommitdb`) for embedded database mode
+- Removed `commitdb/binding.py` — Python ctypes wrapper for the shared library
+- Removed `CommitDBLocal` class from the Python client
+- Removed `lib`, `lib-all`, and platform-specific `lib-*` targets from the Makefile
+- Removed shared library build/upload steps from CI pipeline
+- Removed Go setup and shared library build from PyPI publish workflow
+
+### Changed
+
+- Python client is now server-mode only (`CommitDB` class over TCP/TLS)
+- Updated `docs/python-client.md` and `README.md` to remove embedded mode references
+- Updated `docs/architecture.md` to remove `bindings/` from directory tree
+
 ## [2.7.0] - 2026-02-06
 
 ### Added

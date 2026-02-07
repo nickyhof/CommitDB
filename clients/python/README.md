@@ -17,7 +17,6 @@ pip install commitdb
 
 ## Quick Start
 
-### Remote Mode (connect to server)
 
 ```python
 from commitdb import CommitDB
@@ -30,19 +29,6 @@ with CommitDB('localhost', 3306) as db:
     result = db.query('SELECT * FROM mydb.users')
     for row in result:
         print(f"{row['id']}: {row['name']}")
-```
-
-### Embedded Mode (no server required)
-
-```python
-from commitdb import CommitDBLocal
-
-with CommitDBLocal() as db:  # In-memory
-    db.execute('CREATE DATABASE mydb')
-    db.execute('CREATE TABLE mydb.users (id INT PRIMARY KEY, name STRING)')
-    
-with CommitDBLocal('/path/to/data') as db:  # File-based (persistent)
-    db.execute('CREATE DATABASE mydb')
 ```
 
 ### Ibis Mode (pandas DataFrame support)
@@ -89,20 +75,6 @@ CommitDB(host='localhost', port=3306, use_ssl=False, ssl_verify=True,
 | `query(sql)` | Execute SELECT, returns QueryResult |
 | `authenticate_jwt(token)` | Authenticate with JWT |
 
-### CommitDBLocal (Embedded)
-
-```python
-CommitDBLocal(path=None, lib_path=None)
-```
-
-- `path` - Directory for persistence (`None` = in-memory)
-- `lib_path` - Path to `libcommitdb` shared library
-
-| Method | Description |
-|--------|-------------|
-| `open()` / `close()` | Open/close database |
-| `execute(sql)` | Execute SQL |
-| `query(sql)` | Execute SELECT |
 
 ### QueryResult
 
@@ -162,7 +134,7 @@ db.authenticate_jwt('eyJhbG...')
 ### Branching & Merging
 
 ```python
-with CommitDBLocal() as db:
+with CommitDB('localhost', 3306) as db:
     db.execute('CREATE DATABASE mydb')
     db.execute('CREATE TABLE mydb.users (id INT, name STRING)')
     db.execute("INSERT INTO mydb.users VALUES (1, 'Alice')")
@@ -240,13 +212,3 @@ db.execute("""
 db.execute("COPY INTO 's3://bucket/export.csv' FROM mydb.users WITH (HEADER = TRUE)")
 ```
 
----
-
-## Building the Shared Library
-
-For embedded mode, if the library isn't bundled:
-
-```bash
-# From CommitDB root
-make lib  # Creates lib/libcommitdb.dylib (macOS) or .so (Linux)
-```

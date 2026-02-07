@@ -1,4 +1,4 @@
-.PHONY: all build test test-race test-cover bench bench-json bench-report perf perf-report soak lib lib-all clean run-server run-cli fmt lint vet deps help
+.PHONY: all build test test-race test-cover bench bench-json bench-report perf perf-report soak clean run-server run-cli fmt lint vet deps help
 
 # Go parameters
 GOCMD=go
@@ -10,18 +10,6 @@ GOVET=$(GOCMD) vet
 
 # Output directories
 DIST=dist
-LIB=lib
-
-# Detect OS
-UNAME_S := $(shell uname -s)
-ifeq ($(UNAME_S),Linux)
-	LIB_EXT=so
-	LIB_NAME=libcommitdb.so
-endif
-ifeq ($(UNAME_S),Darwin)
-	LIB_EXT=dylib
-	LIB_NAME=libcommitdb.dylib
-endif
 
 # Default target
 all: build
@@ -34,7 +22,6 @@ help:
 	@echo ""
 	@echo "Build:"
 	@echo "  build          Build CLI and server binaries"
-	@echo "  lib            Build shared library for current platform"
 	@echo "  clean          Remove build artifacts"
 	@echo ""
 	@echo "Test:"
@@ -139,33 +126,11 @@ deps:
 	$(GOCMD) mod download
 	$(GOCMD) mod tidy
 
-# Build shared library for current platform
-lib:
-	@mkdir -p $(LIB)
-	CGO_ENABLED=1 $(GOBUILD) -buildmode=c-shared -o $(LIB)/$(LIB_NAME) ./bindings
 
-# Build shared libraries for all platforms
-lib-all: lib-linux-amd64 lib-linux-arm64 lib-darwin-amd64 lib-darwin-arm64
-
-lib-linux-amd64:
-	@mkdir -p $(LIB)
-	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 $(GOBUILD) -buildmode=c-shared -o $(LIB)/libcommitdb-linux-amd64.so ./bindings
-
-lib-linux-arm64:
-	@mkdir -p $(LIB)
-	CGO_ENABLED=1 GOOS=linux GOARCH=arm64 $(GOBUILD) -buildmode=c-shared -o $(LIB)/libcommitdb-linux-arm64.so ./bindings
-
-lib-darwin-amd64:
-	@mkdir -p $(LIB)
-	CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 $(GOBUILD) -buildmode=c-shared -o $(LIB)/libcommitdb-darwin-amd64.dylib ./bindings
-
-lib-darwin-arm64:
-	@mkdir -p $(LIB)
-	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 $(GOBUILD) -buildmode=c-shared -o $(LIB)/libcommitdb-darwin-arm64.dylib ./bindings
 
 # Clean build artifacts
 clean:
-	rm -rf $(DIST) $(LIB)
+	rm -rf $(DIST)
 	rm -f commitdb-cli commitdb-server
 	rm -f coverage.out coverage.html
 	rm -f benchmark_results.json
