@@ -10,7 +10,6 @@ require (
 	github.com/duckdb/duckdb-go/v2 v2.5.5
 	github.com/go-git/go-billy/v6 v6.0.0-20251209065551-8afc3eb64e4d
 	github.com/go-git/go-git/v6 v6.0.0-20251216093047-22c365fcee9c
-	github.com/golang-jwt/jwt/v5 v5.3.0
 )
 
 require (

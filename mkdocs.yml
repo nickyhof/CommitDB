@@ -40,10 +40,7 @@ nav:
     - Branching & Merging: branching.md
     - Remote Operations: remote-operations.md
     - Shared Databases: shared-databases.md
-  - Drivers:
-    - Python Client: python-client.md
-    - Rust Client: rust-client.md
-    - Go API: go-api.md
+  - Go API: go-api.md
   - Performance:
     - Benchmarks: benchmarks.md
   - Architecture: architecture.md

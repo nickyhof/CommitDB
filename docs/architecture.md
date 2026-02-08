@@ -5,8 +5,7 @@
 ```
 CommitDB/
 ├── cmd/
-│   ├── cli/              # Interactive CLI application
-│   └── server/           # TCP server
+│   └── cli/              # Interactive CLI application
 ├── core/                 # Public: Domain types (Identity)
 ├── engine/               # Public: SQL execution engine
 │   ├── engine.go         # Core router
@@ -20,10 +19,6 @@ CommitDB/
 │   ├── sql/              # SQL parser (internal)
 │   ├── ops/              # Table operations (internal)
 │   └── compare/          # Value comparison (internal)
-
-├── clients/
-│   ├── python/           # Python client
-│   └── rust/             # Rust client
 ├── tests/                # Integration tests
 └── docs/                 # Documentation
 ```
@@ -48,34 +43,25 @@ Git-backed storage with:
 - Branches for isolation
 - Tags for snapshots
 
-### Server (`cmd/server/`)
-
-TCP server supporting:
-
-- JSON protocol
-- TLS encryption
-- JWT authentication
-- Connection management
-
 ## Data Flow
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Client    │────▶│   Server    │────▶│   Engine    │
-│ (Python/Go) │◀────│  (TCP/TLS)  │◀────│   (op/)     │
-└─────────────┘     └─────────────┘     └─────────────┘
-                                              │
-                                              ▼
-                                        ┌─────────────┐
-                                        │ Persistence │
-                                        │    (ps/)    │
-                                        └─────────────┘
-                                              │
-                                              ▼
-                                        ┌─────────────┐
-                                        │ Git Repo    │
-                                        │ (.git/)     │
-                                        └─────────────┘
+┌─────────────┐     ┌─────────────┐
+│  Go App /   │────▶│   Engine    │
+│    CLI      │◀────│   (op/)     │
+└─────────────┘     └─────────────┘
+                          │
+                          ▼
+                    ┌─────────────┐
+                    │ Persistence │
+                    │    (ps/)    │
+                    └─────────────┘
+                          │
+                          ▼
+                    ┌─────────────┐
+                    │ Git Repo    │
+                    │ (.git/)     │
+                    └─────────────┘
 ```
 
 ## Git Storage Format

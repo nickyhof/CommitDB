@@ -26,52 +26,46 @@ Traditional databases lose history. Once you UPDATE or DELETE, the old data is g
 - ⏪ **Time travel** - Restore any table to any previous state
 - 🔗 **Remote sync** - Push/pull to GitHub, GitLab, or any Git remote
 - 📡 **Shared databases** - Query and JOIN across external repositories
-- 🐍 **Python support** - Native driver for Python applications
-- 🦀 **Rust support** - Native driver for Rust applications
 
 ## Quick Start
 
-```bash
-# Docker
-docker run -p 3306:3306 ghcr.io/nickyhof/commitdb:latest
+### Go Library
 
-# Go
+```go
+import (
+    commitdb "github.com/nickyhof/CommitDB/v2"
+    "github.com/nickyhof/CommitDB/v2/core"
+    "github.com/nickyhof/CommitDB/v2/persistence"
+)
+
+// In-memory
+p, _ := persistence.NewMemoryPersistence()
+instance := commitdb.Open(&p)
+
+// Or file-backed (a real Git repo)
+p, _ := persistence.NewFilePersistence("./mydata", nil)
+instance := commitdb.Open(&p)
+
+e := instance.Engine(core.Identity{Name: "Alice", Email: "alice@example.com"})
+
+e.Execute("CREATE DATABASE myapp")
+e.Execute("CREATE TABLE myapp.users (id INT, name STRING)")
+e.Execute("INSERT INTO myapp.users VALUES (1, 'Alice')")
+result, _ := e.Execute("SELECT * FROM myapp.users")
+result.Display()
+```
+
+### CLI
+
+```bash
+# Install
 go install github.com/nickyhof/CommitDB/v2/cmd/cli@latest
 
-# Python
-pip install commitdb
+# In-memory mode
+commitdb
 
-# Rust (Cargo.toml)
-commitdb = "2"
-```
-
-**Python example:**
-
-```python
-from commitdb import CommitDB
-
-with CommitDB('localhost', 3306) as db:
-    db.execute("CREATE DATABASE myapp")
-    db.execute("CREATE TABLE myapp.users (id INT, name STRING)")
-    db.execute("INSERT INTO myapp.users VALUES (1, 'Alice')")
-    result = db.query("SELECT * FROM myapp.users")
-    for row in result:
-        print(row)
-```
-
-**Rust example:**
-
-```rust
-use commitdb::CommitDB;
-
-let mut db = CommitDB::connect("localhost", 3306)?;
-db.execute("CREATE DATABASE myapp")?;
-db.execute("CREATE TABLE myapp.users (id INT, name STRING)")?;
-db.execute("INSERT INTO myapp.users VALUES (1, 'Alice')")?;
-let result = db.query("SELECT * FROM myapp.users")?;
-for row in &result {
-    println!("{:?}", row);
-}
+# File-backed mode (creates a Git repo)
+commitdb -baseDir ./mydata
 ```
 
 ## Documentation
@@ -80,8 +74,6 @@ for row in &result {
 - [SQL Reference](https://nickyhof.github.io/CommitDB/sql-reference/)
 - [Branching & Merging](https://nickyhof.github.io/CommitDB/branching/)
 - [Shared Databases](https://nickyhof.github.io/CommitDB/shared-databases/)
-- [Python Client](https://nickyhof.github.io/CommitDB/python-client/)
-- [Rust Client](https://nickyhof.github.io/CommitDB/rust-client/)
 - [Go API](https://nickyhof.github.io/CommitDB/go-api/)
 - [Benchmarks](https://nickyhof.github.io/CommitDB/benchmarks/)
 
