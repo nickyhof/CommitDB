@@ -103,30 +103,25 @@ SELECT * FROM public_data.census.population
 WHERE state = 'California';
 ```
 
-## Python Client
+## Go Library
 
-```python
-from commitdb import CommitDB
+```go
+// Create a share
+e.Execute("CREATE SHARE external FROM 'https://github.com/company/data.git'")
 
-db = CommitDB('localhost', 3306)
-db.connect()
+// Query shared data
+result, _ := e.Execute("SELECT * FROM external.mydb.users")
+result.Display()
 
-# Create a share
-db.execute("CREATE SHARE external FROM 'https://github.com/company/data.git'")
-
-# Query shared data
-result = db.execute("SELECT * FROM external.mydb.users")
-print(result.rows)
-
-# Join with local data
-result = db.execute("""
+// Join with local data
+result, _ = e.Execute(`
     SELECT o.id, u.name 
     FROM local.orders o 
     JOIN external.customers.users u ON o.user_id = u.id
-""")
+`)
 
-# Sync latest changes
-db.execute("SYNC SHARE external")
+// Sync latest changes
+e.Execute("SYNC SHARE external")
 ```
 
 ## Architecture

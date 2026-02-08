@@ -6,7 +6,7 @@ A Git-backed SQL database engine written in Go. Every transaction is a Git commi
 - 🌿 **Git Branching** – Experiment in branches, merge when ready  
 - ⏪ **Time Travel** – Restore any table to any previous state
 - 🔗 **Remote Sync** – Push/pull to GitHub, GitLab, or any Git remote
-- 🐍 **Python Support** – Native driver for Python applications
+- 📡 **Shared Databases** – Query and JOIN across external repositories
 
 ## Quick Start
 
@@ -17,38 +17,30 @@ A Git-backed SQL database engine written in Go. Every transaction is a Git commi
     go install github.com/nickyhof/CommitDB/v2/cmd/cli@latest
     
     # Run with in-memory storage
-    commitdb-cli
+    commitdb
     
     # Run with file persistence
-    commitdb-cli -baseDir=/path/to/data
-    ```
-
-=== "Docker"
-
-    ```bash
-    docker run -p 3306:3306 ghcr.io/nickyhof/commitdb:latest
+    commitdb -baseDir=/path/to/data
     ```
 
 === "Go Library"
 
     ```go
-    import "github.com/nickyhof/CommitDB/v2/internal/ops"
+    import (
+        commitdb "github.com/nickyhof/CommitDB/v2"
+        "github.com/nickyhof/CommitDB/v2/core"
+        "github.com/nickyhof/CommitDB/v2/persistence"
+    )
     
-    engine := op.NewEngine(op.FileMode, "/path/to/data")
-    engine.Query("CREATE DATABASE myapp")
-    engine.Query("CREATE TABLE myapp.users (id INT, name STRING)")
-    engine.Query("INSERT INTO myapp.users (id, name) VALUES (1, 'Alice')")
-    result, _ := engine.Query("SELECT * FROM myapp.users")
-    ```
-
-=== "Python"
-
-    ```python
-    from commitdb import CommitDB
+    p, _ := persistence.NewFilePersistence("./mydata", nil)
+    instance := commitdb.Open(&p)
+    e := instance.Engine(core.Identity{Name: "Alice", Email: "alice@example.com"})
     
-    db = CommitDB('localhost', 3306)
-    db.connect()
-    db.execute("SELECT * FROM myapp.users")
+    e.Execute("CREATE DATABASE myapp")
+    e.Execute("CREATE TABLE myapp.users (id INT, name STRING)")
+    e.Execute("INSERT INTO myapp.users VALUES (1, 'Alice')")
+    result, _ := e.Execute("SELECT * FROM myapp.users")
+    result.Display()
     ```
 
 ## Features
@@ -66,9 +58,7 @@ A Git-backed SQL database engine written in Go. Every transaction is a Git commi
 ## Documentation
 
 - [Quick Start](quickstart.md) – Get running in 5 minutes
-- [CLI & Server Reference](cli-server.md) – Command-line options and usage
 - [SQL Reference](sql-reference.md) – Full SQL syntax
 - [Branching & Merging](branching.md) – Version control features
 - [Shared Databases](shared-databases.md) – Cross-database queries
-- [Python Client](python-client.md) – Python client library
 - [Go API](go-api.md) – Embedding in Go applications
