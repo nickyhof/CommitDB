@@ -101,12 +101,12 @@ case engine.CommitResult:
 
 ## Thread Safety
 
-The engine is thread-safe. Each connection should create its own engine instance from the shared persistence:
+The persistence layer is protected by a read/write lock, so multiple engine instances can safely share the same persistence. Each goroutine should create its own engine:
 
 ```go
 instance := commitdb.Open(&p)
 
-// Safe for concurrent use - each goroutine gets its own engine
+// Each goroutine gets its own engine with its own identity
 go func() {
     e := instance.Engine(core.Identity{Name: "Worker1", Email: "w1@example.com"})
     result, _ := e.Execute("SELECT * FROM myapp.users")

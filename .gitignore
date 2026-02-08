@@ -1,16 +1,5 @@
 # Build binaries
-commitdb-cli
-commitdb-server
-
-# Python
-__pycache__/
-*.pyc
-*.egg-info/
-dist/
-build/
-
-# Rust
-clients/rust/target/
+commitdb
 
 # Test coverage
 coverage.out
