@@ -1,4 +1,4 @@
-.PHONY: all build test test-race test-cover bench bench-json bench-report perf perf-report soak clean run-server run-cli fmt lint vet deps help
+.PHONY: all build test test-race test-cover bench bench-json bench-report perf perf-report soak clean run-cli fmt lint vet deps help
 
 # Go parameters
 GOCMD=go
@@ -21,7 +21,7 @@ help:
 	@echo "Usage: make [target]"
 	@echo ""
 	@echo "Build:"
-	@echo "  build          Build CLI and server binaries"
+	@echo "  build          Build CLI binary"
 	@echo "  clean          Remove build artifacts"
 	@echo ""
 	@echo "Test:"
@@ -36,7 +36,6 @@ help:
 	@echo "  soak           Run soak test (long-running)"
 	@echo ""
 	@echo "Development:"
-	@echo "  run-server     Run the server (default port 3306)"
 	@echo "  run-cli        Run the CLI"
 	@echo "  fmt            Format code"
 	@echo "  vet            Run go vet"
@@ -44,15 +43,10 @@ help:
 	@echo "  deps           Download dependencies"
 	@echo ""
 
-# Build CLI and Server
+# Build CLI
 build:
 	@mkdir -p $(DIST)
-	$(GOBUILD) -o $(DIST)/commitdb-cli ./cmd/cli
-	$(GOBUILD) -o $(DIST)/commitdb-server ./cmd/server
-
-# Run server
-run-server:
-	$(GORUN) ./cmd/server
+	$(GOBUILD) -o $(DIST)/commitdb ./cmd/cli
 
 # Run CLI
 run-cli:
@@ -126,11 +120,9 @@ deps:
 	$(GOCMD) mod download
 	$(GOCMD) mod tidy
 
-
-
 # Clean build artifacts
 clean:
 	rm -rf $(DIST)
-	rm -f commitdb-cli commitdb-server
+	rm -f commitdb
 	rm -f coverage.out coverage.html
 	rm -f benchmark_results.json

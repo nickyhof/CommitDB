@@ -27,92 +27,56 @@ var Version = "dev"
 
 // CLI holds the CLI state
 type CLI struct {
-	engine      *engine.Engine // embedded mode
-	client      *ServerClient  // server mode
+	engine      *engine.Engine
 	history     []string
 	historyFile string
 	database    string // current database context
-	serverMode  bool
 }
 
 func main() {
-	// Embedded mode flags
 	baseDir := flag.String("baseDir", "", "Base directory for the database")
 	gitUrl := flag.String("gitUrl", "", "Git URL for the database")
 	sqlFile := flag.String("sqlFile", "", "SQL file to execute (non-interactive)")
 	userName := flag.String("name", "CommitDB", "User name for Git commits")
 	userEmail := flag.String("email", "cli@commitdb.local", "User email for Git commits")
 
-	// Server mode flags
-	server := flag.String("server", "", "Server address (e.g., localhost:3306)")
-	useTLS := flag.Bool("tls", false, "Enable TLS encryption")
-	token := flag.String("token", "", "JWT token for authentication")
-
 	flag.Parse()
 
 	printBanner()
 
-	var cli *CLI
+	var Instance commitdb.Instance
 
-	// Server mode
-	if *server != "" {
-		fmt.Printf("%sConnecting to server: %s%s\n", SuccessColor, *server, ResetColor)
-		if *useTLS {
-			fmt.Printf("%sTLS: enabled%s\n", SuccessColor, ResetColor)
-		}
-
-		client := NewServerClient(*server, *useTLS, *token)
-		if err := client.Connect(); err != nil {
+	if *baseDir == "" {
+		fmt.Printf("%sUsing memory persistence%s\n", SuccessColor, ResetColor)
+		p, err := persistence.NewMemoryPersistence()
+		if err != nil {
 			fmt.Printf("%sError: %v%s\n", ErrorColor, err, ResetColor)
 			return
 		}
-		defer client.Close()
-
-		fmt.Printf("%s✓ Connected%s\n", SuccessColor, ResetColor)
-
-		cli = &CLI{
-			client:      client,
-			history:     make([]string, 0),
-			historyFile: getHistoryPath(),
-			serverMode:  true,
-		}
+		Instance = *commitdb.Open(&p)
 	} else {
-		// Embedded mode
-		var Instance commitdb.Instance
-
-		if *baseDir == "" {
-			fmt.Printf("%sUsing memory persistence%s\n", SuccessColor, ResetColor)
-			p, err := persistence.NewMemoryPersistence()
-			if err != nil {
-				fmt.Printf("%sError: %v%s\n", ErrorColor, err, ResetColor)
-				return
-			}
-			Instance = *commitdb.Open(&p)
-		} else {
-			fmt.Printf("%sUsing file persistence: %s%s\n", SuccessColor, *baseDir, ResetColor)
-			var gitUrlPtr *string
-			if *gitUrl != "" {
-				gitUrlPtr = gitUrl
-			}
-			p, err := persistence.NewFilePersistence(*baseDir, gitUrlPtr)
-			if err != nil {
-				fmt.Printf("%sError: %v%s\n", ErrorColor, err, ResetColor)
-				return
-			}
-			Instance = *commitdb.Open(&p)
+		fmt.Printf("%sUsing file persistence: %s%s\n", SuccessColor, *baseDir, ResetColor)
+		var gitUrlPtr *string
+		if *gitUrl != "" {
+			gitUrlPtr = gitUrl
 		}
-
-		e := Instance.Engine(core.Identity{
-			Name:  *userName,
-			Email: *userEmail,
-		})
-
-		cli = &CLI{
-			engine:      e,
-			history:     make([]string, 0),
-			historyFile: getHistoryPath(),
-			serverMode:  false,
+		p, err := persistence.NewFilePersistence(*baseDir, gitUrlPtr)
+		if err != nil {
+			fmt.Printf("%sError: %v%s\n", ErrorColor, err, ResetColor)
+			return
 		}
+		Instance = *commitdb.Open(&p)
+	}
+
+	e := Instance.Engine(core.Identity{
+		Name:  *userName,
+		Email: *userEmail,
+	})
+
+	cli := &CLI{
+		engine:      e,
+		history:     make([]string, 0),
+		historyFile: getHistoryPath(),
 	}
 
 	cli.loadHistory()
@@ -203,20 +167,11 @@ func (cli *CLI) run() {
 		cli.addToHistory(sql + ";")
 
 		// Execute SQL
-		if cli.serverMode {
-			result, err := cli.client.Execute(sql)
-			if err != nil {
-				fmt.Printf("%s✗ Error: %v%s\n", ErrorColor, err, ResetColor)
-			} else {
-				result.Display()
-			}
+		result, err := cli.engine.Execute(sql)
+		if err != nil {
+			fmt.Printf("%s✗ Error: %v%s\n", ErrorColor, err, ResetColor)
 		} else {
-			result, err := cli.engine.Execute(sql)
-			if err != nil {
-				fmt.Printf("%s✗ Error: %v%s\n", ErrorColor, err, ResetColor)
-			} else {
-				result.Display()
-			}
+			result.Display()
 		}
 	}
 }
