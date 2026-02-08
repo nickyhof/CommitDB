@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nickyhof/CommitDB/v2"
+	commitdb "github.com/nickyhof/CommitDB/v2"
 	"github.com/nickyhof/CommitDB/v2/core"
 	"github.com/nickyhof/CommitDB/v2/engine"
 	"github.com/nickyhof/CommitDB/v2/persistence"
@@ -24,8 +24,7 @@ func setupTestCLI(t *testing.T) *CLI {
 	})
 
 	return &CLI{
-		engine:  engine,
-		history: make([]string, 0),
+		engine: engine,
 	}
 }
 
@@ -92,36 +91,6 @@ func TestCLICreateTableAndInsert(t *testing.T) {
 	}
 }
 
-func TestCLIAddToHistory(t *testing.T) {
-	cli := setupTestCLI(t)
-
-	cli.addToHistory("SELECT * FROM test")
-	cli.addToHistory("INSERT INTO test VALUES (1)")
-
-	if len(cli.history) != 2 {
-		t.Errorf("Expected 2 history entries, got %d", len(cli.history))
-	}
-
-	// Adding duplicate of last command should not increase count
-	cli.addToHistory("INSERT INTO test VALUES (1)")
-	if len(cli.history) != 2 {
-		t.Errorf("Expected 2 history entries after duplicate, got %d", len(cli.history))
-	}
-}
-
-func TestCLIHistoryLimit(t *testing.T) {
-	cli := setupTestCLI(t)
-
-	// Add more than 1000 entries
-	for i := 0; i < 1100; i++ {
-		cli.addToHistory("SELECT " + string(rune(i)))
-	}
-
-	if len(cli.history) > 1000 {
-		t.Errorf("Expected history to be limited to 1000, got %d", len(cli.history))
-	}
-}
-
 func TestCLIGetPrompt(t *testing.T) {
 	cli := setupTestCLI(t)
 
@@ -154,7 +123,7 @@ func TestCLIHandleCommand(t *testing.T) {
 	}{
 		{".help", true},
 		{".version", true},
-		{".history", true},
+
 		{".databases", true},
 		{".unknown", true}, // Unknown commands are still handled (with error message)
 	}

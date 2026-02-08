@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	commitdb "github.com/nickyhof/CommitDB/v2"
@@ -27,16 +26,15 @@ var Version = "dev"
 
 // CLI holds the CLI state
 type CLI struct {
-	engine      *engine.Engine
-	history     []string
-	historyFile string
-	database    string // current database context
+	engine   *engine.Engine
+	database string // current database context
 }
 
 func main() {
 	baseDir := flag.String("baseDir", "", "Base directory for the database")
 	gitUrl := flag.String("gitUrl", "", "Git URL for the database")
-	sqlFile := flag.String("sqlFile", "", "SQL file to execute (non-interactive)")
+	sqlFile := flag.String("f", "", "SQL file to execute (non-interactive)")
+	sqlExec := flag.String("e", "", "Execute SQL statement and exit")
 	userName := flag.String("name", "CommitDB", "User name for Git commits")
 	userEmail := flag.String("email", "cli@commitdb.local", "User email for Git commits")
 
@@ -74,12 +72,19 @@ func main() {
 	})
 
 	cli := &CLI{
-		engine:      e,
-		history:     make([]string, 0),
-		historyFile: getHistoryPath(),
+		engine: e,
 	}
 
-	cli.loadHistory()
+	// Execute SQL directly if provided
+	if *sqlExec != "" {
+		result, err := cli.engine.Execute(*sqlExec)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		result.Display()
+		return
+	}
 
 	// Execute SQL file if provided
 	if *sqlFile != "" {
@@ -163,9 +168,6 @@ func (cli *CLI) run() {
 			continue
 		}
 
-		// Add to history
-		cli.addToHistory(sql + ";")
-
 		// Execute SQL
 		result, err := cli.engine.Execute(sql)
 		if err != nil {
@@ -200,7 +202,6 @@ func (cli *CLI) handleCommand(input string) bool {
 	switch parts[0] {
 	case ".quit", ".exit", ".q":
 		fmt.Printf("%sGoodbye!%s\n", SuccessColor, ResetColor)
-		cli.saveHistory()
 		os.Exit(0)
 
 	case ".help", ".h", ".?":
@@ -228,9 +229,6 @@ func (cli *CLI) handleCommand(input string) bool {
 
 	case ".clear", ".cls":
 		fmt.Print("\033[H\033[2J")
-
-	case ".history":
-		cli.printHistory()
 
 	case ".version":
 		fmt.Printf("CommitDB version %s\n", Version)
@@ -261,7 +259,6 @@ func (cli *CLI) printHelp() {
 	fmt.Println("  .tables <db>     List tables in a database")
 	fmt.Println("  .use <db>        Set the current database context")
 	fmt.Println("  .import <file>   Execute SQL statements from a file")
-	fmt.Println("  .history         Show command history")
 	fmt.Println("  .clear           Clear the screen")
 	fmt.Println("  .version         Show version info")
 	fmt.Println()
@@ -299,82 +296,6 @@ func (cli *CLI) showTables(database string) {
 		return
 	}
 	result.Display()
-}
-
-func (cli *CLI) addToHistory(cmd string) {
-	// Don't add duplicates of the last command
-	if len(cli.history) > 0 && cli.history[len(cli.history)-1] == cmd {
-		return
-	}
-	cli.history = append(cli.history, cmd)
-
-	// Limit history size
-	if len(cli.history) > 1000 {
-		cli.history = cli.history[len(cli.history)-1000:]
-	}
-}
-
-func (cli *CLI) printHistory() {
-	if len(cli.history) == 0 {
-		fmt.Println("No command history")
-		return
-	}
-
-	start := 0
-	if len(cli.history) > 20 {
-		start = len(cli.history) - 20
-	}
-
-	for i := start; i < len(cli.history); i++ {
-		fmt.Printf("  %3d  %s\n", i+1, cli.history[i])
-	}
-}
-
-func getHistoryPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, ".commitdb_history")
-}
-
-func (cli *CLI) loadHistory() {
-	if cli.historyFile == "" {
-		return
-	}
-
-	file, err := os.Open(cli.historyFile)
-	if err != nil {
-		return
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		cli.history = append(cli.history, scanner.Text())
-	}
-}
-
-func (cli *CLI) saveHistory() {
-	if cli.historyFile == "" {
-		return
-	}
-
-	file, err := os.Create(cli.historyFile)
-	if err != nil {
-		return
-	}
-	defer file.Close()
-
-	// Save last 1000 entries
-	start := 0
-	if len(cli.history) > 1000 {
-		start = len(cli.history) - 1000
-	}
-
-	for i := start; i < len(cli.history); i++ {
-		_, _ = file.WriteString(cli.history[i] + "\n")
-	}
 }
 
 // importFile reads and executes SQL statements from a file
