@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.0] - 2026-02-08
+
+### Removed
+
+#### TCP Server
+- Removed `cmd/server/` — TCP server with JSON protocol, TLS encryption, JWT/JWKS authentication, and connection management
+- CommitDB is now an **embedded Go library + CLI tool only**
+
+#### Python Client
+- Removed `clients/python/` — Python driver (`commitdb` PyPI package), Ibis backend, and all tests
+- Removed PyPI publish step from release workflow
+
+#### Rust Client
+- Removed `clients/rust/` — Rust driver (`commitdb` crate), TLS support, and all tests
+- Removed crates.io publish step from release workflow
+
+#### Docker Image
+- Removed `Dockerfile` and Docker publish step from release workflow
+
+### Changed
+
+- CLI is now embedded-only (removed `--server`, `--tls`, `--token` flags)
+- CI pipeline simplified to Go tests and CLI build only
+- Release workflow produces only CLI binaries (renamed from `commitdb-cli-*` to `commitdb-*`)
+- Updated README with Go library and CLI examples (removed Python/Rust examples)
+- Updated documentation: installation, architecture, and mkdocs navigation
+
 ## [2.10.0] - 2026-02-06
 
 ### Performance
