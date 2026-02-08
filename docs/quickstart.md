@@ -19,8 +19,21 @@ go install github.com/nickyhof/CommitDB/v2/cmd/cli@latest
 === "File-Backed"
 
     ```bash
-    commitdb -baseDir=/path/to/data
+    commitdb -dir=/path/to/data
     ```
+
+## Scripting
+
+```bash
+# Execute SQL directly
+commitdb -e "SHOW DATABASES"
+
+# Execute a SQL file
+commitdb -dir ./mydata -f setup.sql
+
+# Pipe via stdin
+echo "SELECT * FROM mydb.users;" | commitdb -dir ./mydata
+```
 
 ## Create and Query
 

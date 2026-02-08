@@ -20,7 +20,7 @@ A Git-backed SQL database engine written in Go. Every transaction is a Git commi
     commitdb
     
     # Run with file persistence
-    commitdb -baseDir=/path/to/data
+    commitdb -dir=/path/to/data
     ```
 
 === "Go Library"

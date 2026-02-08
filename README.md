@@ -65,7 +65,16 @@ go install github.com/nickyhof/CommitDB/v2/cmd/cli@latest
 commitdb
 
 # File-backed mode (creates a Git repo)
-commitdb -baseDir ./mydata
+commitdb -dir ./mydata
+
+# Execute SQL directly
+commitdb -e "CREATE DATABASE myapp"
+
+# Execute a SQL file
+commitdb -dir ./mydata -f setup.sql
+
+# Pipe SQL via stdin
+echo "SHOW DATABASES;" | commitdb -dir ./mydata
 ```
 
 ## Documentation

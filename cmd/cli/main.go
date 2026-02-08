@@ -31,8 +31,8 @@ type CLI struct {
 }
 
 func main() {
-	baseDir := flag.String("baseDir", "", "Base directory for the database")
-	gitUrl := flag.String("gitUrl", "", "Git URL for the database")
+	baseDir := flag.String("dir", "", "Base directory for the database")
+	gitUrl := flag.String("url", "", "Git URL for the database")
 	sqlFile := flag.String("f", "", "SQL file to execute (non-interactive)")
 	sqlExec := flag.String("e", "", "Execute SQL statement and exit")
 	userName := flag.String("name", "CommitDB", "User name for Git commits")
@@ -40,28 +40,37 @@ func main() {
 
 	flag.Parse()
 
-	printBanner()
+	// Determine if we're in interactive mode
+	interactive := *sqlExec == "" && *sqlFile == "" && isTerminal()
+
+	if interactive {
+		printBanner()
+	}
 
 	var Instance commitdb.Instance
 
 	if *baseDir == "" {
-		fmt.Printf("%sUsing memory persistence%s\n", SuccessColor, ResetColor)
+		if interactive {
+			fmt.Printf("%sUsing memory persistence%s\n", SuccessColor, ResetColor)
+		}
 		p, err := persistence.NewMemoryPersistence()
 		if err != nil {
-			fmt.Printf("%sError: %v%s\n", ErrorColor, err, ResetColor)
-			return
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
 		}
 		Instance = *commitdb.Open(&p)
 	} else {
-		fmt.Printf("%sUsing file persistence: %s%s\n", SuccessColor, *baseDir, ResetColor)
+		if interactive {
+			fmt.Printf("%sUsing file persistence: %s%s\n", SuccessColor, *baseDir, ResetColor)
+		}
 		var gitUrlPtr *string
 		if *gitUrl != "" {
 			gitUrlPtr = gitUrl
 		}
 		p, err := persistence.NewFilePersistence(*baseDir, gitUrlPtr)
 		if err != nil {
-			fmt.Printf("%sError: %v%s\n", ErrorColor, err, ResetColor)
-			return
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
 		}
 		Instance = *commitdb.Open(&p)
 	}
@@ -90,13 +99,28 @@ func main() {
 	if *sqlFile != "" {
 		err := cli.importFile(*sqlFile)
 		if err != nil {
-			fmt.Printf("%sError importing file: %v%s\n", ErrorColor, err, ResetColor)
+			fmt.Fprintf(os.Stderr, "Error importing file: %v\n", err)
 			os.Exit(1)
 		}
 		return
 	}
 
+	// Read from stdin pipe if not a terminal
+	if !interactive {
+		cli.runPipe()
+		return
+	}
+
 	cli.run()
+}
+
+// isTerminal returns true if stdin is a terminal (not piped)
+func isTerminal() bool {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return true
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
 }
 
 func printBanner() {
@@ -175,6 +199,31 @@ func (cli *CLI) run() {
 		} else {
 			result.Display()
 		}
+	}
+}
+
+// runPipe reads SQL from stdin (piped input) and executes each statement
+func (cli *CLI) runPipe() {
+	var buf strings.Builder
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		buf.WriteString(scanner.Text())
+		buf.WriteString("\n")
+	}
+
+	statements := splitStatements(buf.String())
+	for _, stmt := range statements {
+		stmt = strings.TrimSpace(stmt)
+		if stmt == "" || strings.HasPrefix(stmt, "--") {
+			continue
+		}
+
+		result, err := cli.engine.Execute(stmt)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		result.Display()
 	}
 }
 
