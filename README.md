@@ -1,7 +1,7 @@
 # CommitDB
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/nickyhof/CommitDB/v2.svg)](https://pkg.go.dev/github.com/nickyhof/CommitDB/v2)
-[![Go Report Card](https://goreportcard.com/badge/github.com/nickyhof/CommitDB/v2)](https://goreportcard.com/report/github.com/nickyhof/CommitDB/v2)
+[![Go Report Card](https://goreportcard.com/badge/github.com/nickyhof/CommitDB)](https://goreportcard.com/report/github.com/nickyhof/CommitDB)
 
 A Git-backed SQL database engine. Every transaction is a Git commit.
 
