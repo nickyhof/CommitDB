@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.0] - 2026-02-08
+
+### Changed
+
+#### Code Quality
+- Removed all staticcheck suppressions (`ST1000`, `ST1003`, `ST1016`, `ST1021`, `QF*`) from `golangci-lint` config
+- Renamed identifiers to follow Go conventions: `Id` → `ID`, `Json*` → `JSON*`, `Ssh` → `SSH`, `gitUrl` → `gitURL`
+- Standardized method receiver names to `p` across all `Persistence` methods
+- Converted if/else chains on token types to switch statements in SQL parser
+- Simplified embedded field access in engine package (`engine.Persistence.X()` → `engine.X()`)
+- Fixed package doc comments to use canonical `// Package ...` format
+- Upgraded CI to `golangci-lint-action@v7` for golangci-lint v2 config support
+
 ## [2.12.0] - 2026-02-08
 
 ### Changed
@@ -672,6 +685,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests run with both memory and file persistence modes
 - Persistence reopen tests for data durability verification
 
+[2.13.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.13.0
 [2.10.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.10.0
 [2.9.1]: https://github.com/nickyhof/CommitDB/releases/tag/v2.9.1
 [2.9.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.9.0
