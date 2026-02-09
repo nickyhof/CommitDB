@@ -8,7 +8,7 @@ func (engine *Engine) executeBeginStatement() (CommitResult, error) {
 	startTime := time.Now()
 
 	// Create a new transaction builder
-	_, err := engine.Persistence.BeginTransaction()
+	_, err := engine.BeginTransaction()
 	if err != nil {
 		return CommitResult{}, err
 	}
@@ -26,7 +26,7 @@ func (engine *Engine) executeCommitStatement() (CommitResult, error) {
 	// For now, this is a no-op since each statement auto-commits
 
 	return CommitResult{
-		Transaction:     engine.Persistence.LatestTransaction(),
+		Transaction:     engine.LatestTransaction(),
 		ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:    1,
 	}, nil

@@ -133,7 +133,7 @@ func (engine *Engine) executeDropDatabaseStatement(statement sql.DropDatabaseSta
 func (engine *Engine) executeShowDatabasesStatement(statement sql.ShowDatabasesStatement) (QueryResult, error) {
 	startTime := time.Now()
 
-	databases := engine.Persistence.ListDatabases()
+	databases := engine.ListDatabases()
 
 	// Convert to row-per-database format
 	data := make([][]string, len(databases))
@@ -142,7 +142,7 @@ func (engine *Engine) executeShowDatabasesStatement(statement sql.ShowDatabasesS
 	}
 
 	return QueryResult{
-		Transaction:     engine.Persistence.LatestTransaction(),
+		Transaction:     engine.LatestTransaction(),
 		Columns:         []string{"name"},
 		Data:            data,
 		RecordsRead:     len(databases),
@@ -154,7 +154,7 @@ func (engine *Engine) executeShowDatabasesStatement(statement sql.ShowDatabasesS
 func (engine *Engine) executeShowTablesStatement(statement sql.ShowTablesStatement) (QueryResult, error) {
 	startTime := time.Now()
 
-	tables := engine.Persistence.ListTables(statement.Database)
+	tables := engine.ListTables(statement.Database)
 
 	// Convert to row-per-table format
 	data := make([][]string, len(tables))
@@ -163,7 +163,7 @@ func (engine *Engine) executeShowTablesStatement(statement sql.ShowTablesStateme
 	}
 
 	return QueryResult{
-		Transaction:     engine.Persistence.LatestTransaction(),
+		Transaction:     engine.LatestTransaction(),
 		Columns:         []string{"name"},
 		Data:            data,
 		RecordsRead:     len(tables),
@@ -215,7 +215,7 @@ func (engine *Engine) executeCreateIndexStatement(statement sql.CreateIndexState
 	}
 
 	return CommitResult{
-		Transaction:     engine.Persistence.LatestTransaction(),
+		Transaction:     engine.LatestTransaction(),
 		ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:    opCount,
 	}, nil
@@ -235,7 +235,7 @@ func (engine *Engine) executeDropIndexStatement(statement sql.DropIndexStatement
 	}
 
 	return CommitResult{
-		Transaction:     engine.Persistence.LatestTransaction(),
+		Transaction:     engine.LatestTransaction(),
 		ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:    opCount,
 	}, nil
@@ -246,7 +246,7 @@ func (engine *Engine) executeAlterTableStatement(statement sql.AlterTableStateme
 	opCount := 1
 
 	// Get existing table
-	table, err := engine.Persistence.GetTable(statement.Database, statement.Table)
+	table, err := engine.GetTable(statement.Database, statement.Table)
 	if err != nil {
 		return CommitResult{}, fmt.Errorf("table %s.%s does not exist", statement.Database, statement.Table)
 	}
@@ -326,7 +326,7 @@ func (engine *Engine) executeAlterTableStatement(statement sql.AlterTableStateme
 
 	// Update table schema
 	message := fmt.Sprintf("ALTER TABLE %s.%s %s COLUMN %s", statement.Database, statement.Table, statement.Action, statement.ColumnName)
-	txn, err := engine.Persistence.UpdateTable(*table, engine.Identity, message)
+	txn, err := engine.UpdateTable(*table, engine.Identity, message)
 	if err != nil {
 		return CommitResult{}, err
 	}
@@ -404,7 +404,7 @@ func (engine *Engine) executeDescribeStatement(statement sql.DescribeStatement) 
 	}
 
 	return QueryResult{
-		Transaction:     engine.Persistence.LatestTransaction(),
+		Transaction:     engine.LatestTransaction(),
 		Columns:         []string{"Column", "Type", "PrimaryKey"},
 		Data:            data,
 		RecordsRead:     len(data),
@@ -440,7 +440,7 @@ func (engine *Engine) executeShowIndexesStatement(statement sql.ShowIndexesState
 	}
 
 	return QueryResult{
-		Transaction:     engine.Persistence.LatestTransaction(),
+		Transaction:     engine.LatestTransaction(),
 		Columns:         []string{"Name", "Column", "Unique"},
 		Data:            data,
 		RecordsRead:     len(data),

@@ -20,7 +20,7 @@ func (engine *Engine) executeSelectStatement(statement sql.SelectStatement) (Que
 	// Determine which persistence to use - share or local
 	p := engine.Persistence
 	if statement.Share != "" {
-		sharePersistence, err := engine.Persistence.OpenSharePersistence(statement.Share)
+		sharePersistence, err := engine.OpenSharePersistence(statement.Share)
 		if err != nil {
 			return QueryResult{}, fmt.Errorf("failed to access share '%s': %w", statement.Share, err)
 		}
@@ -149,7 +149,7 @@ func (engine *Engine) executeSelectStatement(statement sql.SelectStatement) (Que
 		// Check if this is a share table (3-level naming)
 		if join.Share != "" {
 			// Open share persistence
-			sharePersistence, shareErr := engine.Persistence.OpenSharePersistence(join.Share)
+			sharePersistence, shareErr := engine.OpenSharePersistence(join.Share)
 			if shareErr != nil {
 				return QueryResult{}, fmt.Errorf("failed to open share '%s' for join: %w", join.Share, shareErr)
 			}
@@ -212,7 +212,7 @@ func (engine *Engine) executeSelectStatement(statement sql.SelectStatement) (Que
 	if statement.CountAll {
 		countResult := [][]string{{strconv.Itoa(len(results))}}
 		return QueryResult{
-			Transaction:     engine.Persistence.LatestTransaction(),
+			Transaction:     engine.LatestTransaction(),
 			Columns:         []string{"COUNT(*)"},
 			Data:            countResult,
 			RecordsRead:     len(results),
@@ -223,12 +223,12 @@ func (engine *Engine) executeSelectStatement(statement sql.SelectStatement) (Que
 
 	// Handle aggregate functions (SUM, AVG, MIN, MAX)
 	if len(statement.Aggregates) > 0 {
-		return executeAggregates(results, statement, engine.Persistence.LatestTransaction(), startTime, rowsScanned)
+		return executeAggregates(results, statement, engine.LatestTransaction(), startTime, rowsScanned)
 	}
 
 	// Handle string functions
 	if len(statement.Functions) > 0 {
-		return executeStringFunctions(results, statement, engine.Persistence.LatestTransaction(), startTime, rowsScanned)
+		return executeStringFunctions(results, statement, engine.LatestTransaction(), startTime, rowsScanned)
 	}
 
 	// Apply OFFSET
@@ -255,7 +255,7 @@ func (engine *Engine) executeSelectStatement(statement sql.SelectStatement) (Que
 	}
 
 	return QueryResult{
-		Transaction:     engine.Persistence.LatestTransaction(),
+		Transaction:     engine.LatestTransaction(),
 		Columns:         columns,
 		Data:            outputData,
 		RecordsRead:     len(outputData),

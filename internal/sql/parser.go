@@ -956,28 +956,30 @@ func ParseSelect(parser *Parser) (Statement, error) {
 			token = parser.lexer.NextToken()
 			if token.Type == Comma { //nolint:gocritic // complex multi-branch token dispatch
 				token = parser.lexer.NextToken()
-				if token.Type == Identifier { //nolint:gocritic // complex mixed column/aggregate parsing
+				switch token.Type {
+				case Identifier:
 					selectStatement.Columns = append(selectStatement.Columns, token.Value)
-				} else if token.Type == Count {
+				case Count:
 					// Parse COUNT(*) or COUNT(col)
 					token = parser.lexer.NextToken()
 					if token.Type != ParenOpen {
 						return nil, errors.New("expected '(' after COUNT")
 					}
 					token = parser.lexer.NextToken()
-					if token.Type == Wildcard { //nolint:gocritic // only 3 cases with mixed side effects
+					switch token.Type {
+					case Wildcard:
 						selectStatement.Aggregates = append(selectStatement.Aggregates, AggregateExpr{Function: "COUNT", Column: "*"})
 						token = parser.lexer.NextToken()
-					} else if token.Type == Identifier {
+					case Identifier:
 						selectStatement.Aggregates = append(selectStatement.Aggregates, AggregateExpr{Function: "COUNT", Column: token.Value})
 						token = parser.lexer.NextToken()
-					} else {
+					default:
 						return nil, errors.New("expected '*' or column name in COUNT()")
 					}
 					if token.Type != ParenClose {
 						return nil, errors.New("expected ')' after COUNT argument")
 					}
-				} else if token.Type == Sum || token.Type == Avg || token.Type == Min || token.Type == Max {
+				case Sum, Avg, Min, Max:
 					// Parse SUM/AVG/MIN/MAX(col)
 					funcName := ""
 					switch token.Type {
@@ -1004,7 +1006,7 @@ func ParseSelect(parser *Parser) (Statement, error) {
 						return nil, errors.New("expected ')' after column name")
 					}
 					selectStatement.Aggregates = append(selectStatement.Aggregates, AggregateExpr{Function: funcName, Column: col})
-				} else {
+				default:
 					return nil, errors.New("expected identifier or aggregate function after comma")
 				}
 			} else if token.Type == From {
@@ -1075,7 +1077,8 @@ func ParseSelect(parser *Parser) (Statement, error) {
 		joinClause := JoinClause{Type: "INNER"} // Default
 
 		// Determine join type
-		if token.Type == Left {
+		switch token.Type {
+		case Left:
 			joinClause.Type = "LEFT"
 			token = parser.lexer.NextToken()
 			if token.Type == Outer {
@@ -1084,7 +1087,7 @@ func ParseSelect(parser *Parser) (Statement, error) {
 			if token.Type != Join {
 				return nil, errors.New("expected JOIN after LEFT")
 			}
-		} else if token.Type == Right {
+		case Right:
 			joinClause.Type = "RIGHT"
 			token = parser.lexer.NextToken()
 			if token.Type == Outer {
@@ -1093,7 +1096,7 @@ func ParseSelect(parser *Parser) (Statement, error) {
 			if token.Type != Join {
 				return nil, errors.New("expected JOIN after RIGHT")
 			}
-		} else if token.Type == Inner {
+		case Inner:
 			joinClause.Type = "INNER"
 			token = parser.lexer.NextToken()
 			if token.Type != Join {
@@ -1297,15 +1300,16 @@ func ParseWhere(parser *Parser) (WhereClause, error) {
 		// Handle IS NULL / IS NOT NULL
 		if token.Type == Is {
 			token = parser.lexer.NextToken()
-			if token.Type == Not {
+			switch token.Type {
+			case Not:
 				token = parser.lexer.NextToken()
 				if token.Type != Null {
 					return whereClause, errors.New("expected NULL after IS NOT")
 				}
 				operator = IsNotNullOperator
-			} else if token.Type == Null {
+			case Null:
 				operator = IsNullOperator
-			} else {
+			default:
 				return whereClause, errors.New("expected NULL or NOT after IS")
 			}
 			right = ""
@@ -2454,7 +2458,8 @@ func ParseCopy(parser *Parser) (Statement, error) {
 
 	// Next token determines direction: identifier = INTO_TABLE, string = INTO_FILE
 	token = parser.lexer.NextToken()
-	if token.Type == String {
+	switch token.Type {
+	case String:
 		// COPY INTO 'file.csv' FROM table (export)
 		stmt.Direction = "INTO_FILE"
 		stmt.FilePath = token.Value
@@ -2479,7 +2484,7 @@ func ParseCopy(parser *Parser) (Statement, error) {
 			return nil, errors.New("expected database.table after FROM")
 		}
 
-	} else if token.Type == Identifier || token.Type == DatabaseIdentifier {
+	case Identifier, DatabaseIdentifier:
 		// COPY INTO table FROM 'file.csv' (import)
 		stmt.Direction = "INTO_TABLE"
 		if token.Type == DatabaseIdentifier {
@@ -2506,7 +2511,7 @@ func ParseCopy(parser *Parser) (Statement, error) {
 			return nil, errors.New("expected file path (string) after FROM")
 		}
 		stmt.FilePath = token.Value
-	} else {
+	default:
 		return nil, errors.New("expected table name or file path after INTO")
 	}
 
