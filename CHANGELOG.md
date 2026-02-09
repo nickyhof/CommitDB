@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.0] - 2026-02-08
+
+### Changed
+
+#### CLI Improvements
+- Renamed package from `cmd/cli/` to `cmd/commitdb/` — `go install` now produces a `commitdb` binary
+- Renamed flags: `-baseDir` → `-dir`, `-gitUrl` → `-url`, `-sqlFile` → `-f`
+- Added `-e` flag for direct SQL execution (`commitdb -e "SHOW DATABASES"`)
+- Added stdin pipe support (`echo "SHOW DATABASES;" | commitdb`)
+- Banner and color output suppressed in non-interactive mode (`-e`, `-f`, piped stdin)
+
+#### Documentation
+- Updated all `go install` paths to `cmd/commitdb`
+- Added scripting examples (`-e`, `-f`, stdin pipe) to README and quickstart
+- Replaced Python client example with Go library example in shared-databases docs
+- Reframed thread safety section in Go API docs for embedded library use
+- Updated architecture docs to reflect `cmd/commitdb/` rename
+
+### Removed
+
+- Removed CLI command history feature (`.history` command, `~/.commitdb_history` file)
+- Removed stale `.gitignore` entries for `commitdb-server`, Python, and Rust artifacts
+- Removed remaining Python client, Docker, and server references from documentation
+
 ## [2.11.0] - 2026-02-08
 
 ### Removed
