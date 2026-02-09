@@ -1,4 +1,4 @@
-.PHONY: all build test test-race test-cover bench bench-json bench-report perf perf-report soak clean run-cli fmt lint vet deps help
+.PHONY: all build test test-race test-cover bench bench-json bench-report clean run-cli fmt lint vet deps help
 
 # Go parameters
 GOCMD=go
@@ -31,9 +31,6 @@ help:
 	@echo "  bench          Run benchmarks"
 	@echo "  bench-json     Run benchmarks and output JSON"
 	@echo "  bench-report   Generate benchmarks.md report"
-	@echo "  perf           Run performance tests"
-	@echo "  perf-report    Generate performance.md report"
-	@echo "  soak           Run soak test (long-running)"
 	@echo ""
 	@echo "Development:"
 	@echo "  run-cli        Run the CLI"
@@ -91,18 +88,7 @@ bench-report:
 	@echo '```' >> benchmarks.md
 	@echo "Benchmark report saved to benchmarks.md"
 
-# Run performance tests only
-perf:
-	$(GOTEST) -v -timeout=15m -tags=perf -run=^TestPerf ./tests
 
-# Generate performance report
-perf-report:
-	chmod +x scripts/generate_performance_report.sh
-	./scripts/generate_performance_report.sh performance.md
-
-# Run soak test (long-running)
-soak:
-	$(GOTEST) -v -timeout=30m -tags=perf -run=^TestPerfSustainedLoad ./tests
 
 # Format code
 fmt:

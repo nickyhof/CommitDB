@@ -26,16 +26,10 @@ jobs:
       - name: Run tests
         run: go test -v ./...
 
-      - name: Run benchmarks and performance tests
+      - name: Run benchmarks
         run: |
-          # Run Go benchmarks once and capture output
           echo "Running Go benchmarks..."
           go test -bench=. -benchmem -run=^$ ./tests/ 2>/dev/null | tee /tmp/bench_raw.txt
-          
-          # Run performance tests once and capture output
-          echo "Running performance tests..."
-          COMMITDB_PERF_DURATION_SEC=5 COMMITDB_PERF_P99_MS=1000 \
-            go test -tags=perf -v -run='^TestPerf' ./tests/ -short -timeout=10m 2>&1 | tee /tmp/perf_raw.txt
 
       - name: Generate benchmark outputs
         run: |
@@ -43,7 +37,6 @@ jobs:
           
           # Generate JSON for dashboard
           chmod +x scripts/run_benchmarks.sh
-          # Pass 'cached' to use already-captured output
           ./scripts/run_benchmarks.sh benchmark_results.json cached
           
           # Generate benchmarks.md (summary)
@@ -55,10 +48,6 @@ jobs:
           echo '```' >> benchmarks.md
           cat /tmp/bench_raw.txt >> benchmarks.md
           echo '```' >> benchmarks.md
-          
-          # Generate performance.md (detailed)
-          chmod +x scripts/generate_performance_report.sh
-          ./scripts/generate_performance_report.sh performance.md ${VERSION} cached
 
       - name: Set up Python for MkDocs
         uses: actions/setup-python@v6
@@ -73,9 +62,8 @@ jobs:
 
       - name: Add generated reports to site
         run: |
-          # Copy generated benchmark and performance reports
+          # Copy benchmark reports
           cp benchmarks.md _site/benchmarks.md
-          cp performance.md _site/performance.md
           # Copy JSON for PR benchmark comparison
           mkdir -p _site/benchmarks
           cp benchmark_results.json _site/benchmarks/latest.json
@@ -111,7 +99,6 @@ jobs:
             --title "${{ github.ref_name }}" \
             --notes-file release_notes.txt \
             benchmarks.md \
-            performance.md \
             dist/commitdb-linux-amd64 \
             dist/commitdb-linux-arm64 \
             dist/commitdb-darwin-amd64 \

@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.2] - 2026-02-08
+
+### Removed
+- Removed TCP server performance test suite (`tests/performance_test.go`)
+- Removed `scripts/generate_performance_report.sh`
+- Removed `make perf`, `make perf-report`, `make soak` targets
+- Removed performance test run and `performance.md` from release workflow
+
 ## [2.13.1] - 2026-02-08
 
 ### Added
@@ -696,6 +704,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests run with both memory and file persistence modes
 - Persistence reopen tests for data durability verification
 
+[2.13.2]: https://github.com/nickyhof/CommitDB/releases/tag/v2.13.2
 [2.13.1]: https://github.com/nickyhof/CommitDB/releases/tag/v2.13.1
 [2.13.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.13.0
 [2.12.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.12.0

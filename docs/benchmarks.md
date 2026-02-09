@@ -11,12 +11,6 @@ make bench-json
 
 # Generate benchmark report (benchmarks.md)
 make bench-report
-
-# Run performance tests
-make perf
-
-# Generate performance report (performance.md)
-make perf-report
 ```
 
 ## Benchmark Tests
@@ -33,4 +27,3 @@ make perf-report
 ## View Results
 
 - **[Latest Benchmarks](../benchmarks.md)** — Go micro-benchmark results
-- **[Performance Report](../performance.md)** — Performance test results
