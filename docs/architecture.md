@@ -5,7 +5,7 @@
 ```
 CommitDB/
 ├── cmd/
-│   └── commitdb/          # Interactive CLI application
+│   └── commitdb/         # Interactive CLI application
 ├── core/                 # Public: Domain types (Identity)
 ├── engine/               # Public: SQL execution engine
 │   ├── engine.go         # Core router
@@ -46,22 +46,22 @@ Git-backed storage with:
 ## Data Flow
 
 ```
-┌─────────────┐     ┌─────────────┐
-│  Go App /   │────▶│   Engine    │
-│    CLI      │◀────│   (op/)     │
-└─────────────┘     └─────────────┘
+┌─────────────┐     ┌──────────────┐
+│  Go App /   │────▶│    Engine    │
+│    CLI      │◀────│  (engine/)   │
+└─────────────┘     └──────────────┘
                           │
                           ▼
-                    ┌─────────────┐
-                    │ Persistence │
-                    │    (ps/)    │
-                    └─────────────┘
+                    ┌──────────────┐
+                    │ Persistence  │
+                    │(persistence/)│
+                    └──────────────┘
                           │
                           ▼
-                    ┌─────────────┐
-                    │ Git Repo    │
-                    │ (.git/)     │
-                    └─────────────┘
+                    ┌──────────────┐
+                    │  Git Repo    │
+                    │   (.git/)    │
+                    └──────────────┘
 ```
 
 ## Git Storage Format
@@ -96,7 +96,7 @@ Table format:
 
 ## Performance Optimizations
 
-### Git Plumbing API (v2.0.0)
+### Git Plumbing API (v2.0.0+)
 
 Bypasses high-level Git commands for ~10x faster writes:
 

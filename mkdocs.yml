@@ -33,17 +33,17 @@ theme:
 nav:
   - Home: index.md
   - Getting Started:
-    - Installation: installation.md
     - Quick Start: quickstart.md
-  - SQL Reference: sql-reference.md
-  - Version Control:
+    - Installation: installation.md
+  - Guides:
+    - SQL Reference: sql-reference.md
     - Branching & Merging: branching.md
     - Remote Operations: remote-operations.md
     - Shared Databases: shared-databases.md
   - Go API: go-api.md
-  - Performance:
+  - Internals:
+    - Architecture: architecture.md
     - Benchmarks: benchmarks.md
-  - Architecture: architecture.md
 
 markdown_extensions:
   - pymdownx.highlight:

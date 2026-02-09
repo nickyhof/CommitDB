@@ -57,8 +57,16 @@ A Git-backed SQL database engine written in Go. Every transaction is a Git commi
 
 ## Documentation
 
+**Getting Started**
+
 - [Quick Start](quickstart.md) – Get running in 5 minutes
+- [Installation](installation.md) – Build from source or `go install`
+
+**Guides**
+
 - [SQL Reference](sql-reference.md) – Full SQL syntax
 - [Branching & Merging](branching.md) – Version control features
-- [Shared Databases](shared-databases.md) – Cross-database queries
+- [Remote Operations](remote-operations.md) – Push, pull, and sync
+- [Shared Databases](shared-databases.md) – Cross-repository queries
 - [Go API](go-api.md) – Embedding in Go applications
+
