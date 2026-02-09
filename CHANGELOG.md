@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.1] - 2026-02-08
+
+### Added
+
+#### Documentation
+- Added `CONTRIBUTING.md` with development setup, code standards, and PR guidelines
+- Added [Storage Format Specification](docs/storage-format.md) documenting the Git repository layout contract
+
+### Fixed
+- Fixed Go Report Card badge URL in README (removed `/v2` module path suffix)
+
 ## [2.13.0] - 2026-02-08
 
 ### Changed
@@ -685,9 +696,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests run with both memory and file persistence modes
 - Persistence reopen tests for data durability verification
 
+[2.13.1]: https://github.com/nickyhof/CommitDB/releases/tag/v2.13.1
 [2.13.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.13.0
+[2.12.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.12.0
+[2.11.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.11.0
 [2.10.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.10.0
-[2.9.1]: https://github.com/nickyhof/CommitDB/releases/tag/v2.9.1
 [2.9.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.9.0
 [2.8.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.8.0
 [2.7.0]: https://github.com/nickyhof/CommitDB/releases/tag/v2.7.0

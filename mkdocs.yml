@@ -43,6 +43,7 @@ nav:
   - Go API: go-api.md
   - Internals:
     - Architecture: architecture.md
+    - Storage Format: storage-format.md
     - Benchmarks: benchmarks.md
 
 markdown_extensions:

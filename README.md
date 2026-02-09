@@ -84,6 +84,7 @@ echo "SHOW DATABASES;" | commitdb -dir ./mydata
 - [Branching & Merging](https://nickyhof.github.io/CommitDB/branching/)
 - [Shared Databases](https://nickyhof.github.io/CommitDB/shared-databases/)
 - [Go API](https://nickyhof.github.io/CommitDB/go-api/)
+- [Storage Format](https://nickyhof.github.io/CommitDB/storage-format/)
 - [Benchmarks](https://nickyhof.github.io/CommitDB/benchmarks/)
 
 ## Performance
