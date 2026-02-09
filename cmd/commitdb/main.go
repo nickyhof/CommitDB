@@ -257,11 +257,12 @@ func (cli *CLI) handleCommand(input string) bool {
 		cli.printHelp()
 
 	case ".tables":
-		if len(parts) > 1 {
+		switch {
+		case len(parts) > 1:
 			cli.showTables(parts[1])
-		} else if cli.database != "" {
+		case cli.database != "":
 			cli.showTables(cli.database)
-		} else {
+		default:
 			fmt.Printf("%s✗ Usage: .tables <database>%s\n", ErrorColor, ResetColor)
 		}
 

@@ -9,8 +9,8 @@ import (
 
 	"github.com/nickyhof/CommitDB/v2/core"
 	"github.com/nickyhof/CommitDB/v2/internal/ops"
-	"github.com/nickyhof/CommitDB/v2/persistence"
 	"github.com/nickyhof/CommitDB/v2/internal/sql"
+	"github.com/nickyhof/CommitDB/v2/persistence"
 )
 
 func (engine *Engine) executeCreateTableStatement(statement sql.CreateTableStatement) (CommitResult, error) {
@@ -425,7 +425,7 @@ func (engine *Engine) executeShowIndexesStatement(statement sql.ShowIndexesState
 
 	// Load indexes
 	indexManager := persistence.NewIndexManager(engine.Persistence, engine.Identity)
-	indexManager.LoadIndexes(statement.Database, statement.Table, tableOp.Table.Columns)
+	_ = indexManager.LoadIndexes(statement.Database, statement.Table, tableOp.Table.Columns)
 
 	// Build index info
 	var data [][]string

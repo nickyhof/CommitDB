@@ -17,15 +17,14 @@ import (
 func (engine *Engine) executeCopyStatement(statement sql.CopyStatement) (Result, error) {
 	startTime := time.Now()
 
-	if statement.Direction == "INTO_TABLE" {
-		// Import: Read CSV file into table
+	switch statement.Direction {
+	case "INTO_TABLE":
 		return engine.executeCopyIntoTable(statement, startTime)
-	} else if statement.Direction == "INTO_FILE" {
-		// Export: Write table to CSV file
+	case "INTO_FILE":
 		return engine.executeCopyIntoFile(statement, startTime)
+	default:
+		return nil, errors.New("invalid COPY direction")
 	}
-
-	return nil, errors.New("invalid COPY direction")
 }
 
 // executeCopyIntoTable imports CSV data into a table
@@ -45,7 +44,7 @@ func (engine *Engine) executeCopyIntoTable(statement sql.CopyStatement, startTim
 	if err != nil {
 		return nil, fmt.Errorf("failed to open source: %v", err)
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	// Create CSV reader
 	csvReader := csv.NewReader(reader)
@@ -167,7 +166,7 @@ func (engine *Engine) executeCopyIntoFile(statement sql.CopyStatement, startTime
 	if err != nil {
 		return nil, fmt.Errorf("failed to open destination: %v", err)
 	}
-	defer writer.Close()
+	defer func() { _ = writer.Close() }()
 
 	// Create CSV writer
 	csvWriter := csv.NewWriter(writer)

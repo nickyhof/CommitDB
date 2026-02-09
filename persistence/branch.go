@@ -73,7 +73,7 @@ func (p *Persistence) ListBranches() ([]string, error) {
 		return nil, fmt.Errorf("failed to list branches: %w", err)
 	}
 
-	refs.ForEach(func(ref *plumbing.Reference) error {
+	_ = refs.ForEach(func(ref *plumbing.Reference) error {
 		branches = append(branches, ref.Name().Short())
 		return nil
 	})

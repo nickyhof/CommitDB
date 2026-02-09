@@ -98,7 +98,7 @@ func (p *Persistence) findMergeBase(headHash, sourceHash plumbing.Hash) (*object
 	// Find first source ancestor that's also in HEAD ancestors
 	var mergeBase *object.Commit
 	sourceIter := object.NewCommitIterCTime(sourceCommit, nil, nil)
-	err = sourceIter.ForEach(func(c *object.Commit) error {
+	_ = sourceIter.ForEach(func(c *object.Commit) error {
 		if headAncestors[c.Hash] {
 			mergeBase = c
 			return fmt.Errorf("found") // break iteration
@@ -244,19 +244,20 @@ func mergeRecordMaps(
 			headUnchanged := inBase && string(baseVal) == string(headVal)
 			sourceUnchanged := inBase && string(baseVal) == string(sourceVal)
 
-			if headUnchanged && sourceUnchanged {
+			switch {
+			case headUnchanged && sourceUnchanged:
 				// Neither changed
 				merged[key] = headVal
-			} else if headUnchanged {
+			case headUnchanged:
 				// Only SOURCE changed
 				merged[key] = sourceVal
-			} else if sourceUnchanged {
+			case sourceUnchanged:
 				// Only HEAD changed
 				merged[key] = headVal
-			} else if string(headVal) == string(sourceVal) {
+			case string(headVal) == string(sourceVal):
 				// Both changed to same value
 				merged[key] = headVal
-			} else {
+			default:
 				// Both changed to different values - LWW
 				if sourceTime.After(headTime) {
 					merged[key] = sourceVal
@@ -325,7 +326,7 @@ func (p *Persistence) performRowLevelMerge(
 			for key := range headRecords {
 				if _, inMerged := merged[key]; !inMerged {
 					path := fmt.Sprintf("%s/%s/%s.json", dbName, tableName, key)
-					wt.Filesystem.Remove(path)
+					_ = wt.Filesystem.Remove(path)
 				}
 			}
 		}
@@ -367,12 +368,21 @@ func (p *Persistence) createMergeCommit(
 	// Check if there are changes to commit
 	if status.IsClean() {
 		// No changes, just update branch to source
-		headRef, _ := p.repo.Head()
+		headRef, err := p.repo.Head()
+		if err != nil {
+			return Transaction{}, fmt.Errorf("failed to get HEAD: %w", err)
+		}
 		if headRef.Name().IsBranch() {
 			newRef := plumbing.NewHashReference(headRef.Name(), sourceHash)
-			p.repo.Storer.SetReference(newRef)
+			err = p.repo.Storer.SetReference(newRef)
+			if err != nil {
+				return Transaction{}, fmt.Errorf("failed to set reference: %w", err)
+			}
 		}
-		commit, _ := p.repo.CommitObject(sourceHash)
+		commit, err := p.repo.CommitObject(sourceHash)
+		if err != nil {
+			return Transaction{}, fmt.Errorf("failed to get commit object: %w", err)
+		}
 		return Transaction{
 			Id:   sourceHash.String(),
 			When: commit.Committer.When,
@@ -508,7 +518,7 @@ func (p *Persistence) MergeWithOptions(source string, identity core.Identity, op
 
 		if headRef.Name().IsBranch() {
 			newRef := plumbing.NewHashReference(headRef.Name(), sourceRef.Hash())
-			p.repo.Storer.SetReference(newRef)
+			_ = p.repo.Storer.SetReference(newRef)
 		}
 
 		return MergeResult{
@@ -646,16 +656,17 @@ func mergeRecordMapsManual(
 			headUnchanged := inBase && string(baseVal) == string(headVal)
 			sourceUnchanged := inBase && string(baseVal) == string(sourceVal)
 
-			if headUnchanged && sourceUnchanged {
+			switch {
+			case headUnchanged && sourceUnchanged:
 				merged[key] = headVal
 				continue
-			} else if headUnchanged {
+			case headUnchanged:
 				merged[key] = sourceVal
 				continue
-			} else if sourceUnchanged {
+			case sourceUnchanged:
 				merged[key] = headVal
 				continue
-			} else if string(headVal) == string(sourceVal) {
+			case string(headVal) == string(sourceVal):
 				merged[key] = headVal
 				continue
 			}

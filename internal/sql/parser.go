@@ -605,7 +605,7 @@ func ParseSelect(parser *Parser) (Statement, error) {
 	}
 
 	// Check for COUNT(*)
-	if token.Type == Count {
+	if token.Type == Count { //nolint:gocritic // complex aggregate parsing; switch impractical
 		token = parser.lexer.NextToken()
 		if token.Type != ParenOpen {
 			return nil, errors.New("expected '(' after COUNT")
@@ -954,9 +954,9 @@ func ParseSelect(parser *Parser) (Statement, error) {
 		selectStatement.Columns = append(selectStatement.Columns, token.Value)
 		for {
 			token = parser.lexer.NextToken()
-			if token.Type == Comma {
+			if token.Type == Comma { //nolint:gocritic // complex multi-branch token dispatch
 				token = parser.lexer.NextToken()
-				if token.Type == Identifier {
+				if token.Type == Identifier { //nolint:gocritic // complex mixed column/aggregate parsing
 					selectStatement.Columns = append(selectStatement.Columns, token.Value)
 				} else if token.Type == Count {
 					// Parse COUNT(*) or COUNT(col)
@@ -965,7 +965,7 @@ func ParseSelect(parser *Parser) (Statement, error) {
 						return nil, errors.New("expected '(' after COUNT")
 					}
 					token = parser.lexer.NextToken()
-					if token.Type == Wildcard {
+					if token.Type == Wildcard { //nolint:gocritic // only 3 cases with mixed side effects
 						selectStatement.Aggregates = append(selectStatement.Aggregates, AggregateExpr{Function: "COUNT", Column: "*"})
 						token = parser.lexer.NextToken()
 					} else if token.Type == Identifier {
@@ -1027,24 +1027,27 @@ func ParseSelect(parser *Parser) (Statement, error) {
 	}
 
 	parts := strings.Split(token.Value, ".")
-	if len(parts) == 3 {
+	switch len(parts) {
+	case 3:
 		// share.database.table format
 		selectStatement.Share = parts[0]
 		selectStatement.Database = parts[1]
 		selectStatement.Table = parts[2]
-	} else if len(parts) == 2 {
+	case 2:
 		selectStatement.Database = parts[0]
 		selectStatement.Table = parts[1]
-	} else {
+	default:
 		return nil, errors.New("expected database.table or share.database.table format")
 	}
 
 	token = parser.lexer.NextToken()
 
 	// Check for table alias or AS OF clause for time-travel
-	if token.Type == As {
+	switch token.Type {
+	case As:
 		token = parser.lexer.NextToken()
-		if token.Type == Of {
+		switch token.Type {
+		case Of:
 			// AS OF 'transaction' - time-travel query
 			token = parser.lexer.NextToken()
 			if token.Type != String {
@@ -1052,16 +1055,16 @@ func ParseSelect(parser *Parser) (Statement, error) {
 			}
 			selectStatement.AsOf = token.Value
 			token = parser.lexer.NextToken()
-		} else if token.Type == Identifier {
+		case Identifier:
 			// Regular alias: AS alias_name
 			selectStatement.TableAlias = token.Value
 			token = parser.lexer.NextToken()
-		} else if token.Type == String {
+		case String:
 			return nil, errors.New("expected OF after AS for time-travel, or identifier for alias")
-		} else {
+		default:
 			return nil, errors.New("expected alias or OF after AS")
 		}
-	} else if token.Type == Identifier {
+	case Identifier:
 		// Alias without AS keyword
 		selectStatement.TableAlias = token.Value
 		token = parser.lexer.NextToken()
@@ -1217,10 +1220,11 @@ func ParseSelect(parser *Parser) (Statement, error) {
 
 			// Check for ASC/DESC
 			peek := parser.lexer.PeekToken()
-			if peek.Type == Asc {
+			switch peek.Type {
+			case Asc:
 				parser.lexer.NextToken()
 				orderByClause.Descending = false
-			} else if peek.Type == Desc {
+			case Desc:
 				parser.lexer.NextToken()
 				orderByClause.Descending = true
 			}

@@ -63,18 +63,19 @@ func (engine *Engine) executeInsertStatement(statement sql.InsertStatement) (Com
 
 			// Validate DATE/TIMESTAMP format
 			colType := columnTypes[column]
-			if colType == core.DateType {
+			switch colType {
+			case core.DateType:
 				if _, err := parseDateTime(value); err != nil {
 					// Try common date formats
 					if !isValidDateFormat(value) {
 						return CommitResult{}, fmt.Errorf("invalid DATE format for column %s: %s (expected YYYY-MM-DD)", column, value)
 					}
 				}
-			} else if colType == core.TimestampType {
+			case core.TimestampType:
 				if _, err := parseDateTime(value); err != nil {
 					return CommitResult{}, fmt.Errorf("invalid TIMESTAMP format for column %s: %s (expected YYYY-MM-DD HH:MM:SS)", column, value)
 				}
-			} else if colType == core.JsonType {
+			case core.JsonType:
 				// Validate JSON format
 				var js interface{}
 				if err := json.Unmarshal([]byte(value), &js); err != nil {

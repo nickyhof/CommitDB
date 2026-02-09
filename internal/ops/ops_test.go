@@ -284,7 +284,7 @@ func TestScan(t *testing.T) {
 	op.Put("2", []byte(`{"id":"2","name":"Bob"}`), testIdentity)
 
 	count := 0
-	for _, _ = range op.Scan() {
+	for range op.Scan() {
 		count++
 	}
 	if count != 2 {
@@ -360,7 +360,7 @@ func TestScanWithFilter(t *testing.T) {
 
 	// Filter to only key "2"
 	count := 0
-	for _, _ = range op.ScanWithFilter(func(key string, value []byte) bool {
+	for range op.ScanWithFilter(func(key string, value []byte) bool {
 		return key == "2"
 	}) {
 		count++

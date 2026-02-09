@@ -83,11 +83,6 @@ func evaluateCondition(row map[string]string, cond sql.WhereCondition) bool {
 	return result
 }
 
-// compareValues delegates to the shared compare package
-func compareValues(a, b string) int {
-	return compare.Values(a, b)
-}
-
 // applyDistinct removes duplicate rows based on selected columns
 func applyDistinct(results []map[string]string, columns []string) []map[string]string {
 	seen := make(map[string]bool)

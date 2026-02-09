@@ -51,7 +51,7 @@ func (persistence *Persistence) TransactionsSince(asof time.Time) []Transaction 
 		Since: &asof,
 	})
 
-	cIter.ForEach(func(c *object.Commit) error {
+	_ = cIter.ForEach(func(c *object.Commit) error {
 		transactions = append(transactions, Transaction{
 			Id:   c.Hash.String(),
 			When: c.Committer.When,
@@ -69,7 +69,7 @@ func (persistence *Persistence) TransactionsFrom(asof string) []Transaction {
 		From: plumbing.NewHash(asof),
 	})
 
-	cIter.ForEach(func(c *object.Commit) error {
+	_ = cIter.ForEach(func(c *object.Commit) error {
 		transactions = append(transactions, Transaction{
 			Id:   c.Hash.String(),
 			When: c.Committer.When,
@@ -102,7 +102,7 @@ func (persistence *Persistence) ListTransactions(limit int) ([]Transaction, erro
 	}
 
 	count := 0
-	cIter.ForEach(func(c *object.Commit) error {
+	_ = cIter.ForEach(func(c *object.Commit) error {
 		if count >= limit {
 			return fmt.Errorf("stop")
 		}

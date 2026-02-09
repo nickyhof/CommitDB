@@ -91,7 +91,7 @@ func (engine *Engine) executeSelectStatement(statement sql.SelectStatement) (Que
 		// Try index lookup if PK fast path wasn't used
 		if !indexUsed {
 			indexManager := persistence.NewIndexManager(p, engine.Identity)
-			indexManager.LoadIndexes(statement.Database, statement.Table, tableOp.Table.Columns)
+			_ = indexManager.LoadIndexes(statement.Database, statement.Table, tableOp.Table.Columns)
 
 			for _, cond := range statement.Where.Conditions {
 				if cond.Operator == sql.EqualsOperator {
@@ -436,9 +436,7 @@ func executeStringFunctions(results []map[string]string, statement sql.SelectSta
 		}
 	}
 	// Add any regular columns
-	for _, col := range statement.Columns {
-		outputColumns = append(outputColumns, col)
-	}
+	outputColumns = append(outputColumns, statement.Columns...)
 
 	// Evaluate functions for each row
 	outputData := make([][]string, len(results))

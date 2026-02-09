@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/nickyhof/CommitDB/v2/core"
-	"github.com/nickyhof/CommitDB/v2/persistence"
 	"github.com/nickyhof/CommitDB/v2/internal/sql"
+	"github.com/nickyhof/CommitDB/v2/persistence"
 )
 
 func (engine *Engine) executeCreateViewStatement(statement sql.CreateViewStatement) (Result, error) {
@@ -66,7 +66,7 @@ func (engine *Engine) executeDropViewStatement(statement sql.DropViewStatement) 
 
 	// If materialized, also delete cached data
 	if view.Materialized {
-		engine.Persistence.DeleteMaterializedViewData(statement.Database, statement.ViewName, engine.Identity)
+		_, _ = engine.Persistence.DeleteMaterializedViewData(statement.Database, statement.ViewName, engine.Identity)
 	}
 
 	return CommitResult{
@@ -122,7 +122,7 @@ func (engine *Engine) executeRefreshViewStatement(statement sql.RefreshViewState
 
 	// Update view timestamp
 	view.UpdatedAt = time.Now()
-	engine.Persistence.UpdateView(*view, engine.Identity)
+	_, _ = engine.Persistence.UpdateView(*view, engine.Identity)
 
 	return CommitResult{
 		ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),

@@ -52,22 +52,23 @@ func (result CommitResult) Type() ResultType {
 
 // formatDuration formats a duration in human-readable form
 func formatDuration(secs float64) string {
-	if secs < 0.001 {
+	switch {
+	case secs < 0.001:
 		return "<1ms"
-	} else if secs < 0.01 {
+	case secs < 0.01:
 		return fmt.Sprintf("%dms", int(secs*1000))
-	} else if secs < 1 {
+	case secs < 1:
 		ms := secs * 1000
 		if ms < 10 {
 			return fmt.Sprintf("%.1fms", ms)
 		}
 		return fmt.Sprintf("%dms", int(ms))
-	} else if secs < 60 {
+	case secs < 60:
 		if secs < 10 {
 			return fmt.Sprintf("%.1fs", secs)
 		}
 		return fmt.Sprintf("%ds", int(secs))
-	} else {
+	default:
 		mins := int(secs / 60)
 		remainSecs := int(secs) % 60
 		if remainSecs == 0 {
@@ -98,11 +99,12 @@ func (result QueryResult) Display() {
 	var throughputStr string
 	if result.ExecutionTimeMs > 0 && result.ExecutionOps > 0 {
 		ops := float64(result.ExecutionOps) / (result.ExecutionTimeMs / 1000)
-		if ops >= 1000000 {
+		switch {
+		case ops >= 1000000:
 			throughputStr = fmt.Sprintf(", %.1fM ops/s", ops/1000000)
-		} else if ops >= 1000 {
+		case ops >= 1000:
 			throughputStr = fmt.Sprintf(", %.1fK ops/s", ops/1000)
-		} else {
+		default:
 			throughputStr = fmt.Sprintf(", %.0f ops/s", ops)
 		}
 	}
@@ -140,11 +142,12 @@ func (result CommitResult) Display() {
 	var throughputStr string
 	if result.ExecutionTimeMs > 0 && result.ExecutionOps > 0 {
 		ops := float64(result.ExecutionOps) / (result.ExecutionTimeMs / 1000)
-		if ops >= 1000000 {
+		switch {
+		case ops >= 1000000:
 			throughputStr = fmt.Sprintf(", %.1fM ops/s", ops/1000000)
-		} else if ops >= 1000 {
+		case ops >= 1000:
 			throughputStr = fmt.Sprintf(", %.1fK ops/s", ops/1000)
-		} else {
+		default:
 			throughputStr = fmt.Sprintf(", %.0f ops/s", ops)
 		}
 	}

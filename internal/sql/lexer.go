@@ -310,7 +310,8 @@ func (lexer *Lexer) NextToken() Token {
 	case '*':
 		token = Token{Type: Wildcard, Value: string(lexer.ch)}
 	default:
-		if isOperator(lexer.ch) {
+		switch {
+		case isOperator(lexer.ch):
 			operator := lexer.readOperator()
 			switch operator {
 			case "=":
@@ -328,7 +329,7 @@ func (lexer *Lexer) NextToken() Token {
 			default:
 				return Token{Type: Unknown, Value: operator}
 			}
-		} else if isDigit(lexer.ch) {
+		case isDigit(lexer.ch):
 			num := lexer.readNumber()
 			// Check if it's a float
 			if lexer.ch == '.' {
@@ -337,7 +338,7 @@ func (lexer *Lexer) NextToken() Token {
 				return Token{Type: Float, Value: num + "." + decimal}
 			}
 			return Token{Type: Int, Value: num}
-		} else if isAlphaNumeric(lexer.ch) {
+		case isAlphaNumeric(lexer.ch):
 			literal := lexer.readIdentifier()
 			if literal == "PRIMARY" {
 				// Check for KEY
@@ -352,7 +353,7 @@ func (lexer *Lexer) NextToken() Token {
 				tokenType := lookupIdentifier(literal)
 				return Token{Type: tokenType, Value: literal}
 			}
-		} else {
+		default:
 			token = Token{Type: Unknown, Value: string(lexer.ch)}
 		}
 	}

@@ -1,13 +1,13 @@
-// Package op provides high-level operations for working with CommitDB databases and tables.
+// Package ops provides high-level operations for working with CommitDB databases and tables.
 //
-// The op package sits between the SQL engine (db/) and the persistence layer (ps/),
+// The ops package sits between the SQL engine (engine/) and the persistence layer (persistence/),
 // providing convenient abstractions for common database operations.
 //
 // # DatabaseOp
 //
 // DatabaseOp wraps database-level operations:
 //
-//	dbOp, err := op.GetDatabase("mydb", persistence)
+//	dbOp, err := ops.GetDatabase("mydb", persistence)
 //	tables := dbOp.TableNames()           // List all tables
 //	dbOp.DropDatabase(identity)           // Drop database
 //	dbOp.Restore(transaction)             // Restore to point in time
@@ -16,7 +16,7 @@
 //
 // TableOp wraps table-level operations for CRUD and scanning:
 //
-//	tableOp, err := op.GetTable("mydb", "users", persistence)
+//	tableOp, err := ops.GetTable("mydb", "users", persistence)
 //
 //	// Read operations
 //	value, exists := tableOp.Get("key")           // Get raw bytes
@@ -44,13 +44,13 @@
 //
 // The layering is:
 //
-//	SQL Parser (sql/)
+//	SQL Parser (internal/sql/)
 //	     ↓
-//	SQL Engine (db/)
+//	SQL Engine (engine/)
 //	     ↓
-//	Operations (op/)     ← This package
+//	Operations (internal/ops/)   ← This package
 //	     ↓
-//	Persistence (ps/)
+//	Persistence (persistence/)
 //	     ↓
 //	Git Storage (go-git)
 package ops

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/nickyhof/CommitDB/v2/persistence"
 	"github.com/nickyhof/CommitDB/v2/internal/sql"
+	"github.com/nickyhof/CommitDB/v2/persistence"
 )
 
 func (engine *Engine) executeCreateBranchStatement(statement sql.CreateBranchStatement) (CommitResult, error) {
