@@ -109,6 +109,10 @@ CommitDB vs [DuckDB](https://duckdb.org/) (1,000 rows, Apple M1 Pro):
 > - **Full audit trail** - Query any table at any point in history
 > - **Standard Git tooling** - Push/pull to GitHub, diff changes, bisect bugs
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
+
 ## License
 
 Apache 2.0
