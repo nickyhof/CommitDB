@@ -5,7 +5,7 @@
 ```
 CommitDB/
 ├── cmd/
-│   └── cli/              # Interactive CLI application
+│   └── commitdb/          # Interactive CLI application
 ├── core/                 # Public: Domain types (Identity)
 ├── engine/               # Public: SQL execution engine
 │   ├── engine.go         # Core router

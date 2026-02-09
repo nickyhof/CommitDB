@@ -44,7 +44,7 @@ jobs:
         run: go build -v ./...
 
       - name: Build CLI
-        run: go build -v -o commitdb ./cmd/cli
+        run: go build -v -o commitdb ./cmd/commitdb
 
   benchmark-pr:
     name: Benchmark (PR)
