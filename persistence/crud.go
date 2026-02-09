@@ -9,7 +9,7 @@ import (
 	"github.com/nickyhof/CommitDB/v2/core"
 )
 
-func (persistence *Persistence) CreateDatabase(database core.Database, identity core.Identity) (txn Transaction, err error) {
+func (p *Persistence) CreateDatabase(database core.Database, identity core.Identity) (txn Transaction, err error) {
 	path := fmt.Sprintf("%s.database", database.Name)
 
 	dataBytes, err := json.Marshal(database)
@@ -18,13 +18,13 @@ func (persistence *Persistence) CreateDatabase(database core.Database, identity 
 	}
 
 	// Use low-level plumbing API
-	return persistence.WriteFileDirect(path, dataBytes, identity, "Creating database")
+	return p.WriteFileDirect(path, dataBytes, identity, "Creating database")
 }
 
-func (persistence *Persistence) GetDatabase(name string) (d *core.Database, err error) {
+func (p *Persistence) GetDatabase(name string) (d *core.Database, err error) {
 	path := fmt.Sprintf("%s.database", name)
 
-	data, err := persistence.ReadFileDirect(path)
+	data, err := p.ReadFileDirect(path)
 	if err != nil {
 		return nil, fmt.Errorf("database %s does not exist: %w", name, err)
 	}
@@ -36,17 +36,17 @@ func (persistence *Persistence) GetDatabase(name string) (d *core.Database, err 
 	return d, nil
 }
 
-func (persistence *Persistence) DropDatabase(name string, identity core.Identity) (txn Transaction, err error) {
+func (p *Persistence) DropDatabase(name string, identity core.Identity) (txn Transaction, err error) {
 	paths := []string{
 		fmt.Sprintf("%s.database", name),
 		name, // Database directory
 	}
 
 	// Use low-level plumbing API
-	return persistence.DeletePathDirect(paths, identity, "Dropping database")
+	return p.DeletePathDirect(paths, identity, "Dropping database")
 }
 
-func (persistence *Persistence) CreateTable(table core.Table, identity core.Identity) (txn Transaction, err error) {
+func (p *Persistence) CreateTable(table core.Table, identity core.Identity) (txn Transaction, err error) {
 	path := fmt.Sprintf("%s/%s.table", table.Database, table.Name)
 
 	dataBytes, err := json.Marshal(table)
@@ -55,13 +55,13 @@ func (persistence *Persistence) CreateTable(table core.Table, identity core.Iden
 	}
 
 	// Use low-level plumbing API
-	return persistence.WriteFileDirect(path, dataBytes, identity, "Creating table")
+	return p.WriteFileDirect(path, dataBytes, identity, "Creating table")
 }
 
-func (persistence *Persistence) GetTable(database string, table string) (t *core.Table, err error) {
+func (p *Persistence) GetTable(database string, table string) (t *core.Table, err error) {
 	path := fmt.Sprintf("%s/%s.table", database, table)
 
-	data, err := persistence.ReadFileDirect(path)
+	data, err := p.ReadFileDirect(path)
 	if err != nil {
 		return nil, fmt.Errorf("table %s.%s does not exist: %w", database, table, err)
 	}
@@ -74,7 +74,7 @@ func (persistence *Persistence) GetTable(database string, table string) (t *core
 }
 
 // UpdateTable updates an existing table's schema
-func (persistence *Persistence) UpdateTable(table core.Table, identity core.Identity, message string) (txn Transaction, err error) {
+func (p *Persistence) UpdateTable(table core.Table, identity core.Identity, message string) (txn Transaction, err error) {
 	path := fmt.Sprintf("%s/%s.table", table.Database, table.Name)
 
 	dataBytes, err := json.Marshal(table)
@@ -83,36 +83,36 @@ func (persistence *Persistence) UpdateTable(table core.Table, identity core.Iden
 	}
 
 	// Use low-level plumbing API
-	return persistence.WriteFileDirect(path, dataBytes, identity, message)
+	return p.WriteFileDirect(path, dataBytes, identity, message)
 }
 
-func (persistence *Persistence) DropTable(database string, table string, identity core.Identity) (txn Transaction, err error) {
+func (p *Persistence) DropTable(database string, table string, identity core.Identity) (txn Transaction, err error) {
 	paths := []string{
 		fmt.Sprintf("%s/%s.table", database, table),
 		fmt.Sprintf("%s/%s", database, table), // Table data directory
 	}
 
 	// Use low-level plumbing API
-	return persistence.DeletePathDirect(paths, identity, "Dropping table")
+	return p.DeletePathDirect(paths, identity, "Dropping table")
 }
 
-func (persistence *Persistence) SaveRecord(database string, table string, records map[string][]byte, identity core.Identity) (txn Transaction, err error) {
+func (p *Persistence) SaveRecord(database string, table string, records map[string][]byte, identity core.Identity) (txn Transaction, err error) {
 	// Use low-level plumbing API for better performance
-	return persistence.SaveRecordDirect(database, table, records, identity)
+	return p.SaveRecordDirect(database, table, records, identity)
 }
 
-func (persistence *Persistence) DeleteRecord(database string, table string, key string, identity core.Identity) (txn Transaction, err error) {
+func (p *Persistence) DeleteRecord(database string, table string, key string, identity core.Identity) (txn Transaction, err error) {
 	// Use low-level plumbing API for better performance
-	return persistence.DeleteRecordDirect(database, table, key, identity)
+	return p.DeleteRecordDirect(database, table, key, identity)
 }
 
-func (persistence *Persistence) GetRecord(database string, table string, key string) (data []byte, exists bool) {
+func (p *Persistence) GetRecord(database string, table string, key string) (data []byte, exists bool) {
 	// Use low-level plumbing API
-	return persistence.GetRecordDirect(database, table, key)
+	return p.GetRecordDirect(database, table, key)
 }
 
-func (persistence *Persistence) ListDatabases() []string {
-	entries, err := persistence.ListEntriesDirect(".")
+func (p *Persistence) ListDatabases() []string {
+	entries, err := p.ListEntriesDirect(".")
 	if err != nil {
 		return nil
 	}
@@ -137,8 +137,8 @@ func (persistence *Persistence) ListDatabases() []string {
 	return databases
 }
 
-func (persistence *Persistence) ListTables(database string) []string {
-	entries, err := persistence.ListEntriesDirect(database)
+func (p *Persistence) ListTables(database string) []string {
+	entries, err := p.ListEntriesDirect(database)
 	if err != nil {
 		return nil
 	}
@@ -153,13 +153,13 @@ func (persistence *Persistence) ListTables(database string) []string {
 	return tables
 }
 
-func (persistence *Persistence) ListRecordKeys(database string, table string) []string {
-	return persistence.ListRecordKeysDirect(database, table)
+func (p *Persistence) ListRecordKeys(database string, table string) []string {
+	return p.ListRecordKeysDirect(database, table)
 }
 
-func (persistence *Persistence) Scan(database string, table string, filterExpr *func(key string, value []byte) bool) iter.Seq2[string, []byte] {
+func (p *Persistence) Scan(database string, table string, filterExpr *func(key string, value []byte) bool) iter.Seq2[string, []byte] {
 	return func(yield func(key string, value []byte) bool) {
-		for key, value := range persistence.ScanDirect(database, table) {
+		for key, value := range p.ScanDirect(database, table) {
 			if filterExpr != nil && !(*filterExpr)(key, value) {
 				continue
 			}
@@ -173,7 +173,7 @@ func (persistence *Persistence) Scan(database string, table string, filterExpr *
 
 // CopyRecords copies all records from source table to destination table in a single atomic transaction.
 // This is memory-efficient: records are streamed row-by-row from source and written to dest without loading all into memory.
-func (persistence *Persistence) CopyRecords(srcDatabase, srcTable, dstDatabase, dstTable string, identity core.Identity) (txn Transaction, err error) {
+func (p *Persistence) CopyRecords(srcDatabase, srcTable, dstDatabase, dstTable string, identity core.Identity) (txn Transaction, err error) {
 	// Use low-level plumbing API for better performance
-	return persistence.CopyRecordsDirect(srcDatabase, srcTable, dstDatabase, dstTable, identity)
+	return p.CopyRecordsDirect(srcDatabase, srcTable, dstDatabase, dstTable, identity)
 }

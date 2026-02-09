@@ -1,4 +1,3 @@
-// SELECT statement execution including aggregates, string/date/JSON functions, and JOINs.
 package engine
 
 import (

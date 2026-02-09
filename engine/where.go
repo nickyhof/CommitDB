@@ -1,4 +1,3 @@
-// WHERE clause evaluation, value comparison, LIKE matching, DISTINCT, and ORDER BY sorting.
 package engine
 
 import (

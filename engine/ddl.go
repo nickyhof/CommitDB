@@ -1,4 +1,3 @@
-// DDL (Data Definition Language) operations: CREATE/DROP TABLE/DATABASE, ALTER TABLE, indexes.
 package engine
 
 import (
@@ -358,7 +357,7 @@ func parseColumnType(typeName string) core.ColumnType {
 	case "TIMESTAMP", "DATETIME":
 		return core.TimestampType
 	case "JSON":
-		return core.JsonType
+		return core.JSONType
 	default:
 		return core.StringType
 	}
@@ -392,7 +391,7 @@ func (engine *Engine) executeDescribeStatement(statement sql.DescribeStatement) 
 			typeStr = "DATE"
 		case core.TimestampType:
 			typeStr = "TIMESTAMP"
-		case core.JsonType:
+		case core.JSONType:
 			typeStr = "JSON"
 		}
 

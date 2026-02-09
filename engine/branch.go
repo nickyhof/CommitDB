@@ -1,4 +1,3 @@
-// Git branching operations: CREATE BRANCH, CHECKOUT, MERGE, and conflict resolution.
 package engine
 
 import (
@@ -13,8 +12,8 @@ func (engine *Engine) executeCreateBranchStatement(statement sql.CreateBranchSta
 	startTime := time.Now()
 
 	var from *persistence.Transaction
-	if statement.FromTxnId != "" {
-		from = &persistence.Transaction{Id: statement.FromTxnId}
+	if statement.FromTxnID != "" {
+		from = &persistence.Transaction{ID: statement.FromTxnID}
 	}
 
 	err := engine.Persistence.Branch(statement.Name, from)
@@ -125,7 +124,7 @@ func (engine *Engine) executeShowTransactionsStatement(statement sql.ShowTransac
 	data := make([][]string, len(transactions))
 	for i, txn := range transactions {
 		data[i] = []string{
-			txn.Id,
+			txn.ID,
 			txn.When.Format(time.RFC3339),
 			txn.Message,
 			txn.Author,

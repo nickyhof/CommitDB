@@ -1,4 +1,3 @@
-// View operations: CREATE/DROP VIEW, materialized views, and time-travel queries.
 package engine
 
 import (
@@ -312,7 +311,7 @@ func (engine *Engine) executeTimeTravelSelect(statement sql.SelectStatement, p *
 		Data:            data,
 		RecordsRead:     len(results),
 		ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
-		Transaction:     persistence.Transaction{Id: transactionID},
+		Transaction:     persistence.Transaction{ID: transactionID},
 	}, nil
 }
 
@@ -372,6 +371,6 @@ func (engine *Engine) executeTimeTravelMaterializedView(view *core.View, transac
 		Data:            data,
 		RecordsRead:     len(data),
 		ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
-		Transaction:     persistence.Transaction{Id: transactionID},
+		Transaction:     persistence.Transaction{ID: transactionID},
 	}, nil
 }

@@ -67,8 +67,8 @@ p, _ := persistence.NewMemoryPersistence()
 p, _ := persistence.NewFilePersistence("/path/to/data", nil)
 
 // Clone from remote Git repository
-gitUrl := "https://github.com/user/repo.git"
-p, _ := persistence.NewFilePersistence("/path/to/data", &gitUrl)
+gitURL := "https://github.com/user/repo.git"
+p, _ := persistence.NewFilePersistence("/path/to/data", &gitURL)
 ```
 
 ## Working with Results

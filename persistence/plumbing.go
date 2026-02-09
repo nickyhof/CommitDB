@@ -400,7 +400,7 @@ func (p *Persistence) createCommitDirect(treeHash plumbing.Hash, identity core.I
 	}
 
 	return Transaction{
-		Id:   commitHash.String(),
+		ID:   commitHash.String(),
 		When: sig.When,
 	}, nil
 }

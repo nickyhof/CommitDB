@@ -1,4 +1,3 @@
-// DML (Data Manipulation Language) operations: INSERT, UPDATE, and DELETE statements.
 package engine
 
 import (
@@ -75,7 +74,7 @@ func (engine *Engine) executeInsertStatement(statement sql.InsertStatement) (Com
 				if _, err := parseDateTime(value); err != nil {
 					return CommitResult{}, fmt.Errorf("invalid TIMESTAMP format for column %s: %s (expected YYYY-MM-DD HH:MM:SS)", column, value)
 				}
-			case core.JsonType:
+			case core.JSONType:
 				// Validate JSON format
 				var js interface{}
 				if err := json.Unmarshal([]byte(value), &js); err != nil {

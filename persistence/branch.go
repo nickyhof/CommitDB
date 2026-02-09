@@ -17,7 +17,7 @@ func (p *Persistence) Branch(name string, from *Transaction) error {
 	var hash plumbing.Hash
 
 	if from != nil {
-		hash = plumbing.NewHash(from.Id)
+		hash = plumbing.NewHash(from.ID)
 	} else {
 		headRef, err := p.repo.Head()
 		if err != nil {

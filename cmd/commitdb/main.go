@@ -32,7 +32,7 @@ type CLI struct {
 
 func main() {
 	baseDir := flag.String("dir", "", "Base directory for the database")
-	gitUrl := flag.String("url", "", "Git URL for the database")
+	gitURL := flag.String("url", "", "Git URL for the database")
 	sqlFile := flag.String("f", "", "SQL file to execute (non-interactive)")
 	sqlExec := flag.String("e", "", "Execute SQL statement and exit")
 	userName := flag.String("name", "CommitDB", "User name for Git commits")
@@ -63,11 +63,11 @@ func main() {
 		if interactive {
 			fmt.Printf("%sUsing file persistence: %s%s\n", SuccessColor, *baseDir, ResetColor)
 		}
-		var gitUrlPtr *string
-		if *gitUrl != "" {
-			gitUrlPtr = gitUrl
+		var gitURLPtr *string
+		if *gitURL != "" {
+			gitURLPtr = gitURL
 		}
-		p, err := persistence.NewFilePersistence(*baseDir, gitUrlPtr)
+		p, err := persistence.NewFilePersistence(*baseDir, gitURLPtr)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)

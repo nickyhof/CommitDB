@@ -246,10 +246,10 @@ type CopyStatement struct {
 	S3Region    string
 }
 
-// Branch statements
+// CreateBranchStatement represents a CREATE BRANCH statement.
 type CreateBranchStatement struct {
 	Name      string
-	FromTxnId string // Optional: create from specific transaction
+	FromTxnID string // Optional: create from specific transaction
 }
 
 type CheckoutStatement struct {
@@ -453,7 +453,7 @@ func (s CopyStatement) Type() StatementType {
 	return CopyStatementType
 }
 
-// Share statements for external database references
+// CreateShareStatement represents a CREATE SHARE statement.
 type CreateShareStatement struct {
 	Name string
 	URL  string
@@ -487,7 +487,7 @@ func (s ShowSharesStatement) Type() StatementType {
 	return ShowSharesStatementType
 }
 
-// View statements
+// CreateViewStatement represents a CREATE VIEW statement.
 type CreateViewStatement struct {
 	Database     string
 	ViewName     string
@@ -881,25 +881,25 @@ func ParseSelect(parser *Parser) (Statement, error) {
 			}
 			break
 		}
-	} else if token.Type == JsonExtract || token.Type == JsonSet || token.Type == JsonRemove ||
-		token.Type == JsonContains || token.Type == JsonKeys || token.Type == JsonLength || token.Type == JsonType {
+	} else if token.Type == JSONExtract || token.Type == JSONSet || token.Type == JSONRemove ||
+		token.Type == JSONContains || token.Type == JSONKeys || token.Type == JSONLength || token.Type == JSONType {
 		// Parse JSON functions
 		for {
 			funcName := ""
 			switch token.Type {
-			case JsonExtract:
+			case JSONExtract:
 				funcName = "JSON_EXTRACT"
-			case JsonSet:
+			case JSONSet:
 				funcName = "JSON_SET"
-			case JsonRemove:
+			case JSONRemove:
 				funcName = "JSON_REMOVE"
-			case JsonContains:
+			case JSONContains:
 				funcName = "JSON_CONTAINS"
-			case JsonKeys:
+			case JSONKeys:
 				funcName = "JSON_KEYS"
-			case JsonLength:
+			case JSONLength:
 				funcName = "JSON_LENGTH"
-			case JsonType:
+			case JSONType:
 				funcName = "JSON_TYPE"
 			}
 			if funcName == "" {
@@ -1718,7 +1718,7 @@ func ParseCreateTable(parser *Parser) (Statement, error) {
 		case "TIMESTAMP", "DATETIME":
 			columnType = core.TimestampType
 		case "JSON":
-			columnType = core.JsonType
+			columnType = core.JSONType
 		default:
 			return nil, errors.New("expected column type (STRING, INT, FLOAT, BOOL, TEXT, DATE, TIMESTAMP, JSON)")
 		}
@@ -2110,7 +2110,7 @@ func ParseCreateBranch(parser *Parser) (Statement, error) {
 		if token.Type != String && token.Type != Identifier {
 			return nil, errors.New("expected transaction ID after FROM")
 		}
-		stmt.FromTxnId = token.Value
+		stmt.FromTxnID = token.Value
 	}
 
 	return stmt, nil
@@ -2386,7 +2386,7 @@ func parseAuth(parser *Parser) (*AuthConfig, error) {
 		auth.Token = token.Value
 		return auth, nil
 
-	case Ssh:
+	case SSH:
 		// SSH KEY 'path' [PASSPHRASE 'xxx']
 		token = parser.lexer.NextToken()
 		if token.Type != Key {

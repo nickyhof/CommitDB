@@ -1,4 +1,3 @@
-// COPY INTO statement for bulk CSV import/export with S3 support.
 package engine
 
 import (

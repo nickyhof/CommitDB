@@ -384,7 +384,7 @@ func (p *Persistence) createMergeCommit(
 			return Transaction{}, fmt.Errorf("failed to get commit object: %w", err)
 		}
 		return Transaction{
-			Id:   sourceHash.String(),
+			ID:   sourceHash.String(),
 			When: commit.Committer.When,
 		}, nil
 	}
@@ -403,7 +403,7 @@ func (p *Persistence) createMergeCommit(
 
 	commit, _ := p.repo.CommitObject(hash)
 	return Transaction{
-		Id:   hash.String(),
+		ID:   hash.String(),
 		When: commit.Committer.When,
 	}, nil
 }
@@ -494,7 +494,7 @@ func (p *Persistence) MergeWithOptions(source string, identity core.Identity, op
 	}
 	if isAncestor {
 		return MergeResult{
-			Transaction: Transaction{Id: headRef.Hash().String(), When: headCommit.Committer.When},
+			Transaction: Transaction{ID: headRef.Hash().String(), When: headCommit.Committer.When},
 			FastForward: true,
 		}, nil
 	}
@@ -522,7 +522,7 @@ func (p *Persistence) MergeWithOptions(source string, identity core.Identity, op
 		}
 
 		return MergeResult{
-			Transaction: Transaction{Id: sourceRef.Hash().String(), When: sourceCommit.Committer.When},
+			Transaction: Transaction{ID: sourceRef.Hash().String(), When: sourceCommit.Committer.When},
 			FastForward: true,
 		}, nil
 	}
@@ -781,7 +781,7 @@ func (p *Persistence) CompleteMerge(identity core.Identity) (Transaction, error)
 	p.pendingMerge = nil
 
 	return Transaction{
-		Id:   hash.String(),
+		ID:   hash.String(),
 		When: commit.Committer.When,
 	}, nil
 }

@@ -24,7 +24,7 @@ func TestPlumbingSaveRecordDirect(t *testing.T) {
 		t.Fatalf("SaveRecordDirect failed: %v", err)
 	}
 
-	if txn.Id == "" {
+	if txn.ID == "" {
 		t.Error("Transaction ID should not be empty")
 	}
 
@@ -59,7 +59,7 @@ func TestPlumbingSaveMultipleRecords(t *testing.T) {
 		t.Fatalf("SaveRecordDirect failed: %v", err)
 	}
 
-	if txn.Id == "" {
+	if txn.ID == "" {
 		t.Error("Transaction ID should not be empty")
 	}
 

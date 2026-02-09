@@ -1,4 +1,3 @@
-// Transaction control statements: BEGIN, COMMIT, and ROLLBACK.
 package engine
 
 import (

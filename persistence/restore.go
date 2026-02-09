@@ -7,29 +7,29 @@ import (
 	"github.com/go-git/go-git/v6/plumbing"
 )
 
-func (persistence *Persistence) Snapshot(name string, asof *Transaction) error {
+func (p *Persistence) Snapshot(name string, asof *Transaction) error {
 	if asof != nil {
-		_, err := persistence.repo.CreateTag(name, plumbing.NewHash(asof.Id), nil)
+		_, err := p.repo.CreateTag(name, plumbing.NewHash(asof.ID), nil)
 
 		return err
 	} else {
-		headRef, _ := persistence.repo.Head()
+		headRef, _ := p.repo.Head()
 
-		_, err := persistence.repo.CreateTag(name, headRef.Hash(), nil)
+		_, err := p.repo.CreateTag(name, headRef.Hash(), nil)
 
 		return err
 	}
 }
 
-func (persistence *Persistence) Recover(name string) error {
+func (p *Persistence) Recover(name string) error {
 	fmt.Println("Recovering to snapshot:", name)
 
-	wt, err := persistence.repo.Worktree()
+	wt, err := p.repo.Worktree()
 	if err != nil {
 		return fmt.Errorf("failed to get worktree: %w", err)
 	}
 
-	ref, err := persistence.repo.Tag(name)
+	ref, err := p.repo.Tag(name)
 	if err != nil {
 		return fmt.Errorf("snapshot not found: %w", err)
 	}
@@ -40,10 +40,10 @@ func (persistence *Persistence) Recover(name string) error {
 	})
 }
 
-func (persistence *Persistence) Restore(asof Transaction, database *string, table *string) error {
-	fmt.Println("Restoring to transaction:", asof.Id)
+func (p *Persistence) Restore(asof Transaction, database *string, table *string) error {
+	fmt.Println("Restoring to transaction:", asof.ID)
 
-	wt, err := persistence.repo.Worktree()
+	wt, err := p.repo.Worktree()
 	if err != nil {
 		return fmt.Errorf("failed to get worktree: %w", err)
 	}
@@ -57,7 +57,7 @@ func (persistence *Persistence) Restore(asof Transaction, database *string, tabl
 
 	return wt.Reset(&git.ResetOptions{
 		Mode:       git.HardReset,
-		Commit:     plumbing.NewHash(asof.Id),
+		Commit:     plumbing.NewHash(asof.ID),
 		SparseDirs: sparseDirs,
 	})
 }

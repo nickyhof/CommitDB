@@ -1,4 +1,3 @@
-// Remote file I/O support for S3 and HTTP URLs.
 package engine
 
 import (

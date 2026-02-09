@@ -1,4 +1,3 @@
-// Git remote operations (PUSH, PULL, FETCH) and shared database management.
 package engine
 
 import (

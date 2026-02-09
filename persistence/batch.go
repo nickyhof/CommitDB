@@ -30,13 +30,13 @@ type TransactionBuilder struct {
 }
 
 // BeginTransaction creates a new transaction builder for batching operations
-func (persistence *Persistence) BeginTransaction() (*TransactionBuilder, error) {
-	if err := persistence.ensureInitialized(); err != nil {
+func (p *Persistence) BeginTransaction() (*TransactionBuilder, error) {
+	if err := p.ensureInitialized(); err != nil {
 		return nil, err
 	}
 
 	return &TransactionBuilder{
-		persistence: persistence,
+		persistence: p,
 		operations:  make([]Operation, 0),
 		started:     true,
 	}, nil
