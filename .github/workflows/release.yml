@@ -81,7 +81,7 @@ jobs:
           cp benchmark_results.json _site/benchmarks/latest.json
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: _site
 
