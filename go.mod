@@ -6,7 +6,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.41.1
 	github.com/aws/aws-sdk-go-v2/config v1.32.7
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.7
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.95.1
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.96.0
 	github.com/duckdb/duckdb-go/v2 v2.5.5
 	github.com/go-git/go-billy/v6 v6.0.0-20251209065551-8afc3eb64e4d
 	github.com/go-git/go-git/v6 v6.0.0-20251216093047-22c365fcee9c
