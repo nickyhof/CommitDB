@@ -59,7 +59,7 @@ result.Display()
 
 ```bash
 # Install
-go install github.com/nickyhof/CommitDB/v2/cmd/cli@latest
+go install github.com/nickyhof/CommitDB/v2/cmd/commitdb@latest
 
 # In-memory mode
 commitdb

@@ -10,13 +10,13 @@ git clone https://github.com/nickyhof/CommitDB.git
 cd CommitDB
 
 # Build CLI
-go build -o commitdb ./cmd/cli
+go build -o commitdb ./cmd/commitdb
 ```
 
 ### Using Go Install
 
 ```bash
-go install github.com/nickyhof/CommitDB/v2/cmd/cli@latest
+go install github.com/nickyhof/CommitDB/v2/cmd/commitdb@latest
 ```
 
 ## Go Library

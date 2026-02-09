@@ -5,7 +5,7 @@ This guide will get you running CommitDB in under 5 minutes.
 ## Install
 
 ```bash
-go install github.com/nickyhof/CommitDB/v2/cmd/cli@latest
+go install github.com/nickyhof/CommitDB/v2/cmd/commitdb@latest
 ```
 
 ## Start the CLI

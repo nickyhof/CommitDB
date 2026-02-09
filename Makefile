@@ -46,11 +46,11 @@ help:
 # Build CLI
 build:
 	@mkdir -p $(DIST)
-	$(GOBUILD) -o $(DIST)/commitdb ./cmd/cli
+	$(GOBUILD) -o $(DIST)/commitdb ./cmd/commitdb
 
 # Run CLI
 run-cli:
-	$(GORUN) ./cmd/cli
+	$(GORUN) ./cmd/commitdb
 
 # Run tests
 test:
