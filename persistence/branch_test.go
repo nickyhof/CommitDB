@@ -150,8 +150,8 @@ func TestMergeFastForward(t *testing.T) {
 	}
 
 	// Verify merge result
-	if txn.Id != featureTxn.Id {
-		t.Errorf("Expected merge to fast-forward to %s, got %s", featureTxn.Id, txn.Id)
+	if txn.ID != featureTxn.ID {
+		t.Errorf("Expected merge to fast-forward to %s, got %s", featureTxn.ID, txn.ID)
 	}
 }
 
@@ -496,7 +496,7 @@ func TestMergeManualResolveAndComplete(t *testing.T) {
 		t.Fatalf("CompleteMerge failed: %v", err)
 	}
 
-	if txn.Id == "" {
+	if txn.ID == "" {
 		t.Error("Expected transaction ID")
 	}
 

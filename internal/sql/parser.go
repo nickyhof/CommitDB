@@ -246,10 +246,10 @@ type CopyStatement struct {
 	S3Region    string
 }
 
-// Branch statements
+// CreateBranchStatement represents a CREATE BRANCH statement.
 type CreateBranchStatement struct {
 	Name      string
-	FromTxnId string // Optional: create from specific transaction
+	FromTxnID string // Optional: create from specific transaction
 }
 
 type CheckoutStatement struct {
@@ -453,7 +453,7 @@ func (s CopyStatement) Type() StatementType {
 	return CopyStatementType
 }
 
-// Share statements for external database references
+// CreateShareStatement represents a CREATE SHARE statement.
 type CreateShareStatement struct {
 	Name string
 	URL  string
@@ -487,7 +487,7 @@ func (s ShowSharesStatement) Type() StatementType {
 	return ShowSharesStatementType
 }
 
-// View statements
+// CreateViewStatement represents a CREATE VIEW statement.
 type CreateViewStatement struct {
 	Database     string
 	ViewName     string
@@ -605,7 +605,7 @@ func ParseSelect(parser *Parser) (Statement, error) {
 	}
 
 	// Check for COUNT(*)
-	if token.Type == Count {
+	if token.Type == Count { //nolint:gocritic // complex aggregate parsing; switch impractical
 		token = parser.lexer.NextToken()
 		if token.Type != ParenOpen {
 			return nil, errors.New("expected '(' after COUNT")
@@ -881,25 +881,25 @@ func ParseSelect(parser *Parser) (Statement, error) {
 			}
 			break
 		}
-	} else if token.Type == JsonExtract || token.Type == JsonSet || token.Type == JsonRemove ||
-		token.Type == JsonContains || token.Type == JsonKeys || token.Type == JsonLength || token.Type == JsonType {
+	} else if token.Type == JSONExtract || token.Type == JSONSet || token.Type == JSONRemove ||
+		token.Type == JSONContains || token.Type == JSONKeys || token.Type == JSONLength || token.Type == JSONType {
 		// Parse JSON functions
 		for {
 			funcName := ""
 			switch token.Type {
-			case JsonExtract:
+			case JSONExtract:
 				funcName = "JSON_EXTRACT"
-			case JsonSet:
+			case JSONSet:
 				funcName = "JSON_SET"
-			case JsonRemove:
+			case JSONRemove:
 				funcName = "JSON_REMOVE"
-			case JsonContains:
+			case JSONContains:
 				funcName = "JSON_CONTAINS"
-			case JsonKeys:
+			case JSONKeys:
 				funcName = "JSON_KEYS"
-			case JsonLength:
+			case JSONLength:
 				funcName = "JSON_LENGTH"
-			case JsonType:
+			case JSONType:
 				funcName = "JSON_TYPE"
 			}
 			if funcName == "" {
@@ -954,30 +954,32 @@ func ParseSelect(parser *Parser) (Statement, error) {
 		selectStatement.Columns = append(selectStatement.Columns, token.Value)
 		for {
 			token = parser.lexer.NextToken()
-			if token.Type == Comma {
+			if token.Type == Comma { //nolint:gocritic // complex multi-branch token dispatch
 				token = parser.lexer.NextToken()
-				if token.Type == Identifier {
+				switch token.Type {
+				case Identifier:
 					selectStatement.Columns = append(selectStatement.Columns, token.Value)
-				} else if token.Type == Count {
+				case Count:
 					// Parse COUNT(*) or COUNT(col)
 					token = parser.lexer.NextToken()
 					if token.Type != ParenOpen {
 						return nil, errors.New("expected '(' after COUNT")
 					}
 					token = parser.lexer.NextToken()
-					if token.Type == Wildcard {
+					switch token.Type {
+					case Wildcard:
 						selectStatement.Aggregates = append(selectStatement.Aggregates, AggregateExpr{Function: "COUNT", Column: "*"})
 						token = parser.lexer.NextToken()
-					} else if token.Type == Identifier {
+					case Identifier:
 						selectStatement.Aggregates = append(selectStatement.Aggregates, AggregateExpr{Function: "COUNT", Column: token.Value})
 						token = parser.lexer.NextToken()
-					} else {
+					default:
 						return nil, errors.New("expected '*' or column name in COUNT()")
 					}
 					if token.Type != ParenClose {
 						return nil, errors.New("expected ')' after COUNT argument")
 					}
-				} else if token.Type == Sum || token.Type == Avg || token.Type == Min || token.Type == Max {
+				case Sum, Avg, Min, Max:
 					// Parse SUM/AVG/MIN/MAX(col)
 					funcName := ""
 					switch token.Type {
@@ -1004,7 +1006,7 @@ func ParseSelect(parser *Parser) (Statement, error) {
 						return nil, errors.New("expected ')' after column name")
 					}
 					selectStatement.Aggregates = append(selectStatement.Aggregates, AggregateExpr{Function: funcName, Column: col})
-				} else {
+				default:
 					return nil, errors.New("expected identifier or aggregate function after comma")
 				}
 			} else if token.Type == From {
@@ -1027,24 +1029,27 @@ func ParseSelect(parser *Parser) (Statement, error) {
 	}
 
 	parts := strings.Split(token.Value, ".")
-	if len(parts) == 3 {
+	switch len(parts) {
+	case 3:
 		// share.database.table format
 		selectStatement.Share = parts[0]
 		selectStatement.Database = parts[1]
 		selectStatement.Table = parts[2]
-	} else if len(parts) == 2 {
+	case 2:
 		selectStatement.Database = parts[0]
 		selectStatement.Table = parts[1]
-	} else {
+	default:
 		return nil, errors.New("expected database.table or share.database.table format")
 	}
 
 	token = parser.lexer.NextToken()
 
 	// Check for table alias or AS OF clause for time-travel
-	if token.Type == As {
+	switch token.Type {
+	case As:
 		token = parser.lexer.NextToken()
-		if token.Type == Of {
+		switch token.Type {
+		case Of:
 			// AS OF 'transaction' - time-travel query
 			token = parser.lexer.NextToken()
 			if token.Type != String {
@@ -1052,16 +1057,16 @@ func ParseSelect(parser *Parser) (Statement, error) {
 			}
 			selectStatement.AsOf = token.Value
 			token = parser.lexer.NextToken()
-		} else if token.Type == Identifier {
+		case Identifier:
 			// Regular alias: AS alias_name
 			selectStatement.TableAlias = token.Value
 			token = parser.lexer.NextToken()
-		} else if token.Type == String {
+		case String:
 			return nil, errors.New("expected OF after AS for time-travel, or identifier for alias")
-		} else {
+		default:
 			return nil, errors.New("expected alias or OF after AS")
 		}
-	} else if token.Type == Identifier {
+	case Identifier:
 		// Alias without AS keyword
 		selectStatement.TableAlias = token.Value
 		token = parser.lexer.NextToken()
@@ -1072,7 +1077,8 @@ func ParseSelect(parser *Parser) (Statement, error) {
 		joinClause := JoinClause{Type: "INNER"} // Default
 
 		// Determine join type
-		if token.Type == Left {
+		switch token.Type {
+		case Left:
 			joinClause.Type = "LEFT"
 			token = parser.lexer.NextToken()
 			if token.Type == Outer {
@@ -1081,7 +1087,7 @@ func ParseSelect(parser *Parser) (Statement, error) {
 			if token.Type != Join {
 				return nil, errors.New("expected JOIN after LEFT")
 			}
-		} else if token.Type == Right {
+		case Right:
 			joinClause.Type = "RIGHT"
 			token = parser.lexer.NextToken()
 			if token.Type == Outer {
@@ -1090,7 +1096,7 @@ func ParseSelect(parser *Parser) (Statement, error) {
 			if token.Type != Join {
 				return nil, errors.New("expected JOIN after RIGHT")
 			}
-		} else if token.Type == Inner {
+		case Inner:
 			joinClause.Type = "INNER"
 			token = parser.lexer.NextToken()
 			if token.Type != Join {
@@ -1217,10 +1223,11 @@ func ParseSelect(parser *Parser) (Statement, error) {
 
 			// Check for ASC/DESC
 			peek := parser.lexer.PeekToken()
-			if peek.Type == Asc {
+			switch peek.Type {
+			case Asc:
 				parser.lexer.NextToken()
 				orderByClause.Descending = false
-			} else if peek.Type == Desc {
+			case Desc:
 				parser.lexer.NextToken()
 				orderByClause.Descending = true
 			}
@@ -1293,15 +1300,16 @@ func ParseWhere(parser *Parser) (WhereClause, error) {
 		// Handle IS NULL / IS NOT NULL
 		if token.Type == Is {
 			token = parser.lexer.NextToken()
-			if token.Type == Not {
+			switch token.Type {
+			case Not:
 				token = parser.lexer.NextToken()
 				if token.Type != Null {
 					return whereClause, errors.New("expected NULL after IS NOT")
 				}
 				operator = IsNotNullOperator
-			} else if token.Type == Null {
+			case Null:
 				operator = IsNullOperator
-			} else {
+			default:
 				return whereClause, errors.New("expected NULL or NOT after IS")
 			}
 			right = ""
@@ -1714,7 +1722,7 @@ func ParseCreateTable(parser *Parser) (Statement, error) {
 		case "TIMESTAMP", "DATETIME":
 			columnType = core.TimestampType
 		case "JSON":
-			columnType = core.JsonType
+			columnType = core.JSONType
 		default:
 			return nil, errors.New("expected column type (STRING, INT, FLOAT, BOOL, TEXT, DATE, TIMESTAMP, JSON)")
 		}
@@ -2106,7 +2114,7 @@ func ParseCreateBranch(parser *Parser) (Statement, error) {
 		if token.Type != String && token.Type != Identifier {
 			return nil, errors.New("expected transaction ID after FROM")
 		}
-		stmt.FromTxnId = token.Value
+		stmt.FromTxnID = token.Value
 	}
 
 	return stmt, nil
@@ -2382,7 +2390,7 @@ func parseAuth(parser *Parser) (*AuthConfig, error) {
 		auth.Token = token.Value
 		return auth, nil
 
-	case Ssh:
+	case SSH:
 		// SSH KEY 'path' [PASSPHRASE 'xxx']
 		token = parser.lexer.NextToken()
 		if token.Type != Key {
@@ -2450,7 +2458,8 @@ func ParseCopy(parser *Parser) (Statement, error) {
 
 	// Next token determines direction: identifier = INTO_TABLE, string = INTO_FILE
 	token = parser.lexer.NextToken()
-	if token.Type == String {
+	switch token.Type {
+	case String:
 		// COPY INTO 'file.csv' FROM table (export)
 		stmt.Direction = "INTO_FILE"
 		stmt.FilePath = token.Value
@@ -2475,7 +2484,7 @@ func ParseCopy(parser *Parser) (Statement, error) {
 			return nil, errors.New("expected database.table after FROM")
 		}
 
-	} else if token.Type == Identifier || token.Type == DatabaseIdentifier {
+	case Identifier, DatabaseIdentifier:
 		// COPY INTO table FROM 'file.csv' (import)
 		stmt.Direction = "INTO_TABLE"
 		if token.Type == DatabaseIdentifier {
@@ -2502,7 +2511,7 @@ func ParseCopy(parser *Parser) (Statement, error) {
 			return nil, errors.New("expected file path (string) after FROM")
 		}
 		stmt.FilePath = token.Value
-	} else {
+	default:
 		return nil, errors.New("expected table name or file path after INTO")
 	}
 

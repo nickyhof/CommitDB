@@ -44,7 +44,7 @@ func TestCreateAndGetDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create database: %v", err)
 	}
-	if txn.Id == "" {
+	if txn.ID == "" {
 		t.Error("Expected transaction ID to be set")
 	}
 
@@ -272,7 +272,7 @@ func TestEmptyCommitPrevention(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to save initial record: %v", err)
 	}
-	if txn1.Id == "" {
+	if txn1.ID == "" {
 		t.Error("Expected transaction ID for initial save")
 	}
 
@@ -281,7 +281,7 @@ func TestEmptyCommitPrevention(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to save duplicate record: %v", err)
 	}
-	if txn2.Id != "" {
+	if txn2.ID != "" {
 		t.Error("Expected empty transaction ID when no changes are made (duplicate data)")
 	}
 
@@ -291,7 +291,7 @@ func TestEmptyCommitPrevention(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to save new record: %v", err)
 	}
-	if txn3.Id == "" {
+	if txn3.ID == "" {
 		t.Error("Expected transaction ID for new data")
 	}
 

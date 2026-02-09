@@ -73,7 +73,7 @@ func NewMemoryPersistence() (Persistence, error) {
 	}, nil
 }
 
-func NewFilePersistence(baseDir string, gitUrl *string) (Persistence, error) {
+func NewFilePersistence(baseDir string, gitURL *string) (Persistence, error) {
 	// Ensure base directory exists
 	if err := os.MkdirAll(baseDir, 0755); err != nil {
 		return Persistence{}, err
@@ -92,9 +92,9 @@ func NewFilePersistence(baseDir string, gitUrl *string) (Persistence, error) {
 
 	var repo *git.Repository
 
-	if gitUrl != nil {
+	if gitURL != nil {
 		repo, err = git.Clone(storer, wt, &git.CloneOptions{
-			URL: *gitUrl,
+			URL: *gitURL,
 		})
 		if err != nil {
 			return Persistence{}, err

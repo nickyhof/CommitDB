@@ -112,8 +112,9 @@ fmt:
 vet:
 	$(GOVET) ./...
 
-# Run all checks
-lint: fmt vet
+# Run all checks (requires: brew install golangci-lint)
+lint:
+	golangci-lint run ./...
 
 # Download dependencies
 deps:

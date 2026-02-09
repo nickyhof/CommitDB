@@ -49,7 +49,7 @@ func TestTransactionBuilder(t *testing.T) {
 		t.Fatalf("Failed to commit: %v", err)
 	}
 
-	if result.Id == "" {
+	if result.ID == "" {
 		t.Error("Expected transaction ID to be set")
 	}
 

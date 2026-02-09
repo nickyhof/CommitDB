@@ -1,4 +1,3 @@
-// WHERE clause evaluation, value comparison, LIKE matching, DISTINCT, and ORDER BY sorting.
 package engine
 
 import (
@@ -81,11 +80,6 @@ func evaluateCondition(row map[string]string, cond sql.WhereCondition) bool {
 	}
 
 	return result
-}
-
-// compareValues delegates to the shared compare package
-func compareValues(a, b string) int {
-	return compare.Values(a, b)
 }
 
 // applyDistinct removes duplicate rows based on selected columns

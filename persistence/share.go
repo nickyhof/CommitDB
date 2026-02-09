@@ -234,14 +234,6 @@ func (p *Persistence) IsShare(name string) bool {
 
 // Helper functions
 
-func (p *Persistence) sharesConfigPath() (string, error) {
-	wt, err := p.repo.Worktree()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(wt.Filesystem.Root(), ".commitdb", "shares.json"), nil
-}
-
 func (p *Persistence) loadSharesConfig() (SharesConfig, error) {
 	// Read from git tree using ReadFileDirect to survive syncWorktree
 	data, err := p.ReadFileDirect(".commitdb/shares.json")

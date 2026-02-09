@@ -235,7 +235,7 @@ func TestLatestTransaction(t *testing.T) {
 
 	// Initially should be empty
 	txn := persistence.LatestTransaction()
-	if txn.Id != "" {
+	if txn.ID != "" {
 		t.Error("Expected empty transaction for fresh repo")
 	}
 
@@ -247,7 +247,7 @@ func TestLatestTransaction(t *testing.T) {
 
 	// Latest should match
 	latestTxn := persistence.LatestTransaction()
-	if latestTxn.Id != createdTxn.Id {
-		t.Errorf("Expected latest transaction %s, got %s", createdTxn.Id, latestTxn.Id)
+	if latestTxn.ID != createdTxn.ID {
+		t.Errorf("Expected latest transaction %s, got %s", createdTxn.ID, latestTxn.ID)
 	}
 }

@@ -103,7 +103,7 @@ const (
 	TokenKeyword
 	Key
 	Passphrase
-	Ssh
+	SSH
 	To
 	Rename
 	Upper
@@ -127,13 +127,13 @@ const (
 	Minute
 	Second
 	DateFormat
-	JsonExtract
-	JsonSet
-	JsonRemove
-	JsonContains
-	JsonKeys
-	JsonLength
-	JsonType
+	JSONExtract
+	JSONSet
+	JSONRemove
+	JSONContains
+	JSONKeys
+	JSONLength
+	JSONType
 	Copy
 	Header
 	Delimiter
@@ -310,7 +310,8 @@ func (lexer *Lexer) NextToken() Token {
 	case '*':
 		token = Token{Type: Wildcard, Value: string(lexer.ch)}
 	default:
-		if isOperator(lexer.ch) {
+		switch {
+		case isOperator(lexer.ch):
 			operator := lexer.readOperator()
 			switch operator {
 			case "=":
@@ -328,7 +329,7 @@ func (lexer *Lexer) NextToken() Token {
 			default:
 				return Token{Type: Unknown, Value: operator}
 			}
-		} else if isDigit(lexer.ch) {
+		case isDigit(lexer.ch):
 			num := lexer.readNumber()
 			// Check if it's a float
 			if lexer.ch == '.' {
@@ -337,7 +338,7 @@ func (lexer *Lexer) NextToken() Token {
 				return Token{Type: Float, Value: num + "." + decimal}
 			}
 			return Token{Type: Int, Value: num}
-		} else if isAlphaNumeric(lexer.ch) {
+		case isAlphaNumeric(lexer.ch):
 			literal := lexer.readIdentifier()
 			if literal == "PRIMARY" {
 				// Check for KEY
@@ -352,7 +353,7 @@ func (lexer *Lexer) NextToken() Token {
 				tokenType := lookupIdentifier(literal)
 				return Token{Type: tokenType, Value: literal}
 			}
-		} else {
+		default:
 			token = Token{Type: Unknown, Value: string(lexer.ch)}
 		}
 	}
@@ -613,7 +614,7 @@ func lookupIdentifier(id string) TokenType {
 	case "PASSPHRASE":
 		return Passphrase
 	case "SSH":
-		return Ssh
+		return SSH
 	case "TO":
 		return To
 	case "RENAME":
@@ -657,19 +658,19 @@ func lookupIdentifier(id string) TokenType {
 	case "DATE_FORMAT", "DATEFORMAT":
 		return DateFormat
 	case "JSON_EXTRACT":
-		return JsonExtract
+		return JSONExtract
 	case "JSON_SET":
-		return JsonSet
+		return JSONSet
 	case "JSON_REMOVE":
-		return JsonRemove
+		return JSONRemove
 	case "JSON_CONTAINS":
-		return JsonContains
+		return JSONContains
 	case "JSON_KEYS":
-		return JsonKeys
+		return JSONKeys
 	case "JSON_LENGTH":
-		return JsonLength
+		return JSONLength
 	case "JSON_TYPE":
-		return JsonType
+		return JSONType
 	case "COPY":
 		return Copy
 	case "HEADER":

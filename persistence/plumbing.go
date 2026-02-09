@@ -29,10 +29,10 @@ func (p *Persistence) createBlob(data []byte) (plumbing.Hash, error) {
 	}
 
 	if _, err := writer.Write(data); err != nil {
-		writer.Close()
+		_ = writer.Close()
 		return plumbing.ZeroHash, fmt.Errorf("failed to write blob data: %w", err)
 	}
-	writer.Close()
+	_ = writer.Close()
 
 	hash, err := p.repo.Storer.SetEncodedObject(obj)
 	if err != nil {
@@ -400,7 +400,7 @@ func (p *Persistence) createCommitDirect(treeHash plumbing.Hash, identity core.I
 	}
 
 	return Transaction{
-		Id:   commitHash.String(),
+		ID:   commitHash.String(),
 		When: sig.When,
 	}, nil
 }
@@ -498,7 +498,7 @@ func (p *Persistence) syncWorktree() error {
 		}
 		for _, entry := range entries {
 			if entry.Name() != ".git" {
-				fs.Remove(entry.Name())
+				_ = fs.Remove(entry.Name())
 			}
 		}
 		return nil
@@ -644,7 +644,7 @@ func (p *Persistence) ScanDirect(database, table string) iter.Seq2[string, []byt
 				}
 
 				data, err := io.ReadAll(reader)
-				reader.Close()
+				_ = reader.Close()
 				if err != nil {
 					continue
 				}
@@ -1050,7 +1050,7 @@ func (p *Persistence) resolveTransaction(transactionID string) (*object.Commit, 
 		defer iter.Close()
 
 		var found *object.Commit
-		err = iter.ForEach(func(c *object.Commit) error {
+		_ = iter.ForEach(func(c *object.Commit) error {
 			if strings.HasPrefix(c.Hash.String(), transactionID) {
 				found = c
 				return fmt.Errorf("found") // break iteration

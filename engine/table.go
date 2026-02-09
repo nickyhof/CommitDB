@@ -49,20 +49,20 @@ func (t *SimpleTable) Render() {
 	separator := t.buildSeparator(colWidths)
 
 	// Print table
-	fmt.Fprintln(t.writer, separator)
+	_, _ = fmt.Fprintln(t.writer, separator)
 
 	// Print headers
 	if len(t.headers) > 0 {
-		fmt.Fprintln(t.writer, t.formatRow(t.headers, colWidths))
-		fmt.Fprintln(t.writer, separator)
+		_, _ = fmt.Fprintln(t.writer, t.formatRow(t.headers, colWidths))
+		_, _ = fmt.Fprintln(t.writer, separator)
 	}
 
 	// Print rows
 	for _, row := range t.rows {
-		fmt.Fprintln(t.writer, t.formatRow(row, colWidths))
+		_, _ = fmt.Fprintln(t.writer, t.formatRow(row, colWidths))
 	}
 
-	fmt.Fprintln(t.writer, separator)
+	_, _ = fmt.Fprintln(t.writer, separator)
 }
 
 // calculateWidths determines the width needed for each column

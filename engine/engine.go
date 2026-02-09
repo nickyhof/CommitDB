@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/nickyhof/CommitDB/v2/core"
-	"github.com/nickyhof/CommitDB/v2/persistence"
 	"github.com/nickyhof/CommitDB/v2/internal/sql"
+	"github.com/nickyhof/CommitDB/v2/persistence"
 )
 
 type Engine struct {

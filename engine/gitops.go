@@ -1,4 +1,3 @@
-// Git remote operations (PUSH, PULL, FETCH) and shared database management.
 package engine
 
 import (
@@ -6,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nickyhof/CommitDB/v2/persistence"
 	"github.com/nickyhof/CommitDB/v2/internal/sql"
+	"github.com/nickyhof/CommitDB/v2/persistence"
 )
 
 // Remote Git operations
@@ -15,7 +14,7 @@ import (
 func (engine *Engine) executeAddRemoteStatement(statement sql.AddRemoteStatement) (QueryResult, error) {
 	startTime := time.Now()
 
-	err := engine.Persistence.AddRemote(statement.Name, statement.URL)
+	err := engine.AddRemote(statement.Name, statement.URL)
 	if err != nil {
 		return QueryResult{}, err
 	}
@@ -31,7 +30,7 @@ func (engine *Engine) executeAddRemoteStatement(statement sql.AddRemoteStatement
 func (engine *Engine) executeShowRemotesStatement() (QueryResult, error) {
 	startTime := time.Now()
 
-	remotes, err := engine.Persistence.ListRemotes()
+	remotes, err := engine.ListRemotes()
 	if err != nil {
 		return QueryResult{}, err
 	}
@@ -53,7 +52,7 @@ func (engine *Engine) executeShowRemotesStatement() (QueryResult, error) {
 func (engine *Engine) executeDropRemoteStatement(statement sql.DropRemoteStatement) (QueryResult, error) {
 	startTime := time.Now()
 
-	err := engine.Persistence.RemoveRemote(statement.Name)
+	err := engine.RemoveRemote(statement.Name)
 	if err != nil {
 		return QueryResult{}, err
 	}
@@ -70,7 +69,7 @@ func (engine *Engine) executePushStatement(statement sql.PushStatement) (QueryRe
 	startTime := time.Now()
 
 	auth := convertAuthConfig(statement.Auth)
-	err := engine.Persistence.Push(statement.Remote, statement.Branch, auth)
+	err := engine.Push(statement.Remote, statement.Branch, auth)
 	if err != nil {
 		return QueryResult{}, err
 	}
@@ -87,7 +86,7 @@ func (engine *Engine) executePullStatement(statement sql.PullStatement) (QueryRe
 	startTime := time.Now()
 
 	auth := convertAuthConfig(statement.Auth)
-	err := engine.Persistence.Pull(statement.Remote, statement.Branch, auth)
+	err := engine.Pull(statement.Remote, statement.Branch, auth)
 	if err != nil {
 		return QueryResult{}, err
 	}
@@ -104,7 +103,7 @@ func (engine *Engine) executeFetchStatement(statement sql.FetchStatement) (Query
 	startTime := time.Now()
 
 	auth := convertAuthConfig(statement.Auth)
-	err := engine.Persistence.Fetch(statement.Remote, auth)
+	err := engine.Fetch(statement.Remote, auth)
 	if err != nil {
 		return QueryResult{}, err
 	}
@@ -155,7 +154,7 @@ func (engine *Engine) executeCreateShareStatement(statement sql.CreateShareState
 	startTime := time.Now()
 
 	auth := convertAuthConfig(statement.Auth)
-	err := engine.Persistence.CreateShare(statement.Name, statement.URL, auth, engine.Identity)
+	err := engine.CreateShare(statement.Name, statement.URL, auth, engine.Identity)
 	if err != nil {
 		return QueryResult{}, err
 	}
@@ -172,7 +171,7 @@ func (engine *Engine) executeSyncShareStatement(statement sql.SyncShareStatement
 	startTime := time.Now()
 
 	auth := convertAuthConfig(statement.Auth)
-	err := engine.Persistence.SyncShare(statement.Name, auth)
+	err := engine.SyncShare(statement.Name, auth)
 	if err != nil {
 		return QueryResult{}, err
 	}
@@ -188,7 +187,7 @@ func (engine *Engine) executeSyncShareStatement(statement sql.SyncShareStatement
 func (engine *Engine) executeDropShareStatement(statement sql.DropShareStatement) (QueryResult, error) {
 	startTime := time.Now()
 
-	err := engine.Persistence.DropShare(statement.Name, engine.Identity)
+	err := engine.DropShare(statement.Name, engine.Identity)
 	if err != nil {
 		return QueryResult{}, err
 	}
@@ -204,7 +203,7 @@ func (engine *Engine) executeDropShareStatement(statement sql.DropShareStatement
 func (engine *Engine) executeShowSharesStatement() (QueryResult, error) {
 	startTime := time.Now()
 
-	shares, err := engine.Persistence.ListShares()
+	shares, err := engine.ListShares()
 	if err != nil {
 		return QueryResult{}, err
 	}

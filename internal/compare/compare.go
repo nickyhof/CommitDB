@@ -40,7 +40,8 @@ func MatchLike(value, pattern string) bool {
 // matchLikeRunes performs recursive LIKE pattern matching
 func matchLikeRunes(value, pattern []rune, vi, pi int) bool {
 	for pi < len(pattern) {
-		if pattern[pi] == '%' {
+		switch {
+		case pattern[pi] == '%':
 			// Skip consecutive %
 			for pi < len(pattern) && pattern[pi] == '%' {
 				pi++
@@ -56,12 +57,12 @@ func matchLikeRunes(value, pattern []rune, vi, pi int) bool {
 				vi++
 			}
 			return false
-		} else if vi >= len(value) {
+		case vi >= len(value):
 			return false // Pattern remains but value exhausted
-		} else if pattern[pi] == '_' || pattern[pi] == value[vi] {
+		case pattern[pi] == '_' || pattern[pi] == value[vi]:
 			vi++
 			pi++
-		} else {
+		default:
 			return false
 		}
 	}

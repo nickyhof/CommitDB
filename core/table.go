@@ -10,7 +10,7 @@ const (
 	TextType
 	DateType
 	TimestampType
-	JsonType
+	JSONType
 )
 
 type Column struct {

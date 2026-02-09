@@ -655,8 +655,8 @@ func TestIntegrationDateColumns(t *testing.T) {
 	})
 }
 
-// TestIntegrationJsonType tests JSON column type and JSON functions
-func TestIntegrationJsonType(t *testing.T) {
+// TestIntegrationJSONType tests JSON column type and JSON functions
+func TestIntegrationJSONType(t *testing.T) {
 	runWithBothPersistence(t, func(t *testing.T, e *engine.Engine) {
 
 		e.Execute("CREATE DATABASE json_test")
@@ -668,13 +668,13 @@ func TestIntegrationJsonType(t *testing.T) {
 			t.Fatalf("DESCRIBE failed: %v", err)
 		}
 		qr := result.(engine.QueryResult)
-		foundJson := false
+		foundJSON := false
 		for _, row := range qr.Data {
 			if row[0] == "data" && row[1] == "JSON" {
-				foundJson = true
+				foundJSON = true
 			}
 		}
-		if !foundJson {
+		if !foundJSON {
 			t.Error("JSON type not found in schema")
 		}
 
@@ -1203,7 +1203,7 @@ func TestBranchFromTransaction(t *testing.T) {
 		}
 
 		// Create branch from the first transaction (should only have 1 row)
-		_, err = e.Execute("CREATE BRANCH old_state FROM '" + txn1.Id + "'")
+		_, err = e.Execute("CREATE BRANCH old_state FROM '" + txn1.ID + "'")
 		if err != nil {
 			t.Fatalf("CREATE BRANCH FROM failed: %v", err)
 		}
@@ -1966,7 +1966,7 @@ func TestIntegrationTimeTravelQueries(t *testing.T) {
 		if err != nil {
 			t.Fatalf("First INSERT failed: %v", err)
 		}
-		txn1 := result1.(engine.CommitResult).Transaction.Id
+		txn1 := result1.(engine.CommitResult).Transaction.ID
 		if txn1 == "" {
 			t.Fatal("Expected transaction ID from first INSERT")
 		}
@@ -1976,14 +1976,14 @@ func TestIntegrationTimeTravelQueries(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Second INSERT failed: %v", err)
 		}
-		txn2 := result2.(engine.CommitResult).Transaction.Id
+		txn2 := result2.(engine.CommitResult).Transaction.ID
 
 		// Update Alice's status and capture transaction
 		result3, err := e.Execute("UPDATE ttdb.users SET status = 'inactive' WHERE id = 1")
 		if err != nil {
 			t.Fatalf("UPDATE failed: %v", err)
 		}
-		txn3 := result3.(engine.CommitResult).Transaction.Id
+		txn3 := result3.(engine.CommitResult).Transaction.ID
 
 		// Current state: Alice (inactive), Bob (active)
 		result, err := e.Execute("SELECT * FROM ttdb.users ORDER BY id")
@@ -2073,7 +2073,7 @@ func TestIntegrationTimeTravelQueries(t *testing.T) {
 		if err != nil {
 			t.Fatalf("INSERT after time-travel failed: %v", err)
 		}
-		txn4 := result4.(engine.CommitResult).Transaction.Id
+		txn4 := result4.(engine.CommitResult).Transaction.ID
 		if txn4 == "" {
 			t.Error("Expected transaction ID from INSERT after time-travel")
 		}
@@ -2132,7 +2132,7 @@ func TestIntegrationTimeTravelOnViews(t *testing.T) {
 		if err != nil {
 			t.Fatalf("INSERT after view failed: %v", err)
 		}
-		txnAfterView := result.(engine.CommitResult).Transaction.Id
+		txnAfterView := result.(engine.CommitResult).Transaction.ID
 
 		// Add more data after
 		e.Execute("INSERT INTO viewttdb.orders (id, product, amount) VALUES (4, 'Doodad', 400)")
@@ -2162,7 +2162,7 @@ func TestIntegrationTimeTravelOnViews(t *testing.T) {
 		if err != nil {
 			t.Fatalf("INSERT for snapshot view failed: %v", err)
 		}
-		txnForSnapshot := result.(engine.CommitResult).Transaction.Id
+		txnForSnapshot := result.(engine.CommitResult).Transaction.ID
 
 		// Create a view that captures data at a specific transaction
 		_, err = e.Execute("CREATE VIEW viewttdb.snapshot_view AS SELECT * FROM viewttdb.orders AS OF '" + txnForSnapshot + "'")
@@ -2227,7 +2227,7 @@ func TestIntegrationTimeTravelOnMaterializedViews(t *testing.T) {
 		if err != nil {
 			t.Fatalf("INSERT marker failed: %v", err)
 		}
-		txnBeforeRefresh := result.(engine.CommitResult).Transaction.Id
+		txnBeforeRefresh := result.(engine.CommitResult).Transaction.ID
 
 		// Add more East region data
 		e.Execute("INSERT INTO matttdb.sales (id, region, amount) VALUES (3, 'East', 300)")
@@ -2237,7 +2237,7 @@ func TestIntegrationTimeTravelOnMaterializedViews(t *testing.T) {
 		if err != nil {
 			t.Fatalf("REFRESH VIEW failed: %v", err)
 		}
-		txnAfterRefresh := result.(engine.CommitResult).Transaction.Id
+		txnAfterRefresh := result.(engine.CommitResult).Transaction.ID
 
 		// Materialized view now has 2 rows
 		result, err = e.Execute("SELECT * FROM matttdb.east_sales")

@@ -10,24 +10,24 @@ import (
 )
 
 type Transaction struct {
-	Id      string
+	ID      string
 	When    time.Time
 	Author  string // "Name <email>" format
 	Message string // Commit message
 }
 
 func (transaction Transaction) String() string {
-	return fmt.Sprintf("Transaction{Id: %s, When: %s, Author: %s}", transaction.Id, transaction.When, transaction.Author)
+	return fmt.Sprintf("Transaction{ID: %s, When: %s, Author: %s}", transaction.ID, transaction.When, transaction.Author)
 }
 
-func (persistence *Persistence) LatestTransaction() Transaction {
-	headRef, err := persistence.repo.Head()
+func (p *Persistence) LatestTransaction() Transaction {
+	headRef, err := p.repo.Head()
 	if err != nil || headRef == nil {
 		// No commits yet
 		return Transaction{}
 	}
 
-	commit, err := persistence.repo.CommitObject(headRef.Hash())
+	commit, err := p.repo.CommitObject(headRef.Hash())
 	if err != nil {
 		return Transaction{}
 	}
@@ -38,22 +38,22 @@ func (persistence *Persistence) LatestTransaction() Transaction {
 	}
 
 	return Transaction{
-		Id:     headRef.Hash().String(),
+		ID:     headRef.Hash().String(),
 		When:   commit.Committer.When,
 		Author: author,
 	}
 }
 
-func (persistence *Persistence) TransactionsSince(asof time.Time) []Transaction {
+func (p *Persistence) TransactionsSince(asof time.Time) []Transaction {
 	var transactions []Transaction
 
-	cIter, _ := persistence.repo.Log(&git.LogOptions{
+	cIter, _ := p.repo.Log(&git.LogOptions{
 		Since: &asof,
 	})
 
-	cIter.ForEach(func(c *object.Commit) error {
+	_ = cIter.ForEach(func(c *object.Commit) error {
 		transactions = append(transactions, Transaction{
-			Id:   c.Hash.String(),
+			ID:   c.Hash.String(),
 			When: c.Committer.When,
 		})
 		return nil
@@ -62,16 +62,16 @@ func (persistence *Persistence) TransactionsSince(asof time.Time) []Transaction 
 	return transactions
 }
 
-func (persistence *Persistence) TransactionsFrom(asof string) []Transaction {
+func (p *Persistence) TransactionsFrom(asof string) []Transaction {
 	var transactions []Transaction
 
-	cIter, _ := persistence.repo.Log(&git.LogOptions{
+	cIter, _ := p.repo.Log(&git.LogOptions{
 		From: plumbing.NewHash(asof),
 	})
 
-	cIter.ForEach(func(c *object.Commit) error {
+	_ = cIter.ForEach(func(c *object.Commit) error {
 		transactions = append(transactions, Transaction{
-			Id:   c.Hash.String(),
+			ID:   c.Hash.String(),
 			When: c.Committer.When,
 		})
 		return nil
@@ -81,12 +81,12 @@ func (persistence *Persistence) TransactionsFrom(asof string) []Transaction {
 }
 
 // ListTransactions returns the most recent transactions (commits)
-func (persistence *Persistence) ListTransactions(limit int) ([]Transaction, error) {
-	if err := persistence.ensureInitialized(); err != nil {
+func (p *Persistence) ListTransactions(limit int) ([]Transaction, error) {
+	if err := p.ensureInitialized(); err != nil {
 		return nil, err
 	}
 
-	headRef, err := persistence.repo.Head()
+	headRef, err := p.repo.Head()
 	if err != nil {
 		// No commits yet
 		return []Transaction{}, nil
@@ -94,7 +94,7 @@ func (persistence *Persistence) ListTransactions(limit int) ([]Transaction, erro
 
 	var transactions []Transaction
 
-	cIter, err := persistence.repo.Log(&git.LogOptions{
+	cIter, err := p.repo.Log(&git.LogOptions{
 		From: headRef.Hash(),
 	})
 	if err != nil {
@@ -102,7 +102,7 @@ func (persistence *Persistence) ListTransactions(limit int) ([]Transaction, erro
 	}
 
 	count := 0
-	cIter.ForEach(func(c *object.Commit) error {
+	_ = cIter.ForEach(func(c *object.Commit) error {
 		if count >= limit {
 			return fmt.Errorf("stop")
 		}
@@ -111,7 +111,7 @@ func (persistence *Persistence) ListTransactions(limit int) ([]Transaction, erro
 			author = fmt.Sprintf("%s <%s>", c.Author.Name, c.Author.Email)
 		}
 		transactions = append(transactions, Transaction{
-			Id:      c.Hash.String(),
+			ID:      c.Hash.String(),
 			When:    c.Committer.When,
 			Author:  author,
 			Message: c.Message,

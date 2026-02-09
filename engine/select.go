@@ -1,4 +1,3 @@
-// SELECT statement execution including aggregates, string/date/JSON functions, and JOINs.
 package engine
 
 import (
@@ -21,7 +20,7 @@ func (engine *Engine) executeSelectStatement(statement sql.SelectStatement) (Que
 	// Determine which persistence to use - share or local
 	p := engine.Persistence
 	if statement.Share != "" {
-		sharePersistence, err := engine.Persistence.OpenSharePersistence(statement.Share)
+		sharePersistence, err := engine.OpenSharePersistence(statement.Share)
 		if err != nil {
 			return QueryResult{}, fmt.Errorf("failed to access share '%s': %w", statement.Share, err)
 		}
@@ -91,7 +90,7 @@ func (engine *Engine) executeSelectStatement(statement sql.SelectStatement) (Que
 		// Try index lookup if PK fast path wasn't used
 		if !indexUsed {
 			indexManager := persistence.NewIndexManager(p, engine.Identity)
-			indexManager.LoadIndexes(statement.Database, statement.Table, tableOp.Table.Columns)
+			_ = indexManager.LoadIndexes(statement.Database, statement.Table, tableOp.Table.Columns)
 
 			for _, cond := range statement.Where.Conditions {
 				if cond.Operator == sql.EqualsOperator {
@@ -150,7 +149,7 @@ func (engine *Engine) executeSelectStatement(statement sql.SelectStatement) (Que
 		// Check if this is a share table (3-level naming)
 		if join.Share != "" {
 			// Open share persistence
-			sharePersistence, shareErr := engine.Persistence.OpenSharePersistence(join.Share)
+			sharePersistence, shareErr := engine.OpenSharePersistence(join.Share)
 			if shareErr != nil {
 				return QueryResult{}, fmt.Errorf("failed to open share '%s' for join: %w", join.Share, shareErr)
 			}
@@ -213,7 +212,7 @@ func (engine *Engine) executeSelectStatement(statement sql.SelectStatement) (Que
 	if statement.CountAll {
 		countResult := [][]string{{strconv.Itoa(len(results))}}
 		return QueryResult{
-			Transaction:     engine.Persistence.LatestTransaction(),
+			Transaction:     engine.LatestTransaction(),
 			Columns:         []string{"COUNT(*)"},
 			Data:            countResult,
 			RecordsRead:     len(results),
@@ -224,12 +223,12 @@ func (engine *Engine) executeSelectStatement(statement sql.SelectStatement) (Que
 
 	// Handle aggregate functions (SUM, AVG, MIN, MAX)
 	if len(statement.Aggregates) > 0 {
-		return executeAggregates(results, statement, engine.Persistence.LatestTransaction(), startTime, rowsScanned)
+		return executeAggregates(results, statement, engine.LatestTransaction(), startTime, rowsScanned)
 	}
 
 	// Handle string functions
 	if len(statement.Functions) > 0 {
-		return executeStringFunctions(results, statement, engine.Persistence.LatestTransaction(), startTime, rowsScanned)
+		return executeStringFunctions(results, statement, engine.LatestTransaction(), startTime, rowsScanned)
 	}
 
 	// Apply OFFSET
@@ -256,7 +255,7 @@ func (engine *Engine) executeSelectStatement(statement sql.SelectStatement) (Que
 	}
 
 	return QueryResult{
-		Transaction:     engine.Persistence.LatestTransaction(),
+		Transaction:     engine.LatestTransaction(),
 		Columns:         columns,
 		Data:            outputData,
 		RecordsRead:     len(outputData),
@@ -436,9 +435,7 @@ func executeStringFunctions(results []map[string]string, statement sql.SelectSta
 		}
 	}
 	// Add any regular columns
-	for _, col := range statement.Columns {
-		outputColumns = append(outputColumns, col)
-	}
+	outputColumns = append(outputColumns, statement.Columns...)
 
 	// Evaluate functions for each row
 	outputData := make([][]string, len(results))

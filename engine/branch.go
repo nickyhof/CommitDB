@@ -1,29 +1,28 @@
-// Git branching operations: CREATE BRANCH, CHECKOUT, MERGE, and conflict resolution.
 package engine
 
 import (
 	"fmt"
 	"time"
 
-	"github.com/nickyhof/CommitDB/v2/persistence"
 	"github.com/nickyhof/CommitDB/v2/internal/sql"
+	"github.com/nickyhof/CommitDB/v2/persistence"
 )
 
 func (engine *Engine) executeCreateBranchStatement(statement sql.CreateBranchStatement) (CommitResult, error) {
 	startTime := time.Now()
 
 	var from *persistence.Transaction
-	if statement.FromTxnId != "" {
-		from = &persistence.Transaction{Id: statement.FromTxnId}
+	if statement.FromTxnID != "" {
+		from = &persistence.Transaction{ID: statement.FromTxnID}
 	}
 
-	err := engine.Persistence.Branch(statement.Name, from)
+	err := engine.Branch(statement.Name, from)
 	if err != nil {
 		return CommitResult{}, err
 	}
 
 	return CommitResult{
-		Transaction:     engine.Persistence.LatestTransaction(),
+		Transaction:     engine.LatestTransaction(),
 		ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:    1,
 	}, nil
@@ -32,13 +31,13 @@ func (engine *Engine) executeCreateBranchStatement(statement sql.CreateBranchSta
 func (engine *Engine) executeCheckoutStatement(statement sql.CheckoutStatement) (CommitResult, error) {
 	startTime := time.Now()
 
-	err := engine.Persistence.Checkout(statement.Branch)
+	err := engine.Checkout(statement.Branch)
 	if err != nil {
 		return CommitResult{}, err
 	}
 
 	return CommitResult{
-		Transaction:     engine.Persistence.LatestTransaction(),
+		Transaction:     engine.LatestTransaction(),
 		ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
 		ExecutionOps:    1,
 	}, nil
@@ -52,7 +51,7 @@ func (engine *Engine) executeMergeStatement(statement sql.MergeStatement) (Resul
 		opts.Strategy = persistence.MergeStrategyManual
 	}
 
-	result, err := engine.Persistence.MergeWithOptions(statement.SourceBranch, engine.Identity, opts)
+	result, err := engine.MergeWithOptions(statement.SourceBranch, engine.Identity, opts)
 	if err != nil {
 		return CommitResult{}, err
 	}
@@ -88,12 +87,12 @@ func (engine *Engine) executeMergeStatement(statement sql.MergeStatement) (Resul
 func (engine *Engine) executeShowBranchesStatement(statement sql.ShowBranchesStatement) (QueryResult, error) {
 	startTime := time.Now()
 
-	branches, err := engine.Persistence.ListBranches()
+	branches, err := engine.ListBranches()
 	if err != nil {
 		return QueryResult{}, err
 	}
 
-	currentBranch, _ := engine.Persistence.CurrentBranch()
+	currentBranch, _ := engine.CurrentBranch()
 
 	data := make([][]string, len(branches))
 	for i, branch := range branches {
@@ -105,7 +104,7 @@ func (engine *Engine) executeShowBranchesStatement(statement sql.ShowBranchesSta
 	}
 
 	return QueryResult{
-		Transaction:     engine.Persistence.LatestTransaction(),
+		Transaction:     engine.LatestTransaction(),
 		Columns:         []string{"Branch", "Current"},
 		Data:            data,
 		RecordsRead:     len(data),
@@ -117,7 +116,7 @@ func (engine *Engine) executeShowBranchesStatement(statement sql.ShowBranchesSta
 func (engine *Engine) executeShowTransactionsStatement(statement sql.ShowTransactionsStatement) (QueryResult, error) {
 	startTime := time.Now()
 
-	transactions, err := engine.Persistence.ListTransactions(statement.Limit)
+	transactions, err := engine.ListTransactions(statement.Limit)
 	if err != nil {
 		return QueryResult{}, err
 	}
@@ -125,7 +124,7 @@ func (engine *Engine) executeShowTransactionsStatement(statement sql.ShowTransac
 	data := make([][]string, len(transactions))
 	for i, txn := range transactions {
 		data[i] = []string{
-			txn.Id,
+			txn.ID,
 			txn.When.Format(time.RFC3339),
 			txn.Message,
 			txn.Author,
@@ -133,7 +132,7 @@ func (engine *Engine) executeShowTransactionsStatement(statement sql.ShowTransac
 	}
 
 	return QueryResult{
-		Transaction:     engine.Persistence.LatestTransaction(),
+		Transaction:     engine.LatestTransaction(),
 		Columns:         []string{"ID", "Timestamp", "Message", "Author"},
 		Data:            data,
 		RecordsRead:     len(data),
@@ -145,7 +144,7 @@ func (engine *Engine) executeShowTransactionsStatement(statement sql.ShowTransac
 func (engine *Engine) executeShowMergeConflictsStatement() (QueryResult, error) {
 	startTime := time.Now()
 
-	pending := engine.Persistence.GetPendingMerge()
+	pending := engine.GetPendingMerge()
 	if pending == nil {
 		return QueryResult{
 			Columns:         []string{"Database", "Table", "Key", "HEAD", "SOURCE"},
@@ -177,7 +176,7 @@ func (engine *Engine) executeShowMergeConflictsStatement() (QueryResult, error) 
 func (engine *Engine) executeResolveConflictStatement(statement sql.ResolveConflictStatement) (QueryResult, error) {
 	startTime := time.Now()
 
-	pending := engine.Persistence.GetPendingMerge()
+	pending := engine.GetPendingMerge()
 	if pending == nil {
 		return QueryResult{}, fmt.Errorf("no pending merge")
 	}
@@ -204,13 +203,13 @@ func (engine *Engine) executeResolveConflictStatement(statement sql.ResolveConfl
 		resolution = []byte(statement.Resolution)
 	}
 
-	err := engine.Persistence.ResolveConflict(statement.Database, statement.Table, statement.Key, resolution)
+	err := engine.ResolveConflict(statement.Database, statement.Table, statement.Key, resolution)
 	if err != nil {
 		return QueryResult{}, err
 	}
 
 	// Return remaining conflicts count
-	remaining := len(engine.Persistence.GetPendingMerge().Unresolved)
+	remaining := len(engine.GetPendingMerge().Unresolved)
 	return QueryResult{
 		Columns:         []string{"Resolved", "Remaining"},
 		Data:            [][]string{{fmt.Sprintf("%s.%s.%s", statement.Database, statement.Table, statement.Key), fmt.Sprintf("%d", remaining)}},
@@ -222,7 +221,7 @@ func (engine *Engine) executeResolveConflictStatement(statement sql.ResolveConfl
 func (engine *Engine) executeCommitMergeStatement() (CommitResult, error) {
 	startTime := time.Now()
 
-	txn, err := engine.Persistence.CompleteMerge(engine.Identity)
+	txn, err := engine.CompleteMerge(engine.Identity)
 	if err != nil {
 		return CommitResult{}, err
 	}
@@ -237,7 +236,7 @@ func (engine *Engine) executeCommitMergeStatement() (CommitResult, error) {
 func (engine *Engine) executeAbortMergeStatement() (QueryResult, error) {
 	startTime := time.Now()
 
-	err := engine.Persistence.AbortMerge()
+	err := engine.AbortMerge()
 	if err != nil {
 		return QueryResult{}, err
 	}

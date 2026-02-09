@@ -1,4 +1,3 @@
-// View operations: CREATE/DROP VIEW, materialized views, and time-travel queries.
 package engine
 
 import (
@@ -8,8 +7,8 @@ import (
 	"time"
 
 	"github.com/nickyhof/CommitDB/v2/core"
-	"github.com/nickyhof/CommitDB/v2/persistence"
 	"github.com/nickyhof/CommitDB/v2/internal/sql"
+	"github.com/nickyhof/CommitDB/v2/persistence"
 )
 
 func (engine *Engine) executeCreateViewStatement(statement sql.CreateViewStatement) (Result, error) {
@@ -26,7 +25,7 @@ func (engine *Engine) executeCreateViewStatement(statement sql.CreateViewStateme
 	}
 
 	// Store the view definition
-	txn, err := engine.Persistence.CreateView(view, engine.Identity)
+	txn, err := engine.CreateView(view, engine.Identity)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create view: %w", err)
 	}
@@ -48,7 +47,7 @@ func (engine *Engine) executeDropViewStatement(statement sql.DropViewStatement) 
 	startTime := time.Now()
 
 	// Check if view exists
-	view, err := engine.Persistence.GetView(statement.Database, statement.ViewName)
+	view, err := engine.GetView(statement.Database, statement.ViewName)
 	if err != nil {
 		if statement.IfExists {
 			return CommitResult{
@@ -59,14 +58,14 @@ func (engine *Engine) executeDropViewStatement(statement sql.DropViewStatement) 
 	}
 
 	// Drop view definition
-	txn, err := engine.Persistence.DropView(statement.Database, statement.ViewName, engine.Identity)
+	txn, err := engine.DropView(statement.Database, statement.ViewName, engine.Identity)
 	if err != nil {
 		return nil, fmt.Errorf("failed to drop view: %w", err)
 	}
 
 	// If materialized, also delete cached data
 	if view.Materialized {
-		engine.Persistence.DeleteMaterializedViewData(statement.Database, statement.ViewName, engine.Identity)
+		_, _ = engine.DeleteMaterializedViewData(statement.Database, statement.ViewName, engine.Identity)
 	}
 
 	return CommitResult{
@@ -78,7 +77,7 @@ func (engine *Engine) executeDropViewStatement(statement sql.DropViewStatement) 
 func (engine *Engine) executeShowViewsStatement(statement sql.ShowViewsStatement) (QueryResult, error) {
 	startTime := time.Now()
 
-	views, err := engine.Persistence.ListViews(statement.Database)
+	views, err := engine.ListViews(statement.Database)
 	if err != nil {
 		return QueryResult{}, err
 	}
@@ -106,7 +105,7 @@ func (engine *Engine) executeRefreshViewStatement(statement sql.RefreshViewState
 	startTime := time.Now()
 
 	// Get view definition
-	view, err := engine.Persistence.GetView(statement.Database, statement.ViewName)
+	view, err := engine.GetView(statement.Database, statement.ViewName)
 	if err != nil {
 		return nil, fmt.Errorf("view %s.%s does not exist", statement.Database, statement.ViewName)
 	}
@@ -122,7 +121,7 @@ func (engine *Engine) executeRefreshViewStatement(statement sql.RefreshViewState
 
 	// Update view timestamp
 	view.UpdatedAt = time.Now()
-	engine.Persistence.UpdateView(*view, engine.Identity)
+	_, _ = engine.UpdateView(*view, engine.Identity)
 
 	return CommitResult{
 		ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
@@ -154,7 +153,7 @@ func (engine *Engine) refreshMaterializedView(database, viewName, query string) 
 	}
 
 	// Store cached data
-	_, err = engine.Persistence.WriteMaterializedViewData(database, viewName, rows, engine.Identity)
+	_, err = engine.WriteMaterializedViewData(database, viewName, rows, engine.Identity)
 	if err != nil {
 		return fmt.Errorf("failed to store materialized view data: %w", err)
 	}
@@ -183,7 +182,7 @@ func (engine *Engine) executeViewQuery(view *core.View, originalStatement sql.Se
 // executeMaterializedViewQuery reads from cached materialized view data
 func (engine *Engine) executeMaterializedViewQuery(view *core.View, originalStatement sql.SelectStatement, startTime time.Time) (QueryResult, error) {
 	// Read cached data
-	rows, err := engine.Persistence.ReadMaterializedViewData(view.Database, view.Name)
+	rows, err := engine.ReadMaterializedViewData(view.Database, view.Name)
 	if err != nil {
 		return QueryResult{}, fmt.Errorf("failed to read materialized view data: %w", err)
 	}
@@ -312,7 +311,7 @@ func (engine *Engine) executeTimeTravelSelect(statement sql.SelectStatement, p *
 		Data:            data,
 		RecordsRead:     len(results),
 		ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
-		Transaction:     persistence.Transaction{Id: transactionID},
+		Transaction:     persistence.Transaction{ID: transactionID},
 	}, nil
 }
 
@@ -342,7 +341,7 @@ func (engine *Engine) executeTimeTravelRegularView(view *core.View, transactionI
 // It reads the cached view data as it existed at the specified transaction.
 func (engine *Engine) executeTimeTravelMaterializedView(view *core.View, transactionID string, startTime time.Time) (QueryResult, error) {
 	// Read materialized view data at that transaction
-	rows, err := engine.Persistence.GetMaterializedViewDataAtTransaction(view.Database, view.Name, transactionID)
+	rows, err := engine.GetMaterializedViewDataAtTransaction(view.Database, view.Name, transactionID)
 	if err != nil {
 		return QueryResult{}, fmt.Errorf("failed to get materialized view data at transaction %s: %w", transactionID, err)
 	}
@@ -372,6 +371,6 @@ func (engine *Engine) executeTimeTravelMaterializedView(view *core.View, transac
 		Data:            data,
 		RecordsRead:     len(data),
 		ExecutionTimeMs: float64(time.Since(startTime).Milliseconds()),
-		Transaction:     persistence.Transaction{Id: transactionID},
+		Transaction:     persistence.Transaction{ID: transactionID},
 	}, nil
 }

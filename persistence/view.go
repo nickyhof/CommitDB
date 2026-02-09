@@ -9,7 +9,7 @@ import (
 )
 
 // CreateView stores a view definition
-func (persistence *Persistence) CreateView(view core.View, identity core.Identity) (txn Transaction, err error) {
+func (p *Persistence) CreateView(view core.View, identity core.Identity) (txn Transaction, err error) {
 	path := fmt.Sprintf(".commitdb/views/%s/%s.json", view.Database, view.Name)
 
 	dataBytes, err := json.MarshalIndent(view, "", "  ")
@@ -17,14 +17,14 @@ func (persistence *Persistence) CreateView(view core.View, identity core.Identit
 		return Transaction{}, fmt.Errorf("failed to marshal view: %w", err)
 	}
 
-	return persistence.WriteFileDirect(path, dataBytes, identity, fmt.Sprintf("Creating view %s.%s", view.Database, view.Name))
+	return p.WriteFileDirect(path, dataBytes, identity, fmt.Sprintf("Creating view %s.%s", view.Database, view.Name))
 }
 
 // GetView retrieves a view definition
-func (persistence *Persistence) GetView(database, name string) (*core.View, error) {
+func (p *Persistence) GetView(database, name string) (*core.View, error) {
 	path := fmt.Sprintf(".commitdb/views/%s/%s.json", database, name)
 
-	data, err := persistence.ReadFileDirect(path)
+	data, err := p.ReadFileDirect(path)
 	if err != nil {
 		return nil, fmt.Errorf("view %s.%s does not exist: %w", database, name, err)
 	}
@@ -38,10 +38,10 @@ func (persistence *Persistence) GetView(database, name string) (*core.View, erro
 }
 
 // ListViews returns all views in a database
-func (persistence *Persistence) ListViews(database string) ([]core.View, error) {
+func (p *Persistence) ListViews(database string) ([]core.View, error) {
 	path := fmt.Sprintf(".commitdb/views/%s", database)
 
-	entries, err := persistence.ListEntriesDirect(path)
+	entries, err := p.ListEntriesDirect(path)
 	if err != nil {
 		// No views directory yet - return empty list
 		return []core.View{}, nil
@@ -54,7 +54,7 @@ func (persistence *Persistence) ListViews(database string) ([]core.View, error) 
 		}
 
 		viewName := strings.TrimSuffix(entry.Name, ".json")
-		view, err := persistence.GetView(database, viewName)
+		view, err := p.GetView(database, viewName)
 		if err != nil {
 			continue // Skip invalid views
 		}
@@ -65,16 +65,16 @@ func (persistence *Persistence) ListViews(database string) ([]core.View, error) 
 }
 
 // DropView removes a view definition
-func (persistence *Persistence) DropView(database, name string, identity core.Identity) (txn Transaction, err error) {
+func (p *Persistence) DropView(database, name string, identity core.Identity) (txn Transaction, err error) {
 	paths := []string{
 		fmt.Sprintf(".commitdb/views/%s/%s.json", database, name),
 	}
 
-	return persistence.DeletePathDirect(paths, identity, fmt.Sprintf("Dropping view %s.%s", database, name))
+	return p.DeletePathDirect(paths, identity, fmt.Sprintf("Dropping view %s.%s", database, name))
 }
 
 // UpdateView updates a view definition (used for refresh timestamps)
-func (persistence *Persistence) UpdateView(view core.View, identity core.Identity) (txn Transaction, err error) {
+func (p *Persistence) UpdateView(view core.View, identity core.Identity) (txn Transaction, err error) {
 	path := fmt.Sprintf(".commitdb/views/%s/%s.json", view.Database, view.Name)
 
 	dataBytes, err := json.MarshalIndent(view, "", "  ")
@@ -82,13 +82,13 @@ func (persistence *Persistence) UpdateView(view core.View, identity core.Identit
 		return Transaction{}, fmt.Errorf("failed to marshal view: %w", err)
 	}
 
-	return persistence.WriteFileDirect(path, dataBytes, identity, fmt.Sprintf("Updating view %s.%s", view.Database, view.Name))
+	return p.WriteFileDirect(path, dataBytes, identity, fmt.Sprintf("Updating view %s.%s", view.Database, view.Name))
 }
 
 // Materialized view data storage
 
 // WriteMaterializedViewData stores cached data for a materialized view
-func (persistence *Persistence) WriteMaterializedViewData(database, viewName string, rows []map[string]string, identity core.Identity) (txn Transaction, err error) {
+func (p *Persistence) WriteMaterializedViewData(database, viewName string, rows []map[string]string, identity core.Identity) (txn Transaction, err error) {
 	basePath := fmt.Sprintf(".commitdb/materialized/%s/%s", database, viewName)
 
 	// Write all rows as a single JSON array
@@ -98,14 +98,14 @@ func (persistence *Persistence) WriteMaterializedViewData(database, viewName str
 		return Transaction{}, fmt.Errorf("failed to marshal rows: %w", err)
 	}
 
-	return persistence.WriteFileDirect(dataPath, dataBytes, identity, fmt.Sprintf("Refreshing materialized view %s.%s", database, viewName))
+	return p.WriteFileDirect(dataPath, dataBytes, identity, fmt.Sprintf("Refreshing materialized view %s.%s", database, viewName))
 }
 
 // ReadMaterializedViewData reads cached data for a materialized view
-func (persistence *Persistence) ReadMaterializedViewData(database, viewName string) ([]map[string]string, error) {
+func (p *Persistence) ReadMaterializedViewData(database, viewName string) ([]map[string]string, error) {
 	dataPath := fmt.Sprintf(".commitdb/materialized/%s/%s/data.json", database, viewName)
 
-	data, err := persistence.ReadFileDirect(dataPath)
+	data, err := p.ReadFileDirect(dataPath)
 	if err != nil {
 		return nil, fmt.Errorf("materialized view data not found: %w", err)
 	}
@@ -119,22 +119,22 @@ func (persistence *Persistence) ReadMaterializedViewData(database, viewName stri
 }
 
 // DeleteMaterializedViewData removes cached data for a materialized view
-func (persistence *Persistence) DeleteMaterializedViewData(database, viewName string, identity core.Identity) (txn Transaction, err error) {
+func (p *Persistence) DeleteMaterializedViewData(database, viewName string, identity core.Identity) (txn Transaction, err error) {
 	path := fmt.Sprintf(".commitdb/materialized/%s/%s", database, viewName)
 
-	return persistence.DeletePathDirect([]string{path}, identity, fmt.Sprintf("Deleting materialized view data %s.%s", database, viewName))
+	return p.DeletePathDirect([]string{path}, identity, fmt.Sprintf("Deleting materialized view data %s.%s", database, viewName))
 }
 
 // GetMaterializedViewDataAtTransaction reads cached data for a materialized view at a specific transaction
-func (persistence *Persistence) GetMaterializedViewDataAtTransaction(database, viewName, transactionID string) ([]map[string]string, error) {
-	if !persistence.IsInitialized() {
+func (p *Persistence) GetMaterializedViewDataAtTransaction(database, viewName, transactionID string) ([]map[string]string, error) {
+	if !p.IsInitialized() {
 		return nil, fmt.Errorf("persistence not initialized")
 	}
 
-	persistence.mu.RLock()
-	defer persistence.mu.RUnlock()
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 
-	commit, err := persistence.resolveTransaction(transactionID)
+	commit, err := p.resolveTransaction(transactionID)
 	if err != nil {
 		return nil, err
 	}

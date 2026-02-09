@@ -1,4 +1,4 @@
-// Package ps provides the persistence layer for CommitDB.
+// Package persistence provides the persistence layer for CommitDB.
 //
 // The persistence layer is backed by Git, using go-git for storage.
 // Every write operation creates a Git commit, providing full version
@@ -8,7 +8,7 @@
 //
 // For testing or ephemeral databases:
 //
-//	persistence, err := ps.NewMemoryPersistence()
+//	p, err := persistence.NewMemoryPersistence()
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -17,7 +17,7 @@
 //
 // For persistent storage:
 //
-//	persistence, err := ps.NewFilePersistence("/path/to/data", nil)
+//	p, err := persistence.NewFilePersistence("/path/to/data", nil)
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -35,7 +35,7 @@
 //
 // The persistence layer supports B-tree indexes for faster queries:
 //
-//	im := ps.NewIndexManager(persistence, identity)
+//	im := persistence.NewIndexManager(p, identity)
 //	im.CreateIndex("idx_name", "db", "table", "column", false)
 //	keys := im.Lookup("db", "table", "column", "value")
 package persistence

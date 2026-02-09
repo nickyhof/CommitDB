@@ -1,4 +1,3 @@
-// Remote file I/O support for S3 and HTTP URLs.
 package engine
 
 import (
@@ -110,7 +109,7 @@ func openHTTPReader(url string) (io.ReadCloser, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		return nil, fmt.Errorf("HTTP request returned status %d", resp.StatusCode)
 	}
 
