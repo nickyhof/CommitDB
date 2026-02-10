@@ -64,42 +64,24 @@ Git-backed storage with:
                     └──────────────┘
 ```
 
-## Git Storage Format
+## Storage Format
 
-Each database is a directory:
-
-```
-data/
-└── mydb/               # Database
-    ├── users.json      # Table: array of records
-    ├── orders.json     
-    └── .indexes/       # Index files
-        └── idx_email.json
-```
-
-Table format:
-
-```json
-{
-  "schema": {
-    "columns": [
-      {"name": "id", "type": "INT", "primaryKey": true},
-      {"name": "name", "type": "STRING"}
-    ]
-  },
-  "records": [
-    {"id": 1, "name": "Alice"},
-    {"id": 2, "name": "Bob"}
-  ]
-}
-```
+See [Storage Format Specification](storage-format.md) for the full file and directory layout.
 
 ## Performance Optimizations
 
-### Git Plumbing API (v2.0.0+)
+### Git Plumbing API
 
-Bypasses high-level Git commands for ~10x faster writes:
+All CRUD operations bypass the Git worktree and shell out to zero external processes. Instead, blobs, trees, and commits are created directly through the Git object store, yielding ~10x faster writes compared to worktree-based operations.
 
-- Direct blob/tree creation
-- Batch commits
-- Memory-mapped file access
+### Batch Tree Updates
+
+Multi-record writes (e.g. `INSERT` with multiple rows, `COPY INTO`) group all changes into a single `batchUpdateTree` call, building one new tree and one commit regardless of row count. This keeps write latency nearly constant as batch size grows.
+
+### Single-Pass Tree Scanning
+
+`ScanDirect` resolves HEAD → commit → root tree once per query, then walks only the target table's subtree to read every record. This eliminates the N+1 object-resolution overhead of reading rows individually.
+
+### O(1) Primary Key Lookups
+
+`WHERE pk = value` queries walk the Git tree directly to the record blob instead of scanning the table, providing constant-time reads without loading an index.
