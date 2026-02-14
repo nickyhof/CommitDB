@@ -98,7 +98,7 @@ jobs:
           ./scripts/compare_benchmarks.sh benchmark_results.json baseline.json 20 > comparison.md
 
       - name: Comment on PR
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');
